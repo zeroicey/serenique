@@ -8,6 +8,7 @@ import {
 } from "@/modules/diary/diary.types";
 import { Res } from "@/shared/response";
 import { AppError, ErrorCode } from "@/shared/errors";
+import { logger } from "@/shared/logger";
 
 // ---------------------------------------------------------------------------
 // Diary handlers — parse request → call service → build response.
@@ -26,7 +27,7 @@ function handleError(e: unknown, c: Context) {
   if (e instanceof ZodError) {
     return Res.validationFailed("参数校验失败", e.issues).build(c);
   }
-  console.error(e);
+  logger.error({ err: e }, "Unhandled error in diary handler");
   return Res.internalError().build(c);
 }
 

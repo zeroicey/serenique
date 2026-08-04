@@ -7,6 +7,7 @@ import {
 } from "@/modules/moment/moment.types";
 import { Res } from "@/shared/response";
 import { AppError } from "@/shared/errors";
+import { logger } from "@/shared/logger";
 
 // ---------------------------------------------------------------------------
 // Moment handlers — parse request → call service → build response.
@@ -19,7 +20,7 @@ function handleError(e: unknown, c: Context) {
   if (e instanceof ZodError) {
     return Res.validationFailed("参数校验失败", e.issues).build(c);
   }
-  console.error(e);
+  logger.error({ err: e }, "Unhandled error in moment handler");
   return Res.internalError().build(c);
 }
 

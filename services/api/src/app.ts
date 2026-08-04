@@ -4,6 +4,7 @@ import { cors, logger } from "@/middleware";
 import { diaryRouter } from "@/modules/diary";
 import { momentRouter } from "@/modules/moment";
 import { Res } from "@/shared/response";
+import { logger as pinoLogger } from "@/shared/logger";
 
 // ---------------------------------------------------------------------------
 // App factory — receives validated env, returns an assembled Hono instance.
@@ -17,7 +18,7 @@ export function createApp(env: Env) {
   //    Catches unhandled errors from any layer below.
   //
   app.onError((err, c) => {
-    console.error(`[${c.req.method} ${c.req.path}]`, err);
+    pinoLogger.error({ err, method: c.req.method, path: c.req.path }, "Unhandled error");
     return Res.internalError().build(c);
   });
 
