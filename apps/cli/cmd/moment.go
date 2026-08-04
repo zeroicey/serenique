@@ -130,8 +130,8 @@ var momentGetCmd = &cobra.Command{
 					dn = *a.DisplayName
 				}
 				rows[i] = map[string]string{
-					"ID":    a.ID[:8] + "...",
-					"文件 ID": a.BlobID[:8] + "...",
+					"ID":    shortID(a.ID),
+					"文件 ID": shortID(a.BlobID),
 					"角色":    a.Role,
 					"显示名称":  dn,
 					"排序":    strconv.Itoa(a.SortOrder),
@@ -231,9 +231,9 @@ func init() {
 		defaultSize: 10,
 		row: func(m MomentEntry) map[string]string {
 			return map[string]string{
-				"ID":   m.ID[:8] + "...",
+				"ID":   shortID(m.ID),
 				"内容":   truncateRunes(m.Text, 50),
-				"创建时间": m.CreatedAt[:19],
+				"创建时间": prefix(m.CreatedAt, 19),
 			}
 		},
 	}, &momentListPage, &momentListPageSize)

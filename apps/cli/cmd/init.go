@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 	"github.com/zeroicey/serenique-cli/internal/config"
 )
 
@@ -69,6 +70,13 @@ var initCmd = &cobra.Command{
 			return errors.New("检测到非交互式输入（EOF）：请通过 --baseurl/--token 参数指定，或在终端中运行 serenique init")
 		}
 
+		// Fail fast on a malformed baseurl at write time, so a typo (typed here
+		// or passed via --baseurl) never lands in the file. `config set baseurl`
+		// is then the repair command, and nothing else ever reads a bad value.
+		if err := client.ValidateBaseURL(cfg.BaseURL); err != nil {
+			return err
+		}
+
 		if err := config.Save(cfg); err != nil {
 			return err
 		}
@@ -88,13 +96,18 @@ var initCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("\n✓ 配置已保存到 %s\n", configPath)
-		fmt.Printf("  baseurl: %s\n", cfg.BaseURL)
+		// Route table-mode success through the printer (matching every other
+		// command's ✓ line + blank + key-value tail) so the output package's
+		// stream abstraction is the only writer to stdout.
+		printer.PrintMessage("✓ 配置已保存到 " + configPath)
+		printer.PrintMessage("")
+		kv := map[string]string{"baseurl": cfg.BaseURL}
 		if cfg.Token != "" {
-			fmt.Printf("  token:   %s\n", maskToken(cfg.Token))
+			kv["token"] = maskToken(cfg.Token)
 		} else {
-			fmt.Println("  token:   (未设置)")
+			kv["token"] = "(未设置)"
 		}
+		printer.PrintKeyValue(kv)
 
 		return nil
 	},

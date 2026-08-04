@@ -37,35 +37,25 @@ var (
 	flagConfig  string
 )
 
-// Build-time version metadata. The Makefile's ldflags target the MAIN package's
-// copies of these names (main.version / main.commit / main.date); main.go then
-// feeds them into SetVersion, which is the ONLY mutation point for these values
-// here. The two var blocks must stay in sync in name and default — see main.go.
-var (
-	version = "dev"
-	commit  = "unknown"
-	date    = ""
-)
-
 // SetVersion wires the ldflags-injected build metadata into the root command
-// so `serenique --version` reports it. Called from main before Execute.
+// so `serenique --version` reports it. Called from main before Execute. main
+// (main.go) is the SINGLE canonical source of these values — the Makefile's
+// ldflags target main.version / main.commit / main.date — so the cmd package
+// declares no copies of its own; empty values fall back to dev defaults here.
 func SetVersion(v, c, d string) {
-	if v != "" {
-		version = v
+	if v == "" {
+		v = "dev"
 	}
-	if c != "" {
-		commit = c
+	if c == "" {
+		c = "unknown"
+	}
+
+	display := v
+	if c != "" && c != "unknown" {
+		display = fmt.Sprintf("%s (commit %s)", display, c)
 	}
 	if d != "" {
-		date = d
-	}
-
-	display := version
-	if commit != "" && commit != "unknown" {
-		display = fmt.Sprintf("%s (commit %s)", display, commit)
-	}
-	if date != "" {
-		display = fmt.Sprintf("%s, built %s", display, date)
+		display = fmt.Sprintf("%s, built %s", display, d)
 	}
 	rootCmd.Version = display
 }
@@ -109,6 +99,16 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
+		// Local-only commands (config management, bare root help) never touch the
+		// network, so they must not require a usable client. Building it here
+		// would fail fast on a malformed configured baseurl and lock out the very
+		// commands that repair it — `serenique config set baseurl <good>` is the
+		// documented repair path for a bad value written by init or a stale env
+		// var.
+		if isLocalOnlyCommand(cmd) {
+			return nil
+		}
+
 		// Resolve effective config (flags > env > file) and build the client
 		// directly from the result — no intermediate global. NewClient validates
 		// the resolved base URL so a config typo surfaces here with an actionable
@@ -123,6 +123,22 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},
+}
+
+// isLocalOnlyCommand reports whether cmd performs no network access: the config
+// management subtree (config, config set, config path) and the bare root help.
+// These must not require a usable API client — otherwise a malformed configured
+// baseurl would prevent `serenique config set baseurl <good>` (the repair
+// command for exactly that condition) from running at all.
+func isLocalOnlyCommand(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	path := cmd.CommandPath()
+	if path == "serenique" {
+		return true
+	}
+	return strings.HasPrefix(path, "serenique config")
 }
 
 // Execute runs the root command and owns error rendering: the returned error is

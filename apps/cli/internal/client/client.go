@@ -17,6 +17,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,6 +30,12 @@ type Client struct {
 	BaseURL    string
 	Token      string
 	HTTPClient *http.Client
+
+	// transferOnce guards lazy construction of the shared streaming-transfer
+	// client so a multi-file `blob upload` reuses one keep-alive connection and
+	// TLS session instead of re-handshaking per file.
+	transferOnce   sync.Once
+	transferClient *http.Client
 }
 
 // APIResponse is the unified response envelope from the server.
@@ -90,18 +98,109 @@ func ValidateBaseURL(raw string) error {
 	return nil
 }
 
-// transferHTTPClient returns an HTTP client with no overall request timeout,
-// used only for streaming file transfers. Uploads and downloads of large blobs
-// (the API allows up to 100MB) can legitimately run longer than DefaultTimeout
-// (60s). The transport keeps a finite ResponseHeaderTimeout so a server that
-// accepts a connection and then never sends response headers fails fast, while
-// large bodies are still allowed to stream once headers have arrived. A body
-// that stalls mid-stream is aborted by request context cancellation (the signal
-// derived root context in cmd/root.go), so a hung server does not hang forever.
+// transferHTTPClient returns the shared HTTP client with no overall request
+// timeout, used only for streaming file transfers. Uploads and downloads of
+// large blobs (the API allows up to 100MB) can legitimately run longer than
+// DefaultTimeout (60s). The transport keeps a finite ResponseHeaderTimeout so
+// a server that accepts a connection and then never sends response headers
+// fails fast, while large bodies are still allowed to stream once headers have
+// arrived. The client is built once and cached on the Client so a multi-file
+// `blob upload` reuses one keep-alive connection instead of re-establishing a
+// TCP connection and re-running the TLS handshake per file. A body that stalls
+// mid-stream is aborted by the transfer watchdog (newTransferWatchdog), so a
+// hung server does not hang forever.
 func (c *Client) transferHTTPClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.ResponseHeaderTimeout = 30 * time.Second
-	return &http.Client{Transport: transport}
+	c.transferOnce.Do(func() {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.ResponseHeaderTimeout = 30 * time.Second
+		c.transferClient = &http.Client{Transport: transport}
+	})
+	return c.transferClient
+}
+
+// transferIdleTimeout is the maximum time a streaming transfer may go without
+// any bytes flowing (a download with no body data, or an upload whose server
+// stops reading) before it is aborted. Bounds a stalled peer so transfers
+// never hang forever. A variable so tests can shorten it.
+var transferIdleTimeout = 30 * time.Second
+
+// transferWatchdog aborts a transfer that makes no progress for
+// transferIdleTimeout. mark() records activity (each chunk read or written); a
+// watchdog goroutine cancels the request context when idle elapses without a
+// mark, which unblocks the blocked read/write with an error. timedOut reports
+// whether the watchdog (rather than the user, via signal) was the cause, so the
+// caller can surface a clear timeout message.
+type transferWatchdog struct {
+	cancel   context.CancelFunc
+	idle     time.Duration
+	lastMark atomic.Int64 // UnixNano of the most recent mark()
+	timedOut atomic.Bool
+	done     chan struct{}
+	once     sync.Once
+}
+
+func newTransferWatchdog(cancel context.CancelFunc) *transferWatchdog {
+	w := &transferWatchdog{
+		cancel: cancel,
+		idle:   transferIdleTimeout,
+		done:   make(chan struct{}),
+	}
+	w.lastMark.Store(time.Now().UnixNano())
+	go w.run()
+	return w
+}
+
+// mark records that a chunk of the transfer just flowed.
+func (w *transferWatchdog) mark() { w.lastMark.Store(time.Now().UnixNano()) }
+
+// stop shuts the watchdog down after a transfer completes normally.
+func (w *transferWatchdog) stop() { w.once.Do(func() { close(w.done) }) }
+
+func (w *transferWatchdog) run() {
+	ticker := time.NewTicker(w.idle / 2)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-w.done:
+			return
+		case <-ticker.C:
+			if time.Since(time.Unix(0, w.lastMark.Load())) >= w.idle {
+				w.timedOut.Store(true)
+				w.cancel()
+				return
+			}
+		}
+	}
+}
+
+// activityReader wraps a transfer source so each chunk of progress resets the
+// watchdog's idle timer (used for the local file being uploaded).
+type activityReader struct {
+	io.Reader
+	w *transferWatchdog
+}
+
+func (r *activityReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if n > 0 {
+		r.w.mark()
+	}
+	return n, err
+}
+
+// activityBody wraps a streaming response body so each received chunk resets
+// the watchdog's idle timer.
+type activityBody struct {
+	io.ReadCloser
+	w *transferWatchdog
+}
+
+func (b *activityBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 {
+		b.w.mark()
+	}
+	return n, err
 }
 
 // =============================================================================
@@ -163,12 +262,24 @@ func (c *Client) Put(ctx context.Context, path string, body any, result any) err
 }
 
 // Delete sends a DELETE request. Returns nil on success (204 or 200).
+//
+// The API's Res.noContent endpoints (diary delete, moment delete, moment
+// detach) send HTTP 204 with a JSON body — a protocol violation: 204 is
+// bodyless, so Go hides resp.Body (NoBody) and the real bytes stay unread on
+// the connection. If that connection were returned to the keep-alive pool, the
+// next request reusing it would read the stale bytes and net/http would log an
+// "Unsolicited response received on idle HTTP channel" warning to stderr,
+// corrupting the CLI's structured-error channel. Setting req.Close (Connection:
+// close) keeps the connection from being reused, so the hidden body is
+// discarded with it. (blob delete/detach send a true bodyless 204 and are
+// unaffected, but closing the connection after any delete is harmless.)
 func (c *Client) Delete(ctx context.Context, path string) error {
 	req, err := http.NewRequestWithContext(ctx, "DELETE", c.url(path), nil)
 	if err != nil {
 		return fmt.Errorf("创建请求失败: %w", err)
 	}
 	c.setHeaders(req)
+	req.Close = true
 
 	return c.do(req, nil)
 }
@@ -199,6 +310,15 @@ func List[T any](c *Client, ctx context.Context, path string, query url.Values) 
 // The file is sent under the field name "file" as expected by the API.
 // The result is unmarshalled from the API response data field.
 func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string, result any) error {
+	// A server that stops reading the multipart body stalls the pipe write (io
+	// .Pipe is unbuffered, so the local file read pace is tied to the server's
+	// read pace). The watchdog cancels the request context after
+	// transferIdleTimeout with no progress so the upload aborts instead of
+	// hanging forever.
+	ctx, cancel := context.WithCancel(ctx)
+	watchdog := newTransferWatchdog(cancel)
+	defer watchdog.stop()
+
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("无法打开文件 %s: %w", filePath, err)
@@ -224,7 +344,7 @@ func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string
 			return
 		}
 
-		if _, err := io.Copy(part, file); err != nil {
+		if _, err := io.Copy(part, &activityReader{Reader: file, w: watchdog}); err != nil {
 			pw.CloseWithError(fmt.Errorf("读取文件失败: %w", err))
 			return
 		}
@@ -237,7 +357,11 @@ func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string
 	c.setHeaders(req)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	// File transfers are not bound by the 60s JSON-endpoint timeout.
-	return c.doWithClient(c.transferHTTPClient(), req, result)
+	err = c.doWithClient(c.transferHTTPClient(), req, result)
+	if err != nil && watchdog.timedOut.Load() {
+		return fmt.Errorf("上传超时：%s 内无数据传输", transferIdleTimeout)
+	}
+	return err
 }
 
 // =============================================================================
@@ -254,6 +378,13 @@ func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string
 // happens immediately before the rename (closing the TOCTOU window between a
 // caller's earlier existence check and the actual write).
 func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath string, forceAttachment, overwrite bool) error {
+	// A server that sends response headers and then stalls mid-body must not
+	// leave io.Copy blocked forever. The watchdog cancels the request context
+	// after transferIdleTimeout with no body bytes, aborting the transfer.
+	ctx, cancel := context.WithCancel(ctx)
+	watchdog := newTransferWatchdog(cancel)
+	defer watchdog.stop()
+
 	query := url.Values{}
 	if forceAttachment {
 		query.Set("download", "1")
@@ -286,7 +417,7 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 		if json.Unmarshal(body, &apiResp) == nil && !apiResp.Success {
 			return &APIError{Message: apiResp.Message, HTTPStatus: resp.StatusCode, Details: apiResp.Error}
 		}
-		return fmt.Errorf("下载失败 (HTTP %d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("下载失败 (HTTP %d): %s", resp.StatusCode, snippet(body))
 	}
 
 	// Write to a temp file in the destination directory (so the final rename is
@@ -302,12 +433,15 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 		os.Remove(tmpName) // no-op once the rename succeeds
 	}
 
-	n, err := io.Copy(tmp, resp.Body)
+	n, err := io.Copy(tmp, &activityBody{ReadCloser: resp.Body, w: watchdog})
 	if err != nil {
 		// io.Copy surfaces an unexpected EOF (server closed the body early) as
 		// io.ErrUnexpectedEOF; without this the partial body would be saved as if
 		// complete when there is no Content-Length (e.g. a proxy that strips it).
-		if errors.Is(err, io.ErrUnexpectedEOF) {
+		switch {
+		case watchdog.timedOut.Load():
+			err = fmt.Errorf("下载超时：%s 内未收到任何数据", transferIdleTimeout)
+		case errors.Is(err, io.ErrUnexpectedEOF):
 			err = fmt.Errorf("下载中断：服务器提前关闭了连接（%d 字节已写入）", n)
 		}
 		discardTmp()
@@ -384,6 +518,26 @@ func (c *Client) do(req *http.Request, result any) error {
 	return c.doWithClient(c.HTTPClient, req, result)
 }
 
+// maxResponseBody caps how much of a response body the client buffers for JSON
+// endpoints. List endpoints are bounded by the API's pageSize<=50 cap, so a
+// legitimate unified envelope is small; an unbounded read would let a
+// misbehaving server (or a proxy error page) balloon memory or produce a giant
+// error string. A variable so tests can shrink it.
+var maxResponseBody = 4 << 20 // 4 MiB
+
+// snippet renders a raw response body for an error message, trimmed to a
+// bounded length so a huge body cannot produce a giant error string.
+func snippet(body []byte) string {
+	s := strings.TrimSpace(string(body))
+	if len(s) > 300 {
+		s = s[:300] + "..."
+	}
+	if s == "" {
+		s = "(空响应体)"
+	}
+	return s
+}
+
 // doWithClient executes a request with the given HTTP client, treating any
 // non-2xx status as an error even when the body is not the unified envelope
 // (Hono default error, proxy error page, HTML, empty body...). When the envelope
@@ -395,7 +549,9 @@ func (c *Client) doWithClient(hc *http.Client, req *http.Request, result any) er
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	// Buffer at most maxResponseBody+1 so an oversized body is detectable and
+	// rejected instead of being read fully into memory.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(maxResponseBody+1)))
 	if err != nil {
 		return fmt.Errorf("读取响应失败: %w", err)
 	}
@@ -403,6 +559,13 @@ func (c *Client) doWithClient(hc *http.Client, req *http.Request, result any) er
 	// 204 No Content — success with no body, nothing to unmarshal
 	if resp.StatusCode == 204 {
 		return nil
+	}
+
+	if len(body) > maxResponseBody {
+		return &APIError{
+			Message:    fmt.Sprintf("响应体过大（超过 %d 字节），已被截断", maxResponseBody),
+			HTTPStatus: resp.StatusCode,
+		}
 	}
 
 	var apiResp APIResponse
@@ -414,18 +577,11 @@ func (c *Client) doWithClient(hc *http.Client, req *http.Request, result any) er
 		if parseErr == nil {
 			return &APIError{Message: apiResp.Message, HTTPStatus: resp.StatusCode, Details: apiResp.Error}
 		}
-		snippet := strings.TrimSpace(string(body))
-		if len(snippet) > 300 {
-			snippet = snippet[:300] + "..."
-		}
-		if snippet == "" {
-			snippet = "(空响应体)"
-		}
-		return &APIError{Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, snippet), HTTPStatus: resp.StatusCode}
+		return &APIError{Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, snippet(body)), HTTPStatus: resp.StatusCode}
 	}
 
 	if parseErr != nil {
-		return fmt.Errorf("服务器返回了意外的响应格式 (HTTP %d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("服务器返回了意外的响应格式 (HTTP %d): %s", resp.StatusCode, snippet(body))
 	}
 
 	if !apiResp.Success {

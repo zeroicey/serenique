@@ -35,14 +35,17 @@ var configCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("配置文件: %s\n", configPath)
-		fmt.Println()
-		fmt.Printf("baseurl: %s\n", cfg.BaseURL)
+		// Route table-mode output through the printer (see init.go) so the output
+		// package's stream abstraction is the only writer to stdout.
+		printer.PrintMessage(fmt.Sprintf("配置文件: %s", configPath))
+		printer.PrintMessage("")
+		kv := map[string]string{"baseurl": cfg.BaseURL}
 		if cfg.Token != "" {
-			fmt.Printf("token:   %s\n", maskToken(cfg.Token))
+			kv["token"] = maskToken(cfg.Token)
 		} else {
-			fmt.Println("token:   (未设置)")
+			kv["token"] = "(未设置)"
 		}
+		printer.PrintKeyValue(kv)
 
 		return nil
 	},
@@ -100,7 +103,7 @@ var configSetCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("✓ %s 已更新\n", key)
+		printer.PrintMessage("✓ " + key + " 已更新")
 		return nil
 	},
 }
@@ -120,7 +123,7 @@ var configPathCmd = &cobra.Command{
 			printer.PrintSuccess("配置文件路径", map[string]any{"configPath": configPath})
 			return nil
 		}
-		fmt.Println(configPath)
+		printer.PrintMessage(configPath)
 		return nil
 	},
 }

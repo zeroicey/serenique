@@ -655,3 +655,84 @@ func TestMomentGetKeepsAttachmentMetadata(t *testing.T) {
 		}
 	})
 }
+
+// =============================================================================
+// Config commands must not be blocked by a malformed configured baseurl
+// =============================================================================
+
+func TestIsLocalOnlyCommand(t *testing.T) {
+	if !isLocalOnlyCommand(rootCmd) {
+		t.Error("bare root (help) should be local-only")
+	}
+	if !isLocalOnlyCommand(configCmd) {
+		t.Error("config should be local-only")
+	}
+	if !isLocalOnlyCommand(configSetCmd) {
+		t.Error("config set should be local-only")
+	}
+	if !isLocalOnlyCommand(configPathCmd) {
+		t.Error("config path should be local-only")
+	}
+	if isLocalOnlyCommand(diaryCmd) {
+		t.Error("diary should not be local-only")
+	}
+	if isLocalOnlyCommand(momentCmd) {
+		t.Error("moment should not be local-only")
+	}
+}
+
+// TestPersistentPreRunESkipsClientForLocalCommands is the repair-workflow guard:
+// with a malformed baseurl in the config file, PersistentPreRunE must still let
+// `config set baseurl <good>` run — it must not try to build the API client.
+func TestPersistentPreRunESkipsClientForLocalCommands(t *testing.T) {
+	withTempConfig(t)
+	// A bad baseurl written by a typo'd init (init previously saved unvalidated).
+	if err := config.Save(&config.Config{BaseURL: "http://", Token: ""}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rootCmd.PersistentPreRunE(configSetCmd, nil); err != nil {
+		t.Fatalf("PersistentPreRunE must not fail for config set on a bad baseurl: %v", err)
+	}
+}
+
+// TestPersistentPreRunEBuildsClientForNetworkCommands is the control: the same
+// malformed baseurl must still fail for a network command, so the config-command
+// exception is precisely scoped.
+func TestPersistentPreRunEBuildsClientForNetworkCommands(t *testing.T) {
+	withTempConfig(t)
+	if err := config.Save(&config.Config{BaseURL: "http://", Token: ""}); err != nil {
+		t.Fatal(err)
+	}
+	if err := rootCmd.PersistentPreRunE(diaryCmd, nil); err == nil {
+		t.Fatal("expected baseurl validation failure for a network command")
+	}
+}
+
+// TestInitRejectsMalformedBaseURL: init must reject a malformed baseurl at write
+// time (previously it saved whatever the user typed, trapping `config set
+// baseurl` into the very lockout the skip above fixes).
+func TestInitRejectsMalformedBaseURL(t *testing.T) {
+	path := withTempConfig(t)
+	// flagToken non-empty skips the interactive token prompt.
+	flagBaseURL = "http://"
+	flagToken = "x"
+	t.Cleanup(func() {
+		flagBaseURL = ""
+		flagToken = ""
+	})
+	rec := &recordingPrinter{}
+	printer = rec
+	useJSON = false
+	t.Cleanup(func() { useJSON = false })
+
+	err := initCmd.RunE(initCmd, nil)
+	if err == nil {
+		t.Fatal("expected validation failure for malformed baseurl")
+	}
+	if !strings.Contains(err.Error(), "无效的 baseurl") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("config should not be written for a malformed baseurl, stat err = %v", statErr)
+	}
+}

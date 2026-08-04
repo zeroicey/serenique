@@ -161,3 +161,27 @@ func TestShortIDToleratesShortAndLongInput(t *testing.T) {
 		}
 	}
 }
+
+// TestPrefixToleratesShortInput guards the ID/timestamp table truncation sites
+// (diary/moment/blob list, attachment rows): a future server contract change
+// returning a shorter value must not panic the renderer. Unlike shortID, no
+// ellipsis is appended — a truncated timestamp column should not gain "...".
+func TestPrefixToleratesShortInput(t *testing.T) {
+	cases := []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"", 8, ""},                       // empty — must not panic
+		{"abc", 8, "abc"},                 // shorter than n — unchanged
+		{"abcdefghij", 8, "abcdefgh"},     // longer — first n runes
+		{"2026-08-04T00:00:00Z", 10, "2026-08-04"},
+		{"2026-08-04T00:00:00Z", 19, "2026-08-04T00:00:00"},
+		{"短内容", 1, "短"}, // rune-aware: no multi-byte split
+	}
+	for _, tc := range cases {
+		if got := prefix(tc.in, tc.n); got != tc.want {
+			t.Errorf("prefix(%q, %d) = %q, want %q", tc.in, tc.n, got, tc.want)
+		}
+	}
+}

@@ -77,6 +77,20 @@ func shortID(s string) string {
 	return string(r[:8]) + "..."
 }
 
+// prefix returns the first n runes of s, or s unchanged when it is shorter.
+// UUIDs and full ISO timestamps are long enough to slice with fixed bounds
+// today, but a future server contract change could return shorter values —
+// slicing without this guard would panic with "index out of range". Unlike
+// truncateRunes, no "..." is appended (a truncated timestamp column should not
+// gain an ellipsis).
+func prefix(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
+
 // renderedError marks an error whose message the command already printed
 // inline (e.g. per-file failures in a batch upload). Execute() still exits
 // non-zero — the batch did fail — but does not render the message a second

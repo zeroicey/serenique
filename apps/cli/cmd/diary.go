@@ -118,6 +118,7 @@ var diaryUpdateCmd = &cobra.Command{
 			"日期":   result.DiaryDate,
 			"内容":   result.Content,
 			"创建时间": result.CreatedAt,
+			"更新时间": result.UpdatedAt,
 		})
 		return nil
 	},
@@ -147,10 +148,10 @@ func init() {
 		defaultSize: 10,
 		row: func(d DiaryEntry) map[string]string {
 			return map[string]string{
-				"ID":   d.ID[:8] + "...",
+				"ID":   shortID(d.ID),
 				"日期":   d.DiaryDate,
 				"内容预览": truncateRunes(d.Content, 40),
-				"创建时间": d.CreatedAt[:10],
+				"创建时间": prefix(d.CreatedAt, 10),
 			}
 		},
 	}, &diaryListPage, &diaryListPageSize)

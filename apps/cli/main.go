@@ -5,9 +5,9 @@ import (
 )
 
 // Build metadata, injected via the Makefile's -X main.version etc. ldflags.
-// These are the ldflags targets; cmd.SetVersion copies them into the cmd
-// package's own (defaulted) copies, which are the single mutation point. The
-// two var blocks must stay in sync in name and default — see cmd/root.go.
+// main is the single canonical source of these values: cmd.SetVersion applies
+// its own dev defaults for empty values, so no parallel var block exists in
+// the cmd package.
 var (
 	version = "dev"
 	commit  = "unknown"

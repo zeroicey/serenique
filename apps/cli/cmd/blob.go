@@ -410,7 +410,7 @@ var blobAttachmentsCmd = &cobra.Command{
 				dn = *a.DisplayName
 			}
 			rows[i] = map[string]string{
-				"ID":   a.ID[:8] + "...",
+				"ID":   shortID(a.ID),
 				"所属类型": a.OwnerType,
 				// ownerId is a free-form business id (the API accepts any 1-128
 				// char string), not a UUID — never slice it with a fixed bound.
@@ -545,11 +545,11 @@ func init() {
 		defaultSize: 20,
 		row: func(b BlobEntry) map[string]string {
 			return map[string]string{
-				"ID":   b.ID[:8] + "...",
+				"ID":   shortID(b.ID),
 				"文件名":  b.OriginalName,
 				"类型":   b.MimeType,
 				"大小":   formatSize(b.Size),
-				"上传时间": b.CreatedAt[:10],
+				"上传时间": prefix(b.CreatedAt, 10),
 			}
 		},
 		extraQuery: func(q url.Values) {
