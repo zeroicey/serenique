@@ -1,4 +1,4 @@
-import { eq, like, and, sql } from "drizzle-orm";
+import { eq, like, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { blobs } from "@/modules/blob/blob.schema";
 import { AppError, ErrorCode } from "@/shared/errors";
@@ -18,11 +18,10 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function toEntry(row: typeof blobs.$inferSelect): BlobEntry {
+export function toPublicBlobEntry(row: typeof blobs.$inferSelect): BlobEntry {
   return {
     id: row.id,
     originalName: row.originalName,
-    storagePath: row.storagePath,
     mimeType: row.mimeType,
     size: row.size,
     checksum: row.checksum,
@@ -64,7 +63,7 @@ export const blobService = {
       .where(eq(blobs.checksum, checksum));
     if (existing) {
       logger.info({ checksum, existingId: existing.id }, "检测到重复文件，返回已有记录");
-      return toEntry(existing);
+      return toPublicBlobEntry(existing);
     }
 
     // --- persist to disk ---
@@ -101,7 +100,7 @@ export const blobService = {
       .returning();
 
     logger.info({ id, mimeType, size: file.size }, "文件上传成功");
-    return toEntry(row);
+    return toPublicBlobEntry(row);
   },
 
   /** Paginated list with optional MIME type filter. */
@@ -127,14 +126,14 @@ export const blobService = {
         .where(where),
     ]);
 
-    return { items: items.map(toEntry), total: count };
+    return { items: items.map(toPublicBlobEntry), total: count };
   },
 
   /** Get a single blob's metadata. */
   async get(id: string): Promise<BlobEntry> {
     const [row] = await db.select().from(blobs).where(eq(blobs.id, id));
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
-    return toEntry(row);
+    return toPublicBlobEntry(row);
   },
 
   /** Read the raw file bytes + metadata needed for streaming. */

@@ -20,7 +20,6 @@ export type ListBlobInput = z.infer<typeof ListBlobSchema>;
 export type BlobEntry = {
   id: string;
   originalName: string;
-  storagePath: string;
   mimeType: string;
   size: number;
   checksum: string;
