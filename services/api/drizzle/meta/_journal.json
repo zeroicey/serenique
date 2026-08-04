@@ -29,6 +29,13 @@
       "when": 1785845544131,
       "tag": "0003_add_blobs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785846012497,
+      "tag": "0004_add_blob_attachments",
+      "breakpoints": true
     }
   ]
 }

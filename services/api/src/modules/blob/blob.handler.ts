@@ -1,7 +1,10 @@
 import type { Context } from "hono";
 import { ZodError } from "zod";
 import { blobService } from "@/modules/blob/blob.service";
-import { ListBlobSchema } from "@/modules/blob/blob.types";
+import {
+  CreateBlobAttachmentSchema,
+  ListBlobSchema,
+} from "@/modules/blob/blob.types";
 import { Res } from "@/shared/response";
 import { AppError } from "@/shared/errors";
 import { logger } from "@/shared/logger";
@@ -110,6 +113,37 @@ export const blobHandler = {
   async delete(c: Context) {
     try {
       await blobService.delete(getId(c));
+      return c.body(null, 204);
+    } catch (e) {
+      return handleError(e, c);
+    }
+  },
+
+  /** POST /api/blobs/:id/attachments — create a business reference */
+  async createAttachment(c: Context) {
+    try {
+      const body = CreateBlobAttachmentSchema.parse(await c.req.json());
+      const result = await blobService.createAttachment(getId(c), body);
+      return Res.created("关联成功", result).build(c);
+    } catch (e) {
+      return handleError(e, c);
+    }
+  },
+
+  /** GET /api/blobs/:id/attachments — list references for a blob */
+  async listAttachments(c: Context) {
+    try {
+      const result = await blobService.listAttachments(getId(c));
+      return Res.ok("查询成功", result).build(c);
+    } catch (e) {
+      return handleError(e, c);
+    }
+  },
+
+  /** DELETE /api/blob-attachments/:id — remove a reference only */
+  async deleteAttachment(c: Context) {
+    try {
+      await blobService.deleteAttachment(getId(c));
       return c.body(null, 204);
     } catch (e) {
       return handleError(e, c);

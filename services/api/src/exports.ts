@@ -34,8 +34,16 @@ export { CreateMomentSchema, ListMomentSchema } from "@/modules/moment/moment.ty
 
 // ---- Blob module ----
 export { blobService } from "@/modules/blob/blob.service";
-export type { BlobEntry, ListBlobInput } from "@/modules/blob/blob.types";
-export { ListBlobSchema } from "@/modules/blob/blob.types";
+export type {
+  BlobAttachmentEntry,
+  BlobEntry,
+  CreateBlobAttachmentInput,
+  ListBlobInput,
+} from "@/modules/blob/blob.types";
+export {
+  CreateBlobAttachmentSchema,
+  ListBlobSchema,
+} from "@/modules/blob/blob.types";
 
 // ---- Shared utilities ----
 export { AppError, ErrorCode } from "@/shared/errors";
