@@ -1,6 +1,7 @@
 import { db } from "@/db/connection";
 import { diaries } from "@/modules/diary/diary.schema";
-import { AppError, ErrorCode } from "@/shared/errors";
+import { isFutureDate, todayStr } from "@/modules/diary/diary.domain";
+import { toDiaryEntry } from "@/modules/diary/diary.mappers";
 import type {
   CreateDiaryInput,
   DiaryEntry,
@@ -9,31 +10,13 @@ import type {
   UpdateDiaryInput,
   DeleteDiaryInput,
 } from "@/modules/diary/diary.types";
+import { AppError, ErrorCode } from "@/shared/errors";
 import { eq, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
-// Diary service — business logic and database operations.
+// Diary service — business orchestration over `db`.
+// Date rules live in diary.domain.ts; row→entry mapping in diary.mappers.ts.
 // ---------------------------------------------------------------------------
-
-/** Format a JS Date to YYYY-MM-DD. */
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/** Check that a date string is not in the future. */
-function isFutureDate(dateStr: string): boolean {
-  return dateStr > todayStr();
-}
-
-function toEntry(row: typeof diaries.$inferSelect): DiaryEntry {
-  return {
-    id: row.id,
-    diaryDate: row.diaryDate,
-    content: row.content,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
 
 export const diaryService = {
   async create(input: CreateDiaryInput): Promise<DiaryEntry> {
@@ -57,7 +40,7 @@ export const diaryService = {
       .insert(diaries)
       .values({ diaryDate, content: input.content })
       .returning();
-    return toEntry(row);
+    return toDiaryEntry(row);
   },
 
   async list(input: ListDiaryInput): Promise<{ items: DiaryEntry[]; total: number }> {
@@ -66,13 +49,13 @@ export const diaryService = {
       db.select().from(diaries).orderBy(diaries.createdAt).limit(input.pageSize).offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(diaries),
     ]);
-    return { items: items.map(toEntry), total: count };
+    return { items: items.map(toDiaryEntry), total: count };
   },
 
   async get(input: GetDiaryInput): Promise<DiaryEntry> {
     const [row] = await db.select().from(diaries).where(eq(diaries.id, input.id));
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "日记不存在", 404);
-    return toEntry(row);
+    return toDiaryEntry(row);
   },
 
   async update(input: UpdateDiaryInput): Promise<DiaryEntry> {
@@ -83,7 +66,7 @@ export const diaryService = {
       .where(eq(diaries.id, id))
       .returning();
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "日记不存在", 404);
-    return toEntry(row);
+    return toDiaryEntry(row);
   },
 
   async delete(input: DeleteDiaryInput): Promise<{ id: string }> {

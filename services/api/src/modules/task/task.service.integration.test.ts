@@ -1,15 +1,21 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
+import {
+  RUN_DB_TESTS,
+  setTestEnv,
+  titlePrefix,
+  uniqueTitle,
+} from "@/test/helpers";
 
 // ---------------------------------------------------------------------------
 // Task service integration tests — exercise the real service + Drizzle ORM
-// against the local docker Postgres (serenique-pg, migration 0006 applied).
+// against PostgreSQL (docker compose test DB, see docker-compose.test.yml).
 //
 // GATED: the whole suite is skipped unless RUN_DB_TESTS=1 is set, so plain
-// `bun test` stays green when the database is not running. Opt in explicitly:
+// `bun test` stays green when the database is not running. One-shot run:
 //
-//   cd services/api && RUN_DB_TESTS=1 bun test src/modules/task/task.service.integration.test.ts
+//   cd services/api && bun run test:integration:full
 //
 // Cleanup: every task group created here is tracked and deleted in afterAll
 // (deleting a group cascades to its tasks at the DB level, so no task rows are
@@ -17,29 +23,9 @@ import { eq, inArray } from "drizzle-orm";
 // never collide with pre-existing data in the shared local database.
 // ---------------------------------------------------------------------------
 
-const RUN_DB_TESTS = process.env.RUN_DB_TESTS === "1";
-const RUN_TOKEN = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-
-function setTestEnv() {
-  process.env.DATABASE_URL ??=
-    "postgresql://serenique:serenique@127.0.0.1:5432/serenique";
-  process.env.BLOB_ROOT ??= "/tmp/serenique-api-task-integration-test";
-  process.env.BLOB_MAX_SIZE ??= "104857600";
-  process.env.NODE_ENV ??= "test";
-}
-
 setTestEnv();
 
 const createdGroupIds: string[] = [];
-
-/** Titles carry a run-unique token + a per-test tag for scoped list assertions. */
-function uniqueTitle(tag: string): string {
-  return `it-${tag}-${RUN_TOKEN}-${randomUUID().slice(0, 8)}`;
-}
-
-function titlePrefix(tag: string): string {
-  return `it-${tag}-${RUN_TOKEN}`;
-}
 
 describe.skipIf(!RUN_DB_TESTS)("task service DB integration", () => {
   let service: typeof import("./task.service").taskService;
@@ -58,14 +44,12 @@ describe.skipIf(!RUN_DB_TESTS)("task service DB integration", () => {
   afterAll(async () => {
     if (!RUN_DB_TESTS || createdGroupIds.length === 0) return;
     // Deleting a group cascades to its tasks at the DB level (ON DELETE CASCADE).
+    // Note: the shared connection pool is intentionally NOT closed here — bun
+    // test runs every file in one process, so closing it would break later
+    // integration files. The process exits and releases the pool.
     await db
       .delete(taskGroupsTable)
       .where(inArray(taskGroupsTable.id, createdGroupIds));
-    try {
-      await (db.$client as { end: () => Promise<void> }).end();
-    } catch {
-      // Best-effort close; process teardown also releases the pool.
-    }
   });
 
   // ---- Task group CRUD -----------------------------------------------------

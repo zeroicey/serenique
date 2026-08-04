@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-
-function setTestEnv() {
-  process.env.DATABASE_URL ??=
-    "postgresql://serenique:serenique@127.0.0.1:5432/serenique";
-  process.env.BLOB_ROOT ??= "/tmp/serenique-api-blob-handler-test";
-  process.env.BLOB_MAX_SIZE ??= "104857600";
-  process.env.NODE_ENV ??= "test";
-}
+import { setTestEnv } from "@/test/helpers";
 
 describe("parseBlobRange", () => {
   test("parses bounded, open-ended, and suffix byte ranges", async () => {

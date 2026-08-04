@@ -4,20 +4,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Serenique is a personal journaling and note-taking API. It is a monorepo with services under `services/`. Current services are `services/api` and `services/mcp`.
+Serenique is a personal journaling and note-taking API. It is a monorepo with two kinds of packages:
 
-**Tech stack:** Bun runtime, Hono web framework, PostgreSQL via Drizzle ORM, Zod validation, Pino logging, TypeScript with strict mode.
+- `services/` — server-side processes:
+  - `services/api` — the REST API (Bun + Hono + Drizzle + PostgreSQL)
+  - `services/mcp` — an MCP server exposing the API's service layer to AI agents
+- `apps/` — client-side applications:
+  - `apps/cli` — a Go CLI client (cobra), modeled after GitHub's `gh`, for humans and AI agents
+
+**API stack:** Bun runtime, Hono web framework, PostgreSQL via Drizzle ORM, Zod validation, Pino logging, TypeScript with strict mode.
+**CLI stack:** Go (1.26+), cobra, yaml.v3.
+
+Before starting work on a subsystem, read the project memory in `.ai/` (below).
+
+## Project memory (`.ai/`)
+
+`.ai/` at the repo root is the project's memory — treat it as documentation of record. It holds:
+
+- `worklog/` — dated work logs: what was built, evaluated, and fixed each day, plus explicit pitfalls ("对下一次会话的提示").
+- `architecture/` — architecture design docs. Later docs supersede earlier ones (e.g. `2026-08-05-cli-tool-architecture-updates.md` explicitly marks itself as the finalized CLI architecture over the 08-04 design).
+- `decisions/` — decision records with **Why** / **How to apply** rationale, including rejected/deferred options.
+
+Read the latest relevant docs before changing a subsystem. The CLI's evaluation history and hardening contracts live in the 08-05 worklog/architecture/decisions files and are condensed into the CLI section below.
 
 ## Commands
 
 Common commands from the repository root:
 
 ```sh
-bun install
-bun run typecheck
-bun test
+bun install          # Install workspace deps
+bun run typecheck    # Type-check api + mcp
+bun test             # Runs ONLY services/mcp tests (bun run --cwd services/mcp test)
 docker compose up -d --build api mcp
 ```
+
+`bun test` at the root only covers the MCP service. API tests run from `services/api/`.
 
 API-specific commands run from `services/api/`:
 
@@ -25,20 +46,49 @@ API-specific commands run from `services/api/`:
 bun install          # Install dependencies
 bun run dev          # Start dev server with hot reload (port 3000)
 bun run start        # Same as dev
+bun test             # API unit/integration tests (bun test)
+bun run typecheck    # Type-check the api package alone
 bun run db:generate  # Generate Drizzle migrations from schema changes (requires TTY)
 bun run db:migrate   # Apply pending migrations to the database
 bun run db:push      # Push schema directly to DB (bypasses migrations, works in CI)
 ```
 
+CLI commands run from `apps/cli/`:
+
+```sh
+make build           # Build bin/serenique (version injected via ldflags)
+make install         # Copy binary to /usr/local/bin
+make build-all       # Cross-compile for 5 platforms
+make test            # go test ./... (runs cmd + internal packages)
+go build ./...       # Compile check
+go vet ./...         # Static check
+go test -count=1 ./...  # Full test run (use -count=1 to bypass cache)
+```
+
+Network note: pulling Go modules requires the China mirror `GOPROXY=https://goproxy.cn,direct` (`proxy.golang.org` is unreachable on this network).
+
 Runtime environment for Docker Compose is loaded from the project root `.env`. Service-local `.env` files are not used. Keep secrets out of images; root `.dockerignore` excludes `.env` files from the build context.
 
 ## Architecture
+
+### Monorepo layout
+
+```
+apps/cli/             Go CLI client (cobra) — see "CLI module" below
+services/api/         REST API — Bun + Hono + Drizzle + PostgreSQL
+services/mcp/         MCP server exposing API service layer over streamable-http
+scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.docker.internal)
+.ai/                  Project memory: worklog/ architecture/ decisions/
+```
+
+### services/api
 
 ```
 services/api/src/
 ├── index.ts          — Entry point: validates env, initialises blob root, creates app
 ├── app.ts            — App factory: wires middleware, routes, error handler, 404
 ├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, PORT, NODE_ENV)
+├── exports.ts        — Public workspace exports for @serenique/api (service layer only, no Hono)
 ├── db/
 │   ├── connection.ts — Single Drizzle client + Postgres pool (shared across all modules)
 │   └── schema.ts     — Central schema registry that Drizzle Kit reads for migrations
@@ -53,22 +103,40 @@ services/api/src/
 │   └── logger.ts     — Request logging (method, path, status, duration)
 └── modules/
     ├── blob/         — Generic binary storage layer (all MIME types, SHA-256 dedup)
-    ├── diary/        — Diary entries (one per day, dated)
-    └── moment/       — Lightweight flash notes
+    ├── diary/        — Diary entries (one per day, dated; fields: content, diaryDate)
+    └── moment/       — Flash notes (≤500 chars; field: text; media attachments via blob refs)
 ```
 
 ### Module structure
 
-Every module follows the same 5-file + barrel pattern:
+Every module follows the same file set (core skeleton):
 
 | File | Purpose |
 |------|---------|
 | `*.schema.ts` | Drizzle table definition |
 | `*.types.ts` | Zod validation schemas + TypeScript types for inputs/outputs |
-| `*.service.ts` | Business logic, DB queries — throws `AppError` on failure |
-| `*.handler.ts` | Parses request with Zod → calls service → builds `Res` response |
+| `*.service.ts` | Exports a **singleton** `xxxService`; orchestration over `db` / `@/shared/*` / `@/env`; throws `AppError` |
+| `*.handler.ts` | Parses request with Zod → calls service → builds `Res` response; errors via shared `handleError` from `shared/handler.ts` |
 | `*.router.ts` | Hono router with RESTful routes, mounted under `/api` |
 | `index.ts` | Barrel re-export of the router |
+
+When a module has pure business rules or row→entry conversion, they live in dedicated files so the service stays thin:
+
+| File | Purpose |
+|------|---------|
+| `*.domain.ts` | Pure business rules/calculations/validations — **no DB/IO imports**, unit-testable in milliseconds |
+| `*.mappers.ts` | row→entry conversion, pure functions |
+
+Services never use repository interfaces or factories/DI — the DB is an implementation detail of the service, and testable logic is extracted as pure functions into `*.domain.ts`.
+
+Tests follow a two-tier convention (see `.ai/decisions/2026-08-05-service-layer-architecture.md`):
+
+| File | Purpose |
+|------|---------|
+| `*.service.test.ts` | Unit tests: domain pure functions + Zod schemas + mappers, no DB |
+| `*.service.integration.test.ts` | Real PostgreSQL (+ real disk for blob), gated by `RUN_DB_TESTS=1`, skipped otherwise |
+
+Shared test helpers live in `src/test/helpers.ts`. Run `cd services/api && bun test` (unit) or `bun run test:integration:full` (DB-backed).
 
 Each module is a self-contained Hono instance. Modules are wired in `app.ts` via `app.route("/api", moduleRouter)`.
 
@@ -81,6 +149,7 @@ Each module is a self-contained Hono instance. Modules are wired in `app.ts` via
 - **Path alias:** `@/*` maps to `./src/*` (configured in `tsconfig.json`).
 - **Database:** The single `db` export from `db/connection.ts` is used everywhere. Never create a second connection pool. The central `db/schema.ts` re-exports all table definitions — Drizzle Kit reads this file, so every new table must be exported there.
 - **Env in services:** Services that need environment variables (like `blob.service.ts` needing `BLOB_ROOT` and `BLOB_MAX_SIZE`) import `env` directly from `@/env`. This is acceptable when the service is tightly coupled to the environment config.
+- **Workspace export:** `src/exports.ts` is the `@serenique/api` package entry point — it re-exports service layers, Zod schemas, and shared utilities (no handlers, routers, or middleware). The MCP service consumes the API through this surface (`import { ... } from "@serenique/api"`). Keep the exported surface small and typed; external consumers share the same DB connection.
 
 ### Blob module (low-level binary storage)
 
@@ -105,7 +174,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET | `/` | API info |
 | GET, POST | `/api/diaries` | Diary list / create |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
-| GET, POST | `/api/moments` | Moment list / create |
+| GET, POST | `/api/moments` | Moment list / create (create accepts optional `attachments[]`) |
 | GET, DELETE | `/api/moments/:id` | Moment detail / delete |
 | POST, DELETE | `/api/moments/:id/attachments[/:attachmentId]` | Moment attachment create / delete |
 | POST | `/api/blobs/upload` | Blob upload (multipart, field: `file`) |
@@ -118,7 +187,33 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | POST, GET | `/api/blobs/:id/attachments` | Create / list blob attachment references |
 | DELETE | `/api/blob-attachments/:id` | Delete an attachment reference only |
 
+Field-naming gotcha: diary uses `content`/`diaryDate`, but moment uses `text`. Don't confuse them — the CLI contract (and MCP) follow the API source: moment body is `{ "text": ... }`.
+
 User-facing messages are in Chinese.
+
+### services/mcp
+
+Bun + `@modelcontextprotocol/sdk` server exposing diary/moment/blob operations to AI agents over **streamable-http** at `/mcp` (port 3001). It calls the API's service layer directly via the `@serenique/api` workspace package (same DB), not over HTTP. Tools are defined in `src/tools/*.tools.ts` and registered in `src/server.ts`.
+
+### CLI module (`apps/cli`)
+
+Go + cobra CLI for the API (like `gh`). Dependency direction: `cmd/` (cobra commands) → `internal/{config,client,output}` — the three internal packages are independent of each other. Config lives at `~/.serenique/config.yaml`, with priority CLI flag > env (`SERENIQUE_BASEURL`/`SERENIQUE_TOKEN`) > file > default. `--json`/`-j` switches the `output.Printer` to machine-readable JSON.
+
+Hard contracts from the 08-05 evaluation — do not regress these:
+
+- **Errors exit non-zero.** Every `RunE` returns an error; never `return nil` on failure. `rootCmd` uses `SilenceUsage` + `SilenceErrors` and renders the error exactly once.
+- **stdout purity.** Results (table, or a single JSON document under `--json`) → stdout; progress/confirmations/errors → stderr. Prefer `output.Printer`; don't `fmt.Printf` to stdout.
+- **Token masking.** Any token output — including `--json` (the machine-consumable mode) — goes through `maskToken()`.
+- **API contract source of truth** is the `services/api` workspace source, not a running container. moment's field is `text`; when backend fields change, sync the CLI struct's `json:"..."` tags.
+- **Download path sanitization.** Default filenames must pass through `filepath.Base()`; never `os.Create(originalName)` directly (path traversal).
+- **Transfers are cancellable and bounded.** Root context derived from `signal.NotifyContext(os.Interrupt, SIGTERM)`; transfer client sets `ResponseHeaderTimeout`. No `context.Background()` on transfer paths.
+- **Config security.** File `0600`, dir `0700`, atomic temp+rename writes, symlink-safe chmod. New config fields must be threaded through `Resolve`, precedence, and the `config set` whitelist.
+- **Confirmations.** Use `helpers.confirm()` — prompt to stderr, EOF in non-interactive stdin means "not confirmed" → error → exit non-zero.
+- **CJK-safe truncation.** Use `truncateRunes()`, never byte-slice strings.
+- **`List` is a generic free function**, not a method (Go forbids generic methods on non-generic receiver types).
+- **Full verification** is `go build ./... && go vet ./... && go test -count=1 ./...` (`make test` runs `go test ./...`, which includes `cmd/`).
+
+Adding a new module (e.g. drive): `internal/client/drive.go` (typed methods) → `cmd/drive.go` (cobra commands) → register in `cmd/root.go`. Nothing else needs touching.
 
 ## Docker
 
@@ -126,7 +221,7 @@ User-facing messages are in Chinese.
 docker compose up -d --build api mcp
 ```
 
-Docker Compose reads `.env` from the project root. See `.env.example` for the expected keys. `BLOB_ROOT` is fixed to `/data/blobs` inside the containers and persisted through the `blob-data` volume. `DATABASE_URL` is required; the entrypoint rewrites localhost database hosts to `host.docker.internal` for container access.
+Docker Compose reads `.env` from the project root. See `.env.example` for the expected keys. `BLOB_ROOT` is fixed to `/data/blobs` inside the containers and persisted through the `blob-data` volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites localhost database hosts to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is wired through from `.env` and is required for the `blob link` / signed access-link feature.
 
 Manual image builds use the repository root as context:
 

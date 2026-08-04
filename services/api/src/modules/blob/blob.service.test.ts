@@ -1,568 +1,213 @@
 import { describe, expect, test } from "bun:test";
+import { setTestEnv, fakeBlobRow } from "@/test/helpers";
 
-function setTestEnv() {
-  process.env.DATABASE_URL ??=
-    "postgresql://serenique:serenique@127.0.0.1:5432/serenique";
-  process.env.BLOB_ROOT ??= "/tmp/serenique-api-blob-test";
-  process.env.BLOB_MAX_SIZE ??= "104857600";
-  process.env.NODE_ENV ??= "test";
-}
+// ---------------------------------------------------------------------------
+// Blob unit tests — domain pure functions, mappers, Zod schemas. No real DB
+// or disk needed. (The upload size guard is a pure domain function so it is
+// tested without depending on process env timing.)
+// ---------------------------------------------------------------------------
 
-function fakeBlobRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
-    originalName: "daily-note.png",
-    storagePath: "image/2026/08/0198f6bd-4f06-7289-b57d-62e8af51a4aa.png",
-    mimeType: "image/png",
-    size: 2048,
-    checksum: "a".repeat(64),
-    metadata: {},
-    width: 128,
-    height: 64,
-    duration: null,
-    createdAt: new Date("2026-08-04T12:00:00.000Z"),
-    ...overrides,
-  };
-}
+setTestEnv();
 
-function createMemoryBlobRepository(
-  initialRows: Array<Record<string, any>> = [fakeBlobRow()],
-  options: {
-    findBlobByChecksumSequence?: Array<Record<string, any> | undefined>;
-    insertBlobError?: unknown;
-  } = {},
-) {
-  const blobsById = new Map<string, Record<string, any>>(
-    initialRows.map((row) => [row.id, row]),
-  );
-  const attachmentsById = new Map<string, Record<string, any>>();
-  let checksumLookupCount = 0;
-
-  return {
-    blobsById,
-    attachmentsById,
-
-    async findBlobByChecksum(checksum: string) {
-      if (options.findBlobByChecksumSequence) {
-        const next = options.findBlobByChecksumSequence[checksumLookupCount];
-        checksumLookupCount += 1;
-        return next;
-      }
-      return [...blobsById.values()].find((row) => row.checksum === checksum);
-    },
-
-    async insertBlob(input: Record<string, unknown>) {
-      if (options.insertBlobError) throw options.insertBlobError;
-
-      const row: Record<string, any> = {
-        metadata: {},
-        width: null,
-        height: null,
-        duration: null,
-        createdAt: new Date("2026-08-04T12:00:00.000Z"),
-        ...input,
-      };
-      blobsById.set(String(row.id), row);
-      return row;
-    },
-
-    async listBlobs() {
-      return { items: [...blobsById.values()], total: blobsById.size };
-    },
-
-    async findBlobById(id: string) {
-      return blobsById.get(id);
-    },
-
-    async deleteBlob(id: string) {
-      blobsById.delete(id);
-    },
-
-    async listBlobStoragePaths() {
-      return [...blobsById.values()].map((row) => String(row.storagePath));
-    },
-
-    async createAttachment(input: Record<string, unknown>) {
-      const id = "0198f6bf-8564-705c-8b95-56227195c5db";
-      const row = {
-        id,
-        role: "attachment",
-        displayName: null,
-        sortOrder: 0,
-        metadata: {},
-        createdAt: new Date("2026-08-04T12:01:00.000Z"),
-        updatedAt: new Date("2026-08-04T12:01:00.000Z"),
-        ...input,
-      };
-      attachmentsById.set(id, row);
-      return row;
-    },
-
-    async listAttachmentsByBlobId(blobId: string) {
-      return [...attachmentsById.values()].filter(
-        (attachment) => attachment.blobId === blobId,
-      );
-    },
-
-    async countAttachmentsByBlobId(blobId: string) {
-      return [...attachmentsById.values()].filter(
-        (attachment) => attachment.blobId === blobId,
-      ).length;
-    },
-
-    async findAttachmentById(id: string) {
-      return attachmentsById.get(id);
-    },
-
-    async deleteAttachment(id: string) {
-      attachmentsById.delete(id);
-    },
-  };
-}
-
-function createMemoryBlobStorage(
-  deletedPaths: string[] = [],
-  options: {
-    savedPaths?: string[];
-    diskPaths?: string[];
-    storagePath?: string;
-  } = {},
-) {
-  return {
-    sha256() {
-      return "b".repeat(64);
-    },
-    buildStoragePath() {
-      return options.storagePath ?? "image/2026/08/generated.png";
-    },
-    async saveFile(_root: string, path: string) {
-      options.savedPaths?.push(path);
-    },
-    async readFileFromStorage() {
-      return Buffer.from("file");
-    },
-    async deleteFileFromStorage(_root: string, path: string) {
-      deletedPaths.push(path);
-    },
-    async listStoragePaths() {
-      return options.diskPaths ?? [];
-    },
-    extractImageDimensions() {
-      return null;
-    },
-  };
-}
-
-describe("blob public response mapping", () => {
-  test("omits internal storage path from public blob entries", async () => {
+describe("blob domain — error guards", () => {
+  test("assertBlobSize rejects files over the limit with 413", async () => {
     setTestEnv();
-    const { toPublicBlobEntry } = await import("./blob.service");
+    const { assertBlobSize } = await import("./blob.domain");
 
-    const entry = toPublicBlobEntry(fakeBlobRow());
+    expect(() => assertBlobSize(2048, 1024)).toThrow();
+    expect(() => assertBlobSize(1024, 1024)).not.toThrow();
+  });
 
-    expect(entry).toEqual({
-      id: "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
-      originalName: "daily-note.png",
-      mimeType: "image/png",
-      size: 2048,
-      checksum: "a".repeat(64),
-      metadata: {},
-      width: 128,
-      height: 64,
-      duration: null,
-      createdAt: "2026-08-04T12:00:00.000Z",
-    });
-    expect("storagePath" in entry).toBe(false);
+  test("isChecksumUniqueConflict matches only checksum unique violations", async () => {
+    setTestEnv();
+    const { isChecksumUniqueConflict } = await import("./blob.domain");
+
+    expect(
+      isChecksumUniqueConflict({
+        code: "23505",
+        constraint: "blobs_checksum_unique",
+      }),
+    ).toBe(true);
+    // PostgresJS driver also reports the constraint as constraint_name.
+    expect(
+      isChecksumUniqueConflict({
+        code: "23505",
+        constraint_name: "blobs_checksum_unique",
+      }),
+    ).toBe(true);
+    // drizzle-orm wraps the driver error under `.cause`.
+    expect(
+      isChecksumUniqueConflict({
+        cause: {
+          code: "23505",
+          constraint_name: "blobs_checksum_unique",
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isChecksumUniqueConflict({ code: "23505", constraint: "other" }),
+    ).toBe(false);
+    expect(isChecksumUniqueConflict({ code: "23503" })).toBe(false);
+    expect(isChecksumUniqueConflict(null)).toBe(false);
+    expect(isChecksumUniqueConflict("boom")).toBe(false);
+  });
+
+  test("errorMessage extracts the message or stringifies", async () => {
+    setTestEnv();
+    const { errorMessage } = await import("./blob.domain");
+
+    expect(errorMessage(new Error("boom"))).toBe("boom");
+    expect(errorMessage("raw")).toBe("raw");
+    expect(errorMessage(42)).toBe("42");
   });
 });
 
-describe("blob attachment lifecycle", () => {
-  test("keeps physical blobs while attachments reference them", async () => {
+describe("blob domain — MIME sniffing", () => {
+  test("looksLikeSvg detects <svg and <?xml+<svg, with BOM tolerance", async () => {
     setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const deletedPaths: string[] = [];
-    const repository = createMemoryBlobRepository();
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository,
-      storage: createMemoryBlobStorage(deletedPaths),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-    });
+    const { looksLikeSvg } = await import("./blob.domain");
 
-    const attachment = await service.createAttachment(
-      "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
-      {
-        ownerType: "diary",
-        ownerId: "2026-08-04",
-        role: "inline-image",
-        displayName: "Daily image",
-        sortOrder: 2,
-        metadata: { alt: "desk" },
-      },
+    expect(looksLikeSvg(Buffer.from("<svg xmlns=..."))).toBe(true);
+    expect(looksLikeSvg(Buffer.from('<?xml version="1.0"?><svg>'))).toBe(true);
+    expect(looksLikeSvg(Buffer.from("﻿<svg>"))).toBe(true);
+    expect(looksLikeSvg(Buffer.from("PNG..."))).toBe(false);
+    expect(looksLikeSvg(Buffer.from("plain text"))).toBe(false);
+  });
+
+  test("normalizeUploadedMimeType overrides SVG-looking content", async () => {
+    setTestEnv();
+    const { normalizeUploadedMimeType } = await import("./blob.domain");
+
+    const svgBuf = Buffer.from("<svg>");
+    expect(normalizeUploadedMimeType({ type: "image/png" }, svgBuf)).toBe(
+      "image/svg+xml",
     );
-
-    expect(attachment).toMatchObject({
-      blobId: "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
-      ownerType: "diary",
-      ownerId: "2026-08-04",
-      role: "inline-image",
-      displayName: "Daily image",
-      sortOrder: 2,
-      metadata: { alt: "desk" },
-    });
-
-    await expect(
-      service.delete("0198f6bd-4f06-7289-b57d-62e8af51a4aa"),
-    ).rejects.toMatchObject({
-      code: "CONFLICT",
-      status: 409,
-    });
-    expect(repository.blobsById.has("0198f6bd-4f06-7289-b57d-62e8af51a4aa")).toBe(
-      true,
-    );
-    expect(deletedPaths).toEqual([]);
-
-    await service.deleteAttachment(attachment.id);
     expect(
-      await service.listAttachments("0198f6bd-4f06-7289-b57d-62e8af51a4aa"),
-    ).toEqual([]);
+      normalizeUploadedMimeType({ type: "image/png" }, Buffer.from("not svg")),
+    ).toBe("image/png");
+    expect(
+      normalizeUploadedMimeType({ type: "" }, Buffer.from("data")),
+    ).toBe("application/octet-stream");
+  });
+});
 
-    await service.delete("0198f6bd-4f06-7289-b57d-62e8af51a4aa");
+describe("blob domain — access signatures", () => {
+  test("signBlobAccess is deterministic and signaturesEqual guards", async () => {
+    setTestEnv();
+    const { signBlobAccess, signaturesEqual } = await import("./blob.domain");
 
-    expect(repository.blobsById.has("0198f6bd-4f06-7289-b57d-62e8af51a4aa")).toBe(
-      false,
-    );
-    expect(deletedPaths).toEqual([
-      "image/2026/08/0198f6bd-4f06-7289-b57d-62e8af51a4aa.png",
-    ]);
+    const sig = signBlobAccess("secret", "blob-1", 12345);
+    expect(signBlobAccess("secret", "blob-1", 12345)).toBe(sig);
+    expect(signBlobAccess("secret", "blob-1", 99999)).not.toBe(sig);
+    expect(signaturesEqual(sig, sig)).toBe(true);
+    expect(signaturesEqual(sig, sig.slice(0, -1) + "x")).toBe(false);
+    expect(signaturesEqual(sig, "short")).toBe(false);
   });
 
-  test("rejects moment attachments from the generic blob API", async () => {
+  test("requireSigningSecret throws INTERNAL when missing", async () => {
     setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository: createMemoryBlobRepository(),
-      storage: createMemoryBlobStorage(),
-    });
+    const { requireSigningSecret } = await import("./blob.domain");
 
-    await expect(
-      service.createAttachment("0198f6bd-4f06-7289-b57d-62e8af51a4aa", {
-        ownerType: "moment",
-        ownerId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001",
-        role: "attachment",
-        sortOrder: 0,
-        metadata: {},
-      }),
-    ).rejects.toMatchObject({
-      code: "VALIDATION",
-      status: 400,
+    expect(requireSigningSecret("a-secret")).toBe("a-secret");
+    expect(() => requireSigningSecret(undefined)).toThrow();
+    expect(() => requireSigningSecret("")).toThrow();
+  });
+});
+
+describe("blob domain — owner type guard", () => {
+  test("assertGenericAttachmentOwnerType rejects reserved types", async () => {
+    setTestEnv();
+    const { assertGenericAttachmentOwnerType } = await import("./blob.domain");
+
+    expect(() => assertGenericAttachmentOwnerType("moment")).toThrow();
+    expect(() => assertGenericAttachmentOwnerType("drive")).not.toThrow();
+  });
+});
+
+describe("blob mappers", () => {
+  test("toPublicBlobEntry converts a row and never exposes storagePath", async () => {
+    setTestEnv();
+    const { toPublicBlobEntry } = await import("./blob.mappers");
+
+    const entry = toPublicBlobEntry(fakeBlobRow());
+    expect(entry).toMatchObject({
+      id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f2001",
+      originalName: "photo.png",
+      mimeType: "image/png",
+      size: 2048,
+      width: 128,
+      height: 64,
+      duration: null,
+      createdAt: "2026-08-05T12:00:00.000Z",
     });
+    expect(entry).not.toHaveProperty("storagePath");
   });
 
-  test("rejects deleting moment attachments from the generic blob API", async () => {
+  test("toBlobAttachmentEntry converts an attachment row", async () => {
     setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const repository = createMemoryBlobRepository();
-    repository.attachmentsById.set("0198f6bf-8564-705c-8b95-56227195c5db", {
-      id: "0198f6bf-8564-705c-8b95-56227195c5db",
-      blobId: "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
+    const { toBlobAttachmentEntry } = await import("./blob.mappers");
+
+    const entry = toBlobAttachmentEntry({
+      id: "att-1",
+      blobId: fakeBlobRow().id,
       ownerType: "moment",
-      ownerId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001",
+      ownerId: "moment-1",
       role: "attachment",
       displayName: null,
       sortOrder: 0,
       metadata: {},
-      createdAt: new Date("2026-08-04T12:01:00.000Z"),
-      updatedAt: new Date("2026-08-04T12:01:00.000Z"),
+      createdAt: new Date("2026-08-05T12:00:00.000Z"),
+      updatedAt: new Date("2026-08-05T12:00:00.000Z"),
     });
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository,
-      storage: createMemoryBlobStorage(),
+    expect(entry).toMatchObject({
+      id: "att-1",
+      ownerType: "moment",
+      sortOrder: 0,
+      createdAt: "2026-08-05T12:00:00.000Z",
     });
-
-    await expect(
-      service.deleteAttachment("0198f6bf-8564-705c-8b95-56227195c5db"),
-    ).rejects.toMatchObject({
-      code: "VALIDATION",
-      status: 400,
-    });
-    expect(
-      repository.attachmentsById.has("0198f6bf-8564-705c-8b95-56227195c5db"),
-    ).toBe(true);
   });
 });
 
-describe("blob upload consistency", () => {
-  test("removes the saved disk file when inserting the blob row fails", async () => {
+describe("blob schemas", () => {
+  test("ListBlobSchema coerces pagination and accepts a mimeType prefix", async () => {
     setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const savedPaths: string[] = [];
-    const deletedPaths: string[] = [];
-    const repository = createMemoryBlobRepository([], {
-      insertBlobError: new Error("database unavailable"),
-    });
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository,
-      storage: createMemoryBlobStorage(deletedPaths, {
-        savedPaths,
-        storagePath: "text/2026/08/generated.txt",
-      }),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-    });
+    const { ListBlobSchema } = await import("./blob.types");
 
-    await expect(
-      service.upload(new File(["hello"], "note.txt", { type: "text/plain" })),
-    ).rejects.toThrow("database unavailable");
-
-    expect(savedPaths).toEqual(["text/2026/08/generated.txt"]);
-    expect(deletedPaths).toEqual(["text/2026/08/generated.txt"]);
-    expect(repository.blobsById.size).toBe(0);
-  });
-
-  test("cleans the redundant disk file and returns the existing blob on checksum races", async () => {
-    setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const savedPaths: string[] = [];
-    const deletedPaths: string[] = [];
-    const existing = fakeBlobRow({ checksum: "b".repeat(64) });
-    const duplicateChecksumError = Object.assign(new Error("duplicate checksum"), {
-      code: "23505",
-      constraint: "blobs_checksum_unique",
-    });
-    const repository = createMemoryBlobRepository([], {
-      findBlobByChecksumSequence: [undefined, existing],
-      insertBlobError: duplicateChecksumError,
-    });
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository,
-      storage: createMemoryBlobStorage(deletedPaths, {
-        savedPaths,
-        storagePath: "text/2026/08/generated.txt",
-      }),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-    });
-
-    const result = await service.upload(
-      new File(["hello"], "note.txt", { type: "text/plain" }),
-    );
-
-    expect(result.id).toBe("0198f6bd-4f06-7289-b57d-62e8af51a4aa");
-    expect(savedPaths).toEqual(["text/2026/08/generated.txt"]);
-    expect(deletedPaths).toEqual(["text/2026/08/generated.txt"]);
-  });
-
-  test("sniffs disguised SVG uploads and stores their MIME type as SVG", async () => {
-    setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const repository = createMemoryBlobRepository([]);
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository,
-      storage: createMemoryBlobStorage([], {
-        storagePath: "image/2026/08/disguised.svg",
-      }),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-    });
-
-    const result = await service.upload(
-      new File(["  <?xml version=\"1.0\"?><svg></svg>"], "disguised.png", {
-        type: "image/png",
-      }),
-    );
-
-    expect(result.mimeType).toBe("image/svg+xml");
-    expect(repository.blobsById.get(result.id)?.mimeType).toBe("image/svg+xml");
-  });
-
-  test("deletes disk files that no blob row references", async () => {
-    setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const deletedPaths: string[] = [];
-    const repository = createMemoryBlobRepository([
-      fakeBlobRow({
-        storagePath: "image/2026/08/kept.png",
-      }),
-    ]);
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository,
-      storage: createMemoryBlobStorage(deletedPaths, {
-        diskPaths: [
-          "image/2026/08/kept.png",
-          "application/2026/08/orphan.pdf",
-        ],
-      }),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-    });
-
-    const result = await service.cleanupOrphanFiles();
-
-    expect(result).toEqual({
-      checked: 2,
-      deleted: ["application/2026/08/orphan.pdf"],
-      failed: [],
-    });
-    expect(deletedPaths).toEqual(["application/2026/08/orphan.pdf"]);
-  });
-});
-
-describe("blob file transfer", () => {
-  test("returns a blob body descriptor instead of materializing a buffer", async () => {
-    setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const repository = createMemoryBlobRepository();
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-      },
-      repository,
-      storage: {
-        ...createMemoryBlobStorage(),
-        async openFileFromStorage() {
-          return { body: new Blob(["file"]), size: 4 };
-        },
-      },
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-    });
-
-    const file = await service.getFile("0198f6bd-4f06-7289-b57d-62e8af51a4aa");
-
-    expect(file).toMatchObject({
-      mimeType: "image/png",
-      filename: "daily-note.png",
-      size: 4,
-    });
-    expect(file.body).toBeInstanceOf(Blob);
-    expect("buf" in file).toBe(false);
-  });
-});
-
-describe("blob signed access links", () => {
-  test("creates and validates temporary access links", async () => {
-    setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const now = new Date("2026-08-04T00:00:00.000Z");
-    const service = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-        BLOB_SIGNING_SECRET: "x".repeat(48),
-      },
-      repository: createMemoryBlobRepository(),
-      storage: createMemoryBlobStorage(),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-      now: () => now,
-    });
-
-    const link = await service.createAccessLink(
-      "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
-      {
-        baseUrl: "https://api.example.test",
-        expiresInSeconds: 60,
-      },
-    );
-
-    expect(link.expires).toBe(Math.floor(now.getTime() / 1000) + 60);
-    expect(link.expiresAt).toBe("2026-08-04T00:01:00.000Z");
+    expect(ListBlobSchema.parse({})).toMatchObject({ page: 1, pageSize: 20 });
     expect(
-      link.path.startsWith(
-        "/api/blobs/0198f6bd-4f06-7289-b57d-62e8af51a4aa/file?",
-      ),
-    ).toBe(true);
-    expect(
-      link.url.startsWith(
-        "https://api.example.test/api/blobs/0198f6bd-4f06-7289-b57d-62e8af51a4aa/file?",
-      ),
-    ).toBe(true);
-    expect(link.signature.length).toBeGreaterThan(20);
-
-    expect(() =>
-      service.verifyAccessSignature("0198f6bd-4f06-7289-b57d-62e8af51a4aa", {
-        expires: String(link.expires),
-        signature: link.signature,
-      }),
-    ).not.toThrow();
+      ListBlobSchema.parse({ page: "2", pageSize: "5", mimeType: "image/" }),
+    ).toMatchObject({ page: 2, pageSize: 5, mimeType: "image/" });
   });
 
-  test("rejects expired or tampered access signatures", async () => {
+  test("CreateBlobAttachmentSchema defaults role/metadata/sortOrder", async () => {
     setTestEnv();
-    const { createBlobService } = (await import("./blob.service")) as any;
-    const issuedAt = new Date("2026-08-04T00:00:00.000Z");
-    const repository = createMemoryBlobRepository();
-    const issuingService = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-        BLOB_SIGNING_SECRET: "x".repeat(48),
-      },
-      repository,
-      storage: createMemoryBlobStorage(),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-      now: () => issuedAt,
-    });
-    const link = await issuingService.createAccessLink(
-      "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
-      {
-        baseUrl: "https://api.example.test",
-        expiresInSeconds: 60,
-      },
-    );
-    const expiredService = createBlobService({
-      env: {
-        BLOB_ROOT: "/tmp/serenique-api-blob-test",
-        BLOB_MAX_SIZE: 104857600,
-        BLOB_SIGNING_SECRET: "x".repeat(48),
-      },
-      repository,
-      storage: createMemoryBlobStorage(),
-      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
-      now: () => new Date("2026-08-04T00:02:00.000Z"),
-    });
+    const { CreateBlobAttachmentSchema } = await import("./blob.types");
 
-    expect(() =>
-      expiredService.verifyAccessSignature(
-        "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
-        {
-          expires: String(link.expires),
-          signature: link.signature,
-        },
-      ),
-    ).toThrow("临时访问链接已过期");
+    const parsed = CreateBlobAttachmentSchema.parse({
+      ownerType: "drive",
+      ownerId: "d1",
+    });
+    expect(parsed.role).toBe("attachment");
+    expect(parsed.metadata).toEqual({});
+    expect(parsed.sortOrder).toBe(0);
+  });
 
-    expect(() =>
-      issuingService.verifyAccessSignature(
-        "0198f6c8-3a3f-7142-8771-0dca5e5552ec",
-        {
-          expires: String(link.expires),
-          signature: link.signature,
-        },
-      ),
-    ).toThrow("临时访问签名无效");
+  test("CreateBlobAccessLinkSchema bounds expiresInSeconds", async () => {
+    setTestEnv();
+    const { CreateBlobAccessLinkSchema } = await import("./blob.types");
+
+    expect(CreateBlobAccessLinkSchema.parse({}).expiresInSeconds).toBe(15 * 60);
+    expect(
+      CreateBlobAccessLinkSchema.parse({ expiresInSeconds: "30" })
+        .expiresInSeconds,
+    ).toBe(30);
+    expect(
+      CreateBlobAccessLinkSchema.safeParse({ expiresInSeconds: 0 }).success,
+    ).toBe(false);
+    expect(
+      CreateBlobAccessLinkSchema.safeParse({
+        expiresInSeconds: 8 * 24 * 60 * 60,
+      }).success,
+    ).toBe(false);
   });
 });

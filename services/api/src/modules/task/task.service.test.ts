@@ -1,16 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { setTestEnv } from "@/test/helpers";
 
 // ---------------------------------------------------------------------------
-// Task module tests — pure functions and Zod schemas only. No database needed.
+// Task module unit tests — pure functions (task.domain), mappers and Zod
+// schemas only. No database needed.
 // ---------------------------------------------------------------------------
-
-function setTestEnv() {
-  process.env.DATABASE_URL ??=
-    "postgresql://serenique:serenique@127.0.0.1:5432/serenique";
-  process.env.BLOB_ROOT ??= "/tmp/serenique-api-task-test";
-  process.env.BLOB_MAX_SIZE ??= "104857600";
-  process.env.NODE_ENV ??= "test";
-}
 
 const NOW = new Date("2026-08-05T10:00:00.000Z");
 const OLD = new Date("2026-08-04T08:00:00.000Z");
@@ -18,14 +12,14 @@ const OLD = new Date("2026-08-04T08:00:00.000Z");
 describe("nextCompletedAt — target-status-determined completedAt", () => {
   test("entering done sets completedAt to now", async () => {
     setTestEnv();
-    const { nextCompletedAt } = await import("./task.service");
+    const { nextCompletedAt } = await import("./task.domain");
 
     expect(nextCompletedAt("done", NOW)).toEqual(NOW);
   });
 
   test("non-done statuses resolve to null (covers leaving done)", async () => {
     setTestEnv();
-    const { nextCompletedAt } = await import("./task.service");
+    const { nextCompletedAt } = await import("./task.domain");
 
     expect(nextCompletedAt("todo", NOW)).toBeNull();
     expect(nextCompletedAt("abandon", NOW)).toBeNull();
@@ -35,7 +29,7 @@ describe("nextCompletedAt — target-status-determined completedAt", () => {
 describe("resolveTaskUpdate — combines patch with current row", () => {
   test("entering done writes completedAt = now", async () => {
     setTestEnv();
-    const { resolveTaskUpdate } = await import("./task.service");
+    const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
       { title: "写周报", groupId: "g1", status: "todo", completedAt: null },
@@ -53,7 +47,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
 
   test("leaving done clears completedAt", async () => {
     setTestEnv();
-    const { resolveTaskUpdate } = await import("./task.service");
+    const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
       { title: "写周报", groupId: "g1", status: "done", completedAt: OLD },
@@ -67,7 +61,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
 
   test("staying done (status not in patch) keeps completedAt unchanged", async () => {
     setTestEnv();
-    const { resolveTaskUpdate } = await import("./task.service");
+    const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
       { title: "写周报", groupId: "g1", status: "done", completedAt: OLD },
@@ -82,7 +76,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
 
   test("re-completing an already-done task refreshes completedAt", async () => {
     setTestEnv();
-    const { resolveTaskUpdate } = await import("./task.service");
+    const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
       { title: "写周报", groupId: "g1", status: "done", completedAt: OLD },
@@ -95,7 +89,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
 
   test("combines title/groupId changes alongside a status change", async () => {
     setTestEnv();
-    const { resolveTaskUpdate } = await import("./task.service");
+    const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
       { title: "写周报", groupId: "g1", status: "todo", completedAt: null },
@@ -219,5 +213,45 @@ describe("task zod schemas", () => {
       false,
     );
     expect(CreateTaskGroupSchema.safeParse({ title: "工作" }).success).toBe(true);
+  });
+});
+
+describe("task mappers", () => {
+  test("toTaskEntry converts a row to an entry with ISO timestamps", async () => {
+    setTestEnv();
+    const { toTaskEntry } = await import("./task.mappers");
+    const { fakeTaskRow } = await import("@/test/helpers");
+
+    expect(toTaskEntry(fakeTaskRow())).toEqual({
+      id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f3002",
+      groupId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f3001",
+      title: "测试任务",
+      status: "todo",
+      createdAt: "2026-08-05T12:00:00.000Z",
+      updatedAt: "2026-08-05T12:00:00.000Z",
+      completedAt: null,
+    });
+
+    const done = toTaskEntry(
+      fakeTaskRow({
+        status: "done",
+        completedAt: new Date("2026-08-05T13:00:00.000Z"),
+      }),
+    );
+    expect(done.status).toBe("done");
+    expect(done.completedAt).toBe("2026-08-05T13:00:00.000Z");
+  });
+
+  test("toTaskGroupEntry converts a group row to an entry", async () => {
+    setTestEnv();
+    const { toTaskGroupEntry } = await import("./task.mappers");
+    const { fakeTaskGroupRow } = await import("@/test/helpers");
+
+    expect(toTaskGroupEntry(fakeTaskGroupRow())).toEqual({
+      id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f3001",
+      title: "测试任务组",
+      createdAt: "2026-08-05T12:00:00.000Z",
+      updatedAt: "2026-08-05T12:00:00.000Z",
+    });
   });
 });

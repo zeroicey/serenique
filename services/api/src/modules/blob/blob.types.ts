@@ -33,9 +33,17 @@ export type ListBlobInput = z.infer<typeof ListBlobSchema>;
 export type CreateBlobAccessLinkInput = z.infer<
   typeof CreateBlobAccessLinkSchema
 >;
-export type CreateBlobAttachmentInput = z.infer<
-  typeof CreateBlobAttachmentSchema
->;
+// Explicit structural input type (not z.input): sortOrder uses z.coerce, which
+// would make z.input resolve to `unknown`. Defaulted fields stay optional so
+// callers can pass bare objects; the service applies the defaults.
+export type CreateBlobAttachmentInput = {
+  ownerType: string;
+  ownerId: string;
+  role?: string;
+  displayName?: string;
+  sortOrder?: number;
+  metadata?: Record<string, unknown>;
+};
 
 // ---------------------------------------------------------------------------
 // Response / domain types

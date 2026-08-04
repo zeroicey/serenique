@@ -1,14 +1,13 @@
 import type { Context } from "hono";
-import { ZodError } from "zod";
 import { blobService } from "@/modules/blob/blob.service";
 import {
   CreateBlobAccessLinkSchema,
   CreateBlobAttachmentSchema,
   ListBlobSchema,
 } from "@/modules/blob/blob.types";
+import { handleError } from "@/shared/handler";
 import { Res } from "@/shared/response";
 import { AppError } from "@/shared/errors";
-import { logger } from "@/shared/logger";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,17 +17,6 @@ function getId(c: Context): string {
   const id = c.req.param("id");
   if (!id) throw new AppError("VALIDATION", "缺少 id 参数", 400);
   return id;
-}
-
-function handleError(e: unknown, c: Context) {
-  if (e instanceof AppError) {
-    return Res.error(e.message).status(e.status).build(c);
-  }
-  if (e instanceof ZodError) {
-    return Res.validationFailed("参数校验失败", e.issues).build(c);
-  }
-  logger.error({ err: e }, "Unhandled error in blob handler");
-  return Res.internalError().build(c);
 }
 
 export function parseBlobRange(
@@ -103,7 +91,7 @@ export const blobHandler = {
       const result = await blobService.upload(file);
       return Res.ok("上传成功", result).build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -114,7 +102,7 @@ export const blobHandler = {
       const result = await blobService.list(query);
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -124,7 +112,7 @@ export const blobHandler = {
       const result = await blobService.get(getId(c));
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -170,7 +158,7 @@ export const blobHandler = {
         headers: fileHeaders(mimeType, filename, disposition, size),
       });
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -186,7 +174,7 @@ export const blobHandler = {
       });
       return Res.ok("生成成功", result).build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -194,9 +182,9 @@ export const blobHandler = {
   async delete(c: Context) {
     try {
       await blobService.delete(getId(c));
-      return c.body(null, 204);
+      return Res.noContent("文件删除成功").build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -207,7 +195,7 @@ export const blobHandler = {
       const result = await blobService.createAttachment(getId(c), body);
       return Res.created("关联成功", result).build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -217,7 +205,7 @@ export const blobHandler = {
       const result = await blobService.listAttachments(getId(c));
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -225,9 +213,9 @@ export const blobHandler = {
   async deleteAttachment(c: Context) {
     try {
       await blobService.deleteAttachment(getId(c));
-      return c.body(null, 204);
+      return Res.noContent("附件关联已删除").build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 
@@ -237,7 +225,7 @@ export const blobHandler = {
       const result = await blobService.cleanupOrphanFiles();
       return Res.ok("清理完成", result).build(c);
     } catch (e) {
-      return handleError(e, c);
+      return handleError(e, c, "blob");
     }
   },
 };

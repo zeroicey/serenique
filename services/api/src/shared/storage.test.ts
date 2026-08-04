@@ -2,14 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-function setTestEnv() {
-  process.env.DATABASE_URL ??=
-    "postgresql://serenique:serenique@127.0.0.1:5432/serenique";
-  process.env.BLOB_ROOT ??= "/tmp/serenique-storage-test";
-  process.env.BLOB_MAX_SIZE ??= "104857600";
-  process.env.NODE_ENV ??= "test";
-}
+import { setTestEnv } from "@/test/helpers";
 
 async function makeBlobRoot() {
   return mkdtemp(join(tmpdir(), "serenique-blob-root-"));

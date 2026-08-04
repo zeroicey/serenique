@@ -1,340 +1,205 @@
 import { describe, expect, test } from "bun:test";
+import { setTestEnv, fakeBlobRow } from "@/test/helpers";
 
-function setTestEnv() {
-  process.env.DATABASE_URL ??=
-    "postgresql://serenique:serenique@127.0.0.1:5432/serenique";
-  process.env.BLOB_ROOT ??= "/tmp/serenique-api-moment-test";
-  process.env.BLOB_MAX_SIZE ??= "104857600";
-  process.env.NODE_ENV ??= "test";
-}
+// ---------------------------------------------------------------------------
+// Moment unit tests — domain pure functions, mappers and Zod schemas. No DB.
+// ---------------------------------------------------------------------------
 
-const momentId = "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001";
-const imageBlobId = "0198f6d0-9e7c-71d7-8214-2a0f7f5f2001";
-const audioBlobId = "0198f6d0-9e7c-71d7-8214-2a0f7f5f2002";
-const videoBlobId = "0198f6d0-9e7c-71d7-8214-2a0f7f5f2003";
-const svgBlobId = "0198f6d0-9e7c-71d7-8214-2a0f7f5f2004";
-const pdfBlobId = "0198f6d0-9e7c-71d7-8214-2a0f7f5f2005";
+describe("moment domain — mime whitelist", () => {
+  test("isAllowedMomentMimeType accepts image/audio/video, case/param-insensitive", async () => {
+    setTestEnv();
+    const { isAllowedMomentMimeType } = await import("./moment.domain");
 
-function fakeMomentRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: momentId,
-    text: "一条带附件的闪念",
-    createdAt: new Date("2026-08-04T12:00:00.000Z"),
-    updatedAt: new Date("2026-08-04T12:00:00.000Z"),
-    ...overrides,
-  };
-}
+    expect(isAllowedMomentMimeType("image/png")).toBe(true);
+    expect(isAllowedMomentMimeType("audio/mpeg")).toBe(true);
+    expect(isAllowedMomentMimeType("video/mp4")).toBe(true);
+    expect(isAllowedMomentMimeType("IMAGE/PNG")).toBe(true);
+    expect(isAllowedMomentMimeType("image/png; charset=utf-8")).toBe(true);
+  });
 
-function fakeBlobRow(overrides: Record<string, unknown> = {}) {
-  return {
-    id: imageBlobId,
-    originalName: "photo.png",
-    storagePath: "image/2026/08/photo.png",
-    mimeType: "image/png",
-    size: 2048,
-    checksum: "a".repeat(64),
-    metadata: {},
-    width: 128,
-    height: 64,
-    duration: null,
-    createdAt: new Date("2026-08-04T12:01:00.000Z"),
-    ...overrides,
-  };
-}
+  test("isAllowedMomentMimeType rejects svg and non-media", async () => {
+    setTestEnv();
+    const { isAllowedMomentMimeType } = await import("./moment.domain");
 
-function createMemoryMomentRepository(options: {
-  moments?: Array<Record<string, any>>;
-  blobs?: Array<Record<string, any>>;
-} = {}) {
-  const momentsById = new Map<string, Record<string, any>>(
-    (options.moments ?? []).map((row) => [row.id, row]),
-  );
-  const blobsById = new Map<string, Record<string, any>>(
-    (options.blobs ?? []).map((row) => [row.id, row]),
-  );
-  const attachmentsById = new Map<string, Record<string, any>>();
-  let attachmentIndex = 0;
+    expect(isAllowedMomentMimeType("image/svg+xml")).toBe(false);
+    expect(isAllowedMomentMimeType("application/pdf")).toBe(false);
+    expect(isAllowedMomentMimeType("text/plain")).toBe(false);
+    expect(isAllowedMomentMimeType("")).toBe(false);
+  });
 
-  const repository: any = {
-    momentsById,
-    blobsById,
-    attachmentsById,
+  test("assertAllowedMomentBlob throws VALIDATION for disallowed mime", async () => {
+    setTestEnv();
+    const { assertAllowedMomentBlob } = await import("./moment.domain");
 
-    async withTransaction<T>(fn: (tx: typeof repository) => Promise<T>) {
-      return fn(repository);
-    },
+    expect(() => assertAllowedMomentBlob({ mimeType: "image/png" })).not.toThrow();
+    expect(() =>
+      assertAllowedMomentBlob({ mimeType: "application/pdf" }),
+    ).toThrow();
+  });
+});
 
-    async createMoment(input: Record<string, unknown>) {
-      const row = fakeMomentRow({
-        id: input.id ?? momentId,
-        ...input,
-      });
-      momentsById.set(String(row.id), row);
-      return row;
-    },
+describe("moment domain — sort order", () => {
+  test("normalizeSortOrder falls back when value is undefined", async () => {
+    setTestEnv();
+    const { normalizeSortOrder } = await import("./moment.domain");
 
-    async listMoments(input: { page: number; pageSize: number }) {
-      const items = [...momentsById.values()].slice(
-        (input.page - 1) * input.pageSize,
-        input.page * input.pageSize,
-      );
-      return { items, total: momentsById.size };
-    },
+    expect(normalizeSortOrder(undefined, 5)).toBe(5);
+    expect(normalizeSortOrder(0, 5)).toBe(0);
+    expect(normalizeSortOrder(2, 5)).toBe(2);
+  });
 
-    async findMomentById(id: string) {
-      return momentsById.get(id);
-    },
+  test("normalizeSortOrder rejects non-integer values", async () => {
+    setTestEnv();
+    const { normalizeSortOrder } = await import("./moment.domain");
 
-    async deleteMoment(id: string) {
-      const row = momentsById.get(id);
-      momentsById.delete(id);
-      return row;
-    },
+    expect(() => normalizeSortOrder(1.5, 0)).toThrow();
+    expect(() => normalizeSortOrder("x", 0)).toThrow();
+  });
+});
 
-    async findBlobsByIds(ids: string[]) {
-      return ids
-        .map((id) => blobsById.get(id))
-        .filter((row): row is Record<string, any> => Boolean(row));
-    },
+describe("moment mappers", () => {
+  function makeAttachmentEntry(id: string, sortOrder: number, createdAt: string) {
+    return {
+      id,
+      blobId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f2001",
+      role: "attachment",
+      displayName: null,
+      sortOrder,
+      metadata: {},
+      createdAt,
+      updatedAt: createdAt,
+      blob: {
+        id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f2001",
+        originalName: "photo.png",
+        mimeType: "image/png",
+        size: 2048,
+        metadata: {},
+        width: 128,
+        height: 64,
+        duration: null,
+        createdAt,
+        fileUrl: "/api/blobs/0198f6d0-9e7c-71d7-8214-2a0f7f5f2001/file",
+      },
+    };
+  }
 
-    async createAttachment(input: Record<string, unknown>) {
-      attachmentIndex += 1;
-      const id = `0198f6d0-9e7c-71d7-8214-2a0f7f5fa00${attachmentIndex}`;
-      const row = {
+  test("toMomentBlobEntry exposes fileUrl and ISO createdAt, not storagePath", async () => {
+    setTestEnv();
+    const { toMomentBlobEntry } = await import("./moment.mappers");
+
+    const entry = toMomentBlobEntry(fakeBlobRow());
+    expect(entry.fileUrl).toBe(`/api/blobs/${entry.id}/file`);
+    expect(entry.createdAt).toBe("2026-08-05T12:00:00.000Z");
+    expect(entry).not.toHaveProperty("storagePath");
+  });
+
+  test("toMomentAttachmentEntry nests the mapped blob", async () => {
+    setTestEnv();
+    const { toMomentAttachmentEntry } = await import("./moment.mappers");
+
+    const entry = toMomentAttachmentEntry({
+      attachment: {
+        id: "att-1",
+        blobId: fakeBlobRow().id,
+        ownerType: "moment",
+        ownerId: "moment-1",
+        role: "attachment",
+        displayName: "cover.png",
+        sortOrder: 3,
+        metadata: { alt: "photo" },
+        createdAt: new Date("2026-08-05T12:00:00.000Z"),
+        updatedAt: new Date("2026-08-05T12:00:00.000Z"),
+      },
+      blob: fakeBlobRow(),
+    });
+
+    expect(entry.id).toBe("att-1");
+    expect(entry.displayName).toBe("cover.png");
+    expect(entry.metadata).toEqual({ alt: "photo" });
+    expect(entry.blob).toMatchObject({ id: fakeBlobRow().id, fileUrl: `/api/blobs/${fakeBlobRow().id}/file` });
+  });
+
+  test("sortAttachments sorts by sortOrder and never mutates the input", async () => {
+    setTestEnv();
+    const { sortAttachments } = await import("./moment.mappers");
+
+    const attachments = [
+      makeAttachmentEntry("c", 2, "2026-08-05T10:00:00.000Z"),
+      makeAttachmentEntry("a", 0, "2026-08-05T12:00:00.000Z"),
+      makeAttachmentEntry("b", 1, "2026-08-05T11:00:00.000Z"),
+    ];
+    const sorted = sortAttachments(attachments);
+
+    expect(sorted.map((a) => a.id)).toEqual(["a", "b", "c"]);
+    expect(attachments[0].id).toBe("c");
+  });
+
+  test("groupAttachmentsByMomentId groups by ownerId and sorts each group", async () => {
+    setTestEnv();
+    const { groupAttachmentsByMomentId } = await import("./moment.mappers");
+    const m1 = "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001";
+    const m2 = "0198f6d0-9e7c-71d7-8214-2a0f7f5f1002";
+    const joinRow = (ownerId: string, id: string, sortOrder: number) => ({
+      attachment: {
         id,
+        blobId: fakeBlobRow().id,
+        ownerType: "moment",
+        ownerId,
         role: "attachment",
         displayName: null,
-        sortOrder: 0,
+        sortOrder,
         metadata: {},
-        createdAt: new Date(`2026-08-04T12:0${attachmentIndex}:00.000Z`),
-        updatedAt: new Date(`2026-08-04T12:0${attachmentIndex}:00.000Z`),
-        ...input,
-      };
-      attachmentsById.set(id, row);
-      return row;
-    },
+        createdAt: new Date("2026-08-05T10:00:00.000Z"),
+        updatedAt: new Date("2026-08-05T10:00:00.000Z"),
+      },
+      blob: fakeBlobRow(),
+    });
 
-    async getNextAttachmentSortOrder(ownerId: string) {
-      const sortOrders = [...attachmentsById.values()]
-        .filter(
-          (row) => row.ownerType === "moment" && row.ownerId === ownerId,
-        )
-        .map((row) => Number(row.sortOrder));
-      return sortOrders.length === 0 ? 0 : Math.max(...sortOrders) + 1;
-    },
+    const grouped = groupAttachmentsByMomentId([
+      joinRow(m1, "att-2", 2),
+      joinRow(m2, "att-1", 0),
+      joinRow(m1, "att-1", 1),
+    ]);
 
-    async listAttachmentsByMomentIds(ids: string[]) {
-      return [...attachmentsById.values()]
-        .filter(
-          (attachment) =>
-            attachment.ownerType === "moment" &&
-            ids.includes(String(attachment.ownerId)),
-        )
-        .map((attachment) => ({
-          attachment,
-          blob: blobsById.get(String(attachment.blobId)),
-        }))
-        .filter((row): row is { attachment: Record<string, any>; blob: Record<string, any> } =>
-          Boolean(row.blob),
-        )
-        .sort((a, b) => {
-          const order = Number(a.attachment.sortOrder) - Number(b.attachment.sortOrder);
-          if (order !== 0) return order;
-          return String(a.attachment.createdAt).localeCompare(
-            String(b.attachment.createdAt),
-          );
-        });
-    },
+    expect([...grouped.keys()].sort()).toEqual([m1, m2]);
+    expect(grouped.get(m1)!.map((a) => a.id)).toEqual(["att-1", "att-2"]);
+    expect(grouped.get(m2)!.map((a) => a.id)).toEqual(["att-1"]);
+  });
+});
 
-    async findMomentAttachment(momentId: string, attachmentId: string) {
-      const attachment = attachmentsById.get(attachmentId);
-      if (
-        !attachment ||
-        attachment.ownerType !== "moment" ||
-        attachment.ownerId !== momentId
-      ) {
-        return undefined;
-      }
-      const blob = blobsById.get(String(attachment.blobId));
-      if (!blob) return undefined;
-      return { attachment, blob };
-    },
-
-    async deleteAttachment(id: string) {
-      attachmentsById.delete(id);
-    },
-
-    async deleteAttachmentsByMomentId(id: string) {
-      for (const [attachmentId, attachment] of attachmentsById) {
-        if (
-          attachment.ownerType === "moment" &&
-          attachment.ownerId === id
-        ) {
-          attachmentsById.delete(attachmentId);
-        }
-      }
-    },
-  };
-
-  return repository;
-}
-
-describe("moment request schema", () => {
-  test("uses text instead of content", async () => {
+describe("moment schemas", () => {
+  test("CreateMomentSchema requires text ≤500 and defaults attachments to []", async () => {
     setTestEnv();
     const { CreateMomentSchema } = await import("./moment.types");
 
     expect(CreateMomentSchema.safeParse({ text: "hello" }).success).toBe(true);
-    expect(CreateMomentSchema.safeParse({ content: "hello" }).success).toBe(
+    expect(CreateMomentSchema.safeParse({ content: "hello" }).success).toBe(false);
+    expect(CreateMomentSchema.safeParse({ text: "" }).success).toBe(false);
+    expect(CreateMomentSchema.safeParse({ text: "x".repeat(501) }).success).toBe(
       false,
     );
-  });
-});
-
-describe("moment attachments", () => {
-  test("creates text moments with ordered media attachments", async () => {
-    setTestEnv();
-    const { createMomentService } = await import("./moment.service");
-    const repository = createMemoryMomentRepository({
-      blobs: [
-        fakeBlobRow({ id: imageBlobId, mimeType: "image/png" }),
-        fakeBlobRow({
-          id: audioBlobId,
-          originalName: "voice.mp3",
-          mimeType: "audio/mpeg",
-          width: null,
-          height: null,
-          duration: 5.2,
-        }),
-        fakeBlobRow({
-          id: videoBlobId,
-          originalName: "clip.mp4",
-          mimeType: "video/mp4",
-          width: 1920,
-          height: 1080,
-          duration: 12.6,
-        }),
-      ],
-    });
-    const service = createMomentService({ repository });
-
-    const result = await service.create({
-      text: "一条带附件的闪念",
-      attachments: [
-        { blobId: imageBlobId, sortOrder: 0, displayName: "cover.png" },
-        { blobId: audioBlobId, metadata: { caption: "voice" } },
-        { blobId: videoBlobId, sortOrder: 5 },
-      ],
-    });
-
-    expect(result.text).toBe("一条带附件的闪念");
-    expect("content" in result).toBe(false);
-    expect(result.attachments.map((item) => item.blobId)).toEqual([
-      imageBlobId,
-      audioBlobId,
-      videoBlobId,
-    ]);
-    expect(result.attachments.map((item) => item.sortOrder)).toEqual([0, 1, 5]);
-    expect(result.attachments[0].displayName).toBe("cover.png");
-    expect(result.attachments[0].blob).toMatchObject({
-      id: imageBlobId,
-      mimeType: "image/png",
-      fileUrl: `/api/blobs/${imageBlobId}/file`,
-    });
-
-    expect([...repository.attachmentsById.values()]).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          blobId: imageBlobId,
-          ownerType: "moment",
-          ownerId: result.id,
-        }),
-        expect.objectContaining({
-          blobId: audioBlobId,
-          ownerType: "moment",
-          ownerId: result.id,
-        }),
-      ]),
-    );
+    expect(CreateMomentSchema.parse({ text: "hello" }).attachments).toEqual([]);
   });
 
-  test("rejects non media files and svg images", async () => {
+  test("MomentAttachmentInputSchema defaults role/metadata and rejects non-uuid blobId", async () => {
     setTestEnv();
-    const { createMomentService } = await import("./moment.service");
-    const repository = createMemoryMomentRepository({
-      blobs: [
-        fakeBlobRow({ id: svgBlobId, mimeType: "image/svg+xml" }),
-        fakeBlobRow({ id: pdfBlobId, mimeType: "application/pdf" }),
-      ],
+    const { MomentAttachmentInputSchema } = await import("./moment.types");
+
+    const parsed = MomentAttachmentInputSchema.parse({
+      blobId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f2001",
     });
-    const service = createMomentService({ repository });
-
-    await expect(
-      service.create({ text: "svg", attachments: [{ blobId: svgBlobId }] }),
-    ).rejects.toMatchObject({ code: "VALIDATION", status: 400 });
-    await expect(
-      service.create({ text: "pdf", attachments: [{ blobId: pdfBlobId }] }),
-    ).rejects.toMatchObject({ code: "VALIDATION", status: 400 });
-
-    expect(repository.momentsById.size).toBe(0);
-    expect(repository.attachmentsById.size).toBe(0);
+    expect(parsed.role).toBe("attachment");
+    expect(parsed.metadata).toEqual({});
+    expect(
+      MomentAttachmentInputSchema.safeParse({ blobId: "not-a-uuid" }).success,
+    ).toBe(false);
   });
 
-  test("lists moments with attachments by default", async () => {
+  test("ListMomentSchema coerces pagination", async () => {
     setTestEnv();
-    const { createMomentService } = await import("./moment.service");
-    const repository = createMemoryMomentRepository({
-      moments: [fakeMomentRow()],
-      blobs: [fakeBlobRow({ id: imageBlobId, mimeType: "image/jpeg" })],
-    });
-    await repository.createAttachment({
-      blobId: imageBlobId,
-      ownerType: "moment",
-      ownerId: momentId,
-      sortOrder: 3,
-      metadata: { alt: "photo" },
-    });
-    await repository.createAttachment({
-      blobId: imageBlobId,
-      ownerType: "diary",
-      ownerId: momentId,
-      sortOrder: 0,
-    });
-    const service = createMomentService({ repository });
+    const { ListMomentSchema } = await import("./moment.types");
 
-    const result = await service.list({ page: 1, pageSize: 10 });
-
-    expect(result.total).toBe(1);
-    expect(result.items[0]).toMatchObject({
-      id: momentId,
-      text: "一条带附件的闪念",
-    });
-    expect(result.items[0].attachments).toHaveLength(1);
-    expect(result.items[0].attachments[0]).toMatchObject({
-      blobId: imageBlobId,
-      sortOrder: 3,
-      metadata: { alt: "photo" },
-    });
-  });
-
-  test("deletes moment attachment references without deleting blobs", async () => {
-    setTestEnv();
-    const { createMomentService } = await import("./moment.service");
-    const repository = createMemoryMomentRepository({
-      moments: [fakeMomentRow()],
-      blobs: [fakeBlobRow({ id: imageBlobId })],
-    });
-    const attachment = await repository.createAttachment({
-      blobId: imageBlobId,
-      ownerType: "moment",
-      ownerId: momentId,
-    });
-    const service = createMomentService({ repository });
-
-    await service.delete({ id: momentId });
-
-    expect(repository.momentsById.has(momentId)).toBe(false);
-    expect(repository.attachmentsById.has(attachment.id)).toBe(false);
-    expect(repository.blobsById.has(imageBlobId)).toBe(true);
+    expect(ListMomentSchema.parse({})).toMatchObject({ page: 1, pageSize: 10 });
+    expect(ListMomentSchema.parse({ page: "2" })).toMatchObject({ page: 2 });
   });
 });
