@@ -148,11 +148,12 @@ func Save(cfg *Config) error {
 
 // Resolve returns the effective configuration by merging flags and
 // environment variables on top of the config file values.
-// Override strings may be empty (meaning "not set").
-func Resolve(cfg *Config, baseURLOverride, tokenOverride string) *Config {
+// Override strings may be empty (meaning "not set"). The receiver is not
+// mutated.
+func (c *Config) Resolve(baseURLOverride, tokenOverride string) *Config {
 	resolved := &Config{
-		BaseURL: cfg.BaseURL,
-		Token:   cfg.Token,
+		BaseURL: c.BaseURL,
+		Token:   c.Token,
 	}
 
 	// Environment variables — override config file

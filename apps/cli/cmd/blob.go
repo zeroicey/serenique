@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -9,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
-	"github.com/zeroicey/serenique-cli/internal/client"
 )
 
 // Blob types matching the API response.
@@ -68,62 +66,7 @@ var blobCmd = &cobra.Command{
 // blob list
 // =============================================================================
 
-var blobListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "列出文件",
-	Long: `分页查询已上传的文件列表，可按 MIME 类型过滤。
-
-示例:
-  serenique blob list
-  serenique blob list --mime-type image/
-  serenique blob list --page 1 --page-size 20
-  serenique blob list --json`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := validatePageParams(blobListPage, blobListPageSize); err != nil {
-			return err
-		}
-
-		ctx := context.Background()
-		query := url.Values{}
-		query.Set("page", strconv.Itoa(blobListPage))
-		query.Set("pageSize", strconv.Itoa(blobListPageSize))
-		if blobListMimeType != "" {
-			query.Set("mimeType", blobListMimeType)
-		}
-
-		items, total, err := client.List[BlobEntry](apiClient, ctx, "/api/blobs", query)
-		if err != nil {
-			return err
-		}
-
-		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]any{"items": items, "total": total})
-			return nil
-		}
-
-		if total == 0 {
-			printer.PrintMessage("暂无文件记录")
-			return nil
-		}
-
-		headers := []string{"ID", "文件名", "类型", "大小", "上传时间"}
-		rows := make([]map[string]string, len(items))
-		for i, b := range items {
-			rows[i] = map[string]string{
-				"ID":   b.ID[:8] + "...",
-				"文件名":  b.OriginalName,
-				"类型":   b.MimeType,
-				"大小":   formatSize(b.Size),
-				"上传时间": b.CreatedAt[:10],
-			}
-		}
-
-		printer.PrintTable(headers, rows)
-		fmt.Printf("\n共 %d 条记录\n", total)
-		return nil
-	},
-}
+var blobListCmd *cobra.Command
 
 var (
 	blobListPage     int
@@ -148,7 +91,7 @@ var blobUploadCmd = &cobra.Command{
   serenique blob upload doc.pdf image.png`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 
 		// uploadResult describes one file's outcome. In JSON mode the whole
 		// batch is emitted as a single document so stdout stays valid JSON.
@@ -231,7 +174,7 @@ var blobInfoCmd = &cobra.Command{
   serenique blob info a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 
 		var result BlobEntry
 		if err := apiClient.Get(ctx, "/api/blobs/"+args[0], nil, &result); err != nil {
@@ -277,7 +220,7 @@ var blobDownloadCmd = &cobra.Command{
 		blobID := args[0]
 
 		// Get metadata first to know the original filename
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 		var info BlobEntry
 
 		outputPath := blobDownloadOutput
@@ -297,8 +240,11 @@ var blobDownloadCmd = &cobra.Command{
 		// Fast-fail when the target already exists; the client re-checks
 		// atomically immediately before its rename, so this is only an early
 		// UX optimization (avoids downloading a large file before erroring).
+		// Use os.Lstat (not os.Stat) so both layers classify existence
+		// identically — DownloadFile's atomic re-check uses Lstat, which sees a
+		// dangling symlink as existing and refuses to overwrite it.
 		if !blobDownloadOverwrite {
-			if _, err := os.Stat(outputPath); err == nil {
+			if _, err := os.Lstat(outputPath); err == nil {
 				return fmt.Errorf("目标文件已存在: %s（如需覆盖请使用 --force）", outputPath)
 			}
 		}
@@ -342,7 +288,7 @@ var blobLinkCmd = &cobra.Command{
 			return fmt.Errorf("过期时间必须在 1 到 604800 秒之间（最长 7 天）")
 		}
 
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 
 		body := map[string]int{"expiresInSeconds": blobLinkExpiresIn}
 
@@ -351,14 +297,7 @@ var blobLinkCmd = &cobra.Command{
 			return err
 		}
 
-		if useJSON {
-			printer.PrintSuccess("生成成功", result)
-			return nil
-		}
-
-		printer.PrintSuccess("临时访问链接已生成", nil)
-		fmt.Println()
-		printer.PrintKeyValue(map[string]string{
+		printCreateResult("生成成功", result, "临时访问链接已生成", map[string]string{
 			"URL":  result.URL,
 			"过期时间": result.ExpiresAt,
 			"有效时长": fmt.Sprintf("%d 秒", blobLinkExpiresIn),
@@ -373,29 +312,7 @@ var blobLinkExpiresIn int
 // blob delete
 // =============================================================================
 
-var blobDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "删除文件",
-	Long: `删除指定文件（磁盘文件 + 数据库记录）。如果文件仍被业务实体引用，会返回错误。
-
-示例:
-  serenique blob delete a1b2c3d4
-  serenique blob delete a1b2c3d4 --force`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := confirm("确认永久删除文件 "+args[0], blobDeleteForce); err != nil {
-			return err
-		}
-
-		ctx := context.Background()
-		if err := apiClient.Delete(ctx, "/api/blobs/"+args[0]); err != nil {
-			return err
-		}
-
-		printDeleteResult("文件已删除", args[0])
-		return nil
-	},
-}
+var blobDeleteCmd *cobra.Command
 
 var blobDeleteForce bool
 
@@ -418,7 +335,7 @@ var blobAttachCmd = &cobra.Command{
 			return fmt.Errorf("owner-type 为 moment 时，请使用 `serenique moment attach <moment-id> --blob-id %s`", args[0])
 		}
 
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 
 		body := attachmentBody(args[0], blobAttachRole, blobAttachDisplayName,
 			blobAttachSortOrder, cmd.Flags().Changed("sort-order"), map[string]any{
@@ -431,18 +348,11 @@ var blobAttachCmd = &cobra.Command{
 			return err
 		}
 
-		if useJSON {
-			printer.PrintSuccess("关联成功", result)
-			return nil
-		}
-
-		printer.PrintSuccess("关联成功", nil)
-		fmt.Println()
 		dn := "-"
 		if result.DisplayName != nil {
 			dn = *result.DisplayName
 		}
-		printer.PrintKeyValue(map[string]string{
+		printCreateResult("关联成功", result, "关联成功", map[string]string{
 			"ID":   result.ID,
 			"所属类型": result.OwnerType,
 			"所属ID": result.OwnerID,
@@ -474,7 +384,7 @@ var blobAttachmentsCmd = &cobra.Command{
   serenique blob attachments a1b2c3d4`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 
 		var result []BlobAttachmentEntry
 		if err := apiClient.Get(ctx, "/api/blobs/"+args[0]+"/attachments", nil, &result); err != nil {
@@ -533,7 +443,7 @@ var blobDetachCmd = &cobra.Command{
 			return err
 		}
 
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 		if err := apiClient.Delete(ctx, "/api/blob-attachments/"+args[0]); err != nil {
 			return err
 		}
@@ -565,7 +475,7 @@ var blobCleanupCmd = &cobra.Command{
 			return err
 		}
 
-		ctx := context.Background()
+		ctx := commandContext(cmd)
 
 		var result BlobCleanupResult
 		if err := apiClient.Post(ctx, "/api/blobs/cleanup-orphans", nil, &result); err != nil {
@@ -619,6 +529,35 @@ func formatSize(bytes int64) string {
 
 func init() {
 	// blob list
+	blobListCmd = paginatedListCommand[BlobEntry](listSpec[BlobEntry]{
+		use:   "list",
+		short: "列出文件",
+		long: `分页查询已上传的文件列表，可按 MIME 类型过滤。
+
+示例:
+  serenique blob list
+  serenique blob list --mime-type image/
+  serenique blob list --page 1 --page-size 20
+  serenique blob list --json`,
+		path:        "/api/blobs",
+		emptyMsg:    "暂无文件记录",
+		headers:     []string{"ID", "文件名", "类型", "大小", "上传时间"},
+		defaultSize: 20,
+		row: func(b BlobEntry) map[string]string {
+			return map[string]string{
+				"ID":   b.ID[:8] + "...",
+				"文件名":  b.OriginalName,
+				"类型":   b.MimeType,
+				"大小":   formatSize(b.Size),
+				"上传时间": b.CreatedAt[:10],
+			}
+		},
+		extraQuery: func(q url.Values) {
+			if blobListMimeType != "" {
+				q.Set("mimeType", blobListMimeType)
+			}
+		},
+	}, &blobListPage, &blobListPageSize)
 	blobListCmd.Flags().IntVarP(&blobListPage, "page", "p", 1, "页码")
 	blobListCmd.Flags().IntVarP(&blobListPageSize, "page-size", "l", 20, "每页条数")
 	blobListCmd.Flags().StringVar(&blobListMimeType, "mime-type", "", "按 MIME 类型过滤 (如 image/)")
@@ -632,6 +571,12 @@ func init() {
 	blobLinkCmd.Flags().IntVarP(&blobLinkExpiresIn, "expires-in", "e", 900, "过期时间（秒），默认 900（15分钟），最长 604800（7天）")
 
 	// blob delete
+	blobDeleteCmd = deleteCommand("delete <id>", "删除文件", `删除指定文件（磁盘文件 + 数据库记录）。如果文件仍被业务实体引用，会返回错误。
+
+示例:
+  serenique blob delete a1b2c3d4
+  serenique blob delete a1b2c3d4 --force`, "文件", true,
+		func(id string) string { return "/api/blobs/" + id }, &blobDeleteForce)
 	blobDeleteCmd.Flags().BoolVarP(&blobDeleteForce, "force", "f", false, "跳过确认提示")
 
 	// blob attach

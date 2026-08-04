@@ -1,13 +1,7 @@
 package cmd
 
 import (
-	"context"
-	"fmt"
-	"net/url"
-	"strconv"
-
 	"github.com/spf13/cobra"
-	"github.com/zeroicey/serenique-cli/internal/client"
 )
 
 // Diary types matching the API response.
@@ -28,58 +22,7 @@ var diaryCmd = &cobra.Command{
 }
 
 // diary list
-var diaryListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "列出日记",
-	Long: `分页查询日记列表。
-
-示例:
-  serenique diary list
-  serenique diary list --page 1 --page-size 10
-  serenique diary list --json`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := validatePageParams(diaryListPage, diaryListPageSize); err != nil {
-			return err
-		}
-
-		ctx := context.Background()
-		query := url.Values{}
-		query.Set("page", strconv.Itoa(diaryListPage))
-		query.Set("pageSize", strconv.Itoa(diaryListPageSize))
-
-		items, total, err := client.List[DiaryEntry](apiClient, ctx, "/api/diaries", query)
-		if err != nil {
-			return err
-		}
-
-		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]any{"items": items, "total": total})
-			return nil
-		}
-
-		if total == 0 {
-			printer.PrintMessage("暂无日记记录")
-			return nil
-		}
-
-		headers := []string{"ID", "日期", "内容预览", "创建时间"}
-		rows := make([]map[string]string, len(items))
-		for i, d := range items {
-			preview := truncateRunes(d.Content, 40)
-			rows[i] = map[string]string{
-				"ID":   d.ID[:8] + "...",
-				"日期":   d.DiaryDate,
-				"内容预览": preview,
-				"创建时间": d.CreatedAt[:10],
-			}
-		}
-
-		printer.PrintTable(headers, rows)
-		fmt.Printf("\n共 %d 条记录\n", total)
-		return nil
-	},
-}
+var diaryListCmd *cobra.Command
 
 var (
 	diaryListPage     int
@@ -97,26 +40,17 @@ var diaryCreateCmd = &cobra.Command{
   serenique diary create --content "今天完成了项目的第一阶段..."
   serenique diary create -m "补昨天的日记" --date 2026-08-03`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
-
 		body := map[string]string{"content": diaryCreateContent}
 		if diaryCreateDate != "" {
 			body["diaryDate"] = diaryCreateDate
 		}
 
 		var result DiaryEntry
-		if err := apiClient.Post(ctx, "/api/diaries", body, &result); err != nil {
+		if err := apiClient.Post(commandContext(cmd), "/api/diaries", body, &result); err != nil {
 			return err
 		}
 
-		if useJSON {
-			printer.PrintSuccess("日记创建成功", result)
-			return nil
-		}
-
-		printer.PrintSuccess("日记创建成功", nil)
-		fmt.Println()
-		printer.PrintKeyValue(map[string]string{
+		printCreateResult("日记创建成功", result, "日记创建成功", map[string]string{
 			"ID":   result.ID,
 			"日期":   result.DiaryDate,
 			"内容":   result.Content,
@@ -141,10 +75,8 @@ var diaryGetCmd = &cobra.Command{
   serenique diary get a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
-
 		var result DiaryEntry
-		if err := apiClient.Get(ctx, "/api/diaries/"+args[0], nil, &result); err != nil {
+		if err := apiClient.Get(commandContext(cmd), "/api/diaries/"+args[0], nil, &result); err != nil {
 			return err
 		}
 
@@ -174,23 +106,14 @@ var diaryUpdateCmd = &cobra.Command{
   serenique diary update a1b2c3d4 --content "更新后的内容"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
-
 		body := map[string]string{"content": diaryUpdateContent}
 
 		var result DiaryEntry
-		if err := apiClient.Put(ctx, "/api/diaries/"+args[0], body, &result); err != nil {
+		if err := apiClient.Put(commandContext(cmd), "/api/diaries/"+args[0], body, &result); err != nil {
 			return err
 		}
 
-		if useJSON {
-			printer.PrintSuccess("日记更新成功", result)
-			return nil
-		}
-
-		printer.PrintSuccess("日记更新成功", nil)
-		fmt.Println()
-		printer.PrintKeyValue(map[string]string{
+		printCreateResult("日记更新成功", result, "日记更新成功", map[string]string{
 			"ID":   result.ID,
 			"日期":   result.DiaryDate,
 			"内容":   result.Content,
@@ -203,34 +126,34 @@ var diaryUpdateCmd = &cobra.Command{
 var diaryUpdateContent string
 
 // diary delete
-var diaryDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "删除日记",
-	Long: `删除指定的日记。此操作不可撤销，默认需要确认。
-
-示例:
-  serenique diary delete a1b2c3d4
-  serenique diary delete a1b2c3d4 --force`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := confirm("确认删除日记 "+args[0], diaryDeleteForce); err != nil {
-			return err
-		}
-
-		ctx := context.Background()
-		if err := apiClient.Delete(ctx, "/api/diaries/"+args[0]); err != nil {
-			return err
-		}
-
-		printDeleteResult("日记已删除", args[0])
-		return nil
-	},
-}
+var diaryDeleteCmd *cobra.Command
 
 var diaryDeleteForce bool
 
 func init() {
-	// diary list flags
+	// diary list
+	diaryListCmd = paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
+		use:   "list",
+		short: "列出日记",
+		long: `分页查询日记列表。
+
+示例:
+  serenique diary list
+  serenique diary list --page 1 --page-size 10
+  serenique diary list --json`,
+		path:        "/api/diaries",
+		emptyMsg:    "暂无日记记录",
+		headers:     []string{"ID", "日期", "内容预览", "创建时间"},
+		defaultSize: 10,
+		row: func(d DiaryEntry) map[string]string {
+			return map[string]string{
+				"ID":   d.ID[:8] + "...",
+				"日期":   d.DiaryDate,
+				"内容预览": truncateRunes(d.Content, 40),
+				"创建时间": d.CreatedAt[:10],
+			}
+		},
+	}, &diaryListPage, &diaryListPageSize)
 	diaryListCmd.Flags().IntVarP(&diaryListPage, "page", "p", 1, "页码")
 	diaryListCmd.Flags().IntVarP(&diaryListPageSize, "page-size", "l", 10, "每页条数")
 
@@ -243,7 +166,13 @@ func init() {
 	diaryUpdateCmd.Flags().StringVarP(&diaryUpdateContent, "content", "m", "", "新内容 (必填)")
 	diaryUpdateCmd.MarkFlagRequired("content")
 
-	// diary delete flags
+	// diary delete
+	diaryDeleteCmd = deleteCommand("delete <id>", "删除日记", `删除指定的日记。此操作不可撤销，默认需要确认。
+
+示例:
+  serenique diary delete a1b2c3d4
+  serenique diary delete a1b2c3d4 --force`, "日记", false,
+		func(id string) string { return "/api/diaries/" + id }, &diaryDeleteForce)
 	diaryDeleteCmd.Flags().BoolVarP(&diaryDeleteForce, "force", "f", false, "跳过确认提示")
 
 	diaryCmd.AddCommand(diaryListCmd)

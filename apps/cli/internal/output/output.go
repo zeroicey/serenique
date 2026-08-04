@@ -22,12 +22,31 @@ import (
 	"strings"
 )
 
-// stdout and stderr are the output streams. They are package vars so tests can
-// capture them; commands never write directly to the terminal.
+// stdout and stderr are optional test overrides. When nil, the printer resolves
+// os.Stdout/os.Stderr at call time, so a runtime redirection of the process's
+// streams (a test swapping os.Stderr, a tool re-pointing the file descriptors)
+// is honored instead of being bound once at package init. Commands never write
+// directly to the terminal.
 var (
-	stdout io.Writer = os.Stdout
-	stderr io.Writer = os.Stderr
+	stdout io.Writer
+	stderr io.Writer
 )
+
+// out returns the stdout stream: a test override if set, else os.Stdout.
+func out() io.Writer {
+	if stdout != nil {
+		return stdout
+	}
+	return os.Stdout
+}
+
+// errOut returns the stderr stream: a test override if set, else os.Stderr.
+func errOut() io.Writer {
+	if stderr != nil {
+		return stderr
+	}
+	return os.Stderr
+}
 
 // Printer is the output interface. Commands use this to render results
 // without knowing whether the user chose table or JSON output.
@@ -64,7 +83,7 @@ type TablePrinter struct{}
 
 func (p *TablePrinter) PrintTable(headers []string, rows []map[string]string) {
 	if len(rows) == 0 {
-		fmt.Fprintln(stdout, "(无数据)")
+		fmt.Fprintln(out(), "(无数据)")
 		return
 	}
 
@@ -88,7 +107,7 @@ func (p *TablePrinter) PrintTable(headers []string, rows []map[string]string) {
 		for i, cell := range cells {
 			parts[i] = cell + strings.Repeat(" ", widths[i]-displayWidth(cell))
 		}
-		fmt.Fprintln(stdout, strings.Join(parts, padding))
+		fmt.Fprintln(out(), strings.Join(parts, padding))
 	}
 
 	printLine(headers)
@@ -100,7 +119,7 @@ func (p *TablePrinter) PrintTable(headers []string, rows []map[string]string) {
 	for i := range sep {
 		sep[i] = strings.Repeat("-", widths[i])
 	}
-	fmt.Fprintln(stdout, strings.Join(sep, padding))
+	fmt.Fprintln(out(), strings.Join(sep, padding))
 
 	for _, row := range rows {
 		cells := make([]string, len(headers))
@@ -127,24 +146,24 @@ func (p *TablePrinter) PrintKeyValue(data map[string]string) {
 
 	for _, k := range keys {
 		pad := maxKeyLen - displayWidth(k)
-		fmt.Fprintf(stdout, "%s:%s  %s\n", k, strings.Repeat(" ", pad), data[k])
+		fmt.Fprintf(out(), "%s:%s  %s\n", k, strings.Repeat(" ", pad), data[k])
 	}
 }
 
 func (p *TablePrinter) PrintSuccess(message string, data any) {
-	fmt.Fprintf(stdout, "✓ %s\n", message)
+	fmt.Fprintf(out(), "✓ %s\n", message)
 	if data != nil {
 		b, _ := json.MarshalIndent(data, "", "  ")
-		fmt.Fprintln(stdout, string(b))
+		fmt.Fprintln(out(), string(b))
 	}
 }
 
 func (p *TablePrinter) PrintError(message string) {
-	fmt.Fprintf(stderr, "✗ 错误: %s\n", message)
+	fmt.Fprintf(errOut(), "✗ 错误: %s\n", message)
 }
 
 func (p *TablePrinter) PrintMessage(message string) {
-	fmt.Fprintln(stdout, message)
+	fmt.Fprintln(out(), message)
 }
 
 // displayWidth returns the on-screen width of a string, counting East Asian
@@ -217,7 +236,7 @@ func (p *JSONPrinter) PrintError(message string) {
 		Error string `json:"error"`
 	}
 	b, _ := json.MarshalIndent(errorOutput{Error: message}, "", "  ")
-	fmt.Fprintln(stderr, string(b))
+	fmt.Fprintln(errOut(), string(b))
 }
 
 func (p *JSONPrinter) PrintMessage(message string) {
@@ -227,8 +246,8 @@ func (p *JSONPrinter) PrintMessage(message string) {
 func (p *JSONPrinter) print(v any) {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		fmt.Fprintf(stderr, `{"error": "JSON序列化失败: %s"}`, err.Error())
+		fmt.Fprintf(errOut(), `{"error": "JSON序列化失败: %s"}`, err.Error())
 		return
 	}
-	fmt.Fprintln(stdout, string(b))
+	fmt.Fprintln(out(), string(b))
 }

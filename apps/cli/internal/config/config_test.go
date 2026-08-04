@@ -211,13 +211,13 @@ func TestResolvePrecedence(t *testing.T) {
 	file := &Config{BaseURL: "http://file.test", Token: "file-token"}
 
 	// Env should win over the file.
-	r := Resolve(file, "", "")
+	r := file.Resolve("", "")
 	if r.BaseURL != "http://env.test" || r.Token != "env-token" {
 		t.Fatalf("env should win over file, got %+v", r)
 	}
 
 	// Flags should win over env.
-	r = Resolve(file, "http://flag.test", "flag-token")
+	r = file.Resolve("http://flag.test", "flag-token")
 	if r.BaseURL != "http://flag.test" || r.Token != "flag-token" {
 		t.Fatalf("flag should win over env, got %+v", r)
 	}

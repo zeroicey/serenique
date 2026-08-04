@@ -15,7 +15,11 @@ func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *C
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return srv, NewClient(srv.URL, "test-token")
+	c, err := NewClient(srv.URL, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return srv, c
 }
 
 func TestGetUnmarshalsData(t *testing.T) {
@@ -312,5 +316,123 @@ func TestDoTreats2xxSuccessFalseEnvelopeAsError(t *testing.T) {
 	err := c.Get(context.Background(), "/api/x", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for success:false envelope")
+	}
+}
+
+// =============================================================================
+// Base URL validation
+// =============================================================================
+
+func TestValidateBaseURLAcceptsValidURLs(t *testing.T) {
+	for _, u := range []string{
+		"http://localhost:3000",
+		"http://localhost:3000/",
+		"https://example.com",
+		"http://127.0.0.1:8080/base",
+	} {
+		if err := ValidateBaseURL(u); err != nil {
+			t.Errorf("ValidateBaseURL(%q) = %v, want nil", u, err)
+		}
+	}
+}
+
+func TestValidateBaseURLRejectsMalformed(t *testing.T) {
+	for _, u := range []string{
+		"",                    // empty
+		"http://",             // scheme but no host
+		"localhost:3000",      // host but no scheme
+		"ftp://example.com/x", // unsupported scheme
+		"://host",             // unparseable
+	} {
+		if err := ValidateBaseURL(u); err == nil {
+			t.Errorf("ValidateBaseURL(%q) = nil, want error", u)
+		}
+	}
+}
+
+func TestNewClientRejectsInvalidBaseURL(t *testing.T) {
+	for _, u := range []string{"", "http://", "localhost:3000"} {
+		if _, err := NewClient(u, "t"); err == nil {
+			t.Errorf("NewClient(%q) = nil error, want validation failure", u)
+		}
+	}
+	c, err := NewClient("http://localhost:3000/", "t")
+	if err != nil {
+		t.Fatalf("valid URL rejected: %v", err)
+	}
+	if c.BaseURL != "http://localhost:3000" {
+		t.Fatalf("BaseURL = %q, want trailing slash stripped", c.BaseURL)
+	}
+}
+
+// =============================================================================
+// Download integrity
+// =============================================================================
+
+func TestVerifyDownloadCount(t *testing.T) {
+	cases := []struct {
+		received, declared int64
+		wantErr            bool
+	}{
+		{5, 5, false},          // exact match
+		{0, 0, false},          // empty file, declared 0
+		{5, 100, true},         // truncated
+		{100, 5, true},         // over-received (mismatch)
+		{5, -1, false},         // chunked/unknown length: no check
+		{0, -1, false},         // unknown length, empty
+	}
+	for _, tc := range cases {
+		err := verifyDownloadCount(tc.received, tc.declared)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("verifyDownloadCount(%d, %d) err = %v, wantErr %v", tc.received, tc.declared, err, tc.wantErr)
+		}
+	}
+}
+
+// TestDownloadFileChunkedTruncation drives a raw HTTP/1.1 connection that sends
+// one chunked body then closes without the terminating chunk. The Go client
+// surfaces this as io.ErrUnexpectedEOF; DownloadFile must treat it as a failure,
+// clean up its temp file, and never leave a partial file at the target path.
+func TestDownloadFileChunkedTruncation(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out.bin")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("response writer does not support hijacking")
+		}
+		conn, buf, err := hj.Hijack()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		buf.WriteString("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n")
+		buf.WriteString("5\r\nhello\r\n") // one chunk, then close — no terminator
+		buf.Flush()
+	}))
+	defer srv.Close()
+
+	c, err := NewClient(srv.URL, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = c.DownloadFile(context.Background(), "b1", out, false, false)
+	if err == nil {
+		t.Fatal("expected error for truncated chunked download")
+	}
+	if !strings.Contains(err.Error(), "下载中断") && !strings.Contains(err.Error(), "写入文件失败") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+		t.Fatalf("partial file must not exist at the target path, stat err = %v", statErr)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected no leftover files in dir, got %v", entries)
 	}
 }

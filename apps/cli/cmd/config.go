@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 	"github.com/zeroicey/serenique-cli/internal/config"
 )
 
@@ -72,11 +73,16 @@ var configSetCmd = &cobra.Command{
 
 		switch key {
 		case "baseurl":
+			// Fail fast on a malformed base URL when it is written, so a config
+			// typo never surfaces later as a cryptic request-time network error.
+			if err := client.ValidateBaseURL(value); err != nil {
+				return err
+			}
 			cfg.BaseURL = value
 		case "token":
 			cfg.Token = value
 		default:
-			return fmt.Errorf("未知的配置项: %s\n支持的配置项: baseurl, token", key)
+			return fmt.Errorf("未知的配置项: %s（支持的配置项: baseurl, token）", key)
 		}
 
 		if err := config.Save(cfg); err != nil {

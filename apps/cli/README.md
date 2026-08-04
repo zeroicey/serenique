@@ -141,6 +141,9 @@ serenique moment list --page 1 --page-size 20
 serenique moment create --text "记录一个灵感..."
 serenique moment create -m "记录一个灵感"
 
+# 查看闪念详情（含附件列表）
+serenique moment get <闪念ID>
+
 # 删除闪念
 serenique moment delete <闪念ID>
 serenique moment delete <闪念ID> --force
@@ -171,6 +174,7 @@ serenique blob info <文件ID>
 serenique blob download <文件ID>
 serenique blob download <文件ID> --output ./saved.jpg
 serenique blob download <文件ID> --download  # 强制作为附件下载
+serenique blob download <文件ID> --force     # 覆盖已存在的本地文件
 
 # 创建临时访问链接
 serenique blob link <文件ID>

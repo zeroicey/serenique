@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/zeroicey/serenique-cli/internal/client"
 	"github.com/zeroicey/serenique-cli/internal/config"
 	"github.com/zeroicey/serenique-cli/internal/output"
@@ -24,7 +25,11 @@ func runWithServer(t *testing.T, handler http.HandlerFunc, jsonMode bool, fn fun
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	apiClient = client.NewClient(srv.URL, "test-token")
+	c, err := client.NewClient(srv.URL, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiClient = c
 	printer = output.NewPrinter(jsonMode)
 	useJSON = jsonMode
 	fn(srv)
@@ -137,6 +142,37 @@ func withTempConfig(t *testing.T) string {
 	config.SetPath(path)
 	t.Cleanup(func() { config.SetPath("") })
 	return path
+}
+
+// TestConfigSetUnknownKeyErrorHasNoNewline guards the error message shape: the
+// unknown-key error must not embed a newline (which would render as a stray
+// blank line under the "✗ 错误:" prefix and leak verbatim into the JSON error
+// object).
+func TestConfigSetUnknownKeyErrorHasNoNewline(t *testing.T) {
+	withTempConfig(t)
+	err := configSetCmd.RunE(configSetCmd, []string{"bogus", "x"})
+	if err == nil {
+		t.Fatal("expected error for unknown config key")
+	}
+	if !strings.Contains(err.Error(), "未知的配置项: bogus") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(err.Error(), "\n") {
+		t.Fatalf("error must not embed a newline: %q", err.Error())
+	}
+}
+
+func TestConfigSetBaseURLRejectsMalformed(t *testing.T) {
+	withTempConfig(t)
+	for _, bad := range []string{"http://", "localhost:3000", "ftp://x", ""} {
+		err := configSetCmd.RunE(configSetCmd, []string{"baseurl", bad})
+		if err == nil {
+			t.Errorf("config set baseurl %q = nil error, want validation failure", bad)
+		}
+	}
+	if err := configSetCmd.RunE(configSetCmd, []string{"baseurl", "http://example.test"}); err != nil {
+		t.Fatalf("valid baseurl rejected: %v", err)
+	}
 }
 
 func TestConfigSetJSONMasksToken(t *testing.T) {
@@ -468,6 +504,22 @@ func TestFlagJSONRequestedFrom(t *testing.T) {
 		{"long numeric false", []string{"--json=0"}, false},
 		{"no flag", []string{"diary", "list"}, false},
 		{"unrelated flags", []string{"--baseurl", "http://x", "list"}, false},
+		// Value-taking flags must consume the next argument so a literal "--json"
+		// or "-j" used as content is not misdetected as a flag (pflag semantics
+		// confirmed: `-m --json` sets m="--json").
+		{"json consumed as short value", []string{"diary", "create", "-m", "--json"}, false},
+		{"json consumed as long value", []string{"diary", "create", "--content", "--json"}, false},
+		{"json consumed as short flag value", []string{"diary", "create", "-m", "-j"}, false},
+		{"json embedded in value", []string{"diary", "create", "-mj"}, false},
+		// Combined boolean shorthands must be recognized (-fj = force+json).
+		{"combined shorthand", []string{"blob", "delete", "-fj"}, true},
+		{"combined shorthand reversed", []string{"blob", "delete", "-jf"}, true},
+		// "--" terminates flag parsing; everything after is positional.
+		{"json after terminator", []string{"diary", "create", "--", "--json"}, false},
+		// "-m -- --json": "--" is consumed as m's value, so --json is a real flag.
+		{"json after value-taken terminator", []string{"diary", "create", "-m", "--", "--json"}, true},
+		{"short flag with attached value", []string{"blob", "download", "-j=true"}, true},
+		{"short flag attached false", []string{"blob", "download", "-j=false"}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -493,6 +545,89 @@ func TestBlobAttachmentsShortOwnerIDDoesNotPanic(t *testing.T) {
 			t.Fatalf("command failed: %v", err)
 		}
 	})
+}
+
+// =============================================================================
+// Shared command factories
+// =============================================================================
+
+// TestListFactoryEmptyPageMessage verifies the UX fix for a page past the end:
+// table mode prints an explicit "本页无数据，共 N 条记录" instead of an empty
+// "(无数据)" table followed by the total footer. This also exercises the
+// output package's lazy stream resolution, since the factory writes through the
+// real TablePrinter to the (swapped) os.Stdout.
+func TestListFactoryEmptyPageMessage(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query().Get("pageSize"); q != "10" {
+			t.Errorf("pageSize = %q, want 10", q)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"items":[],"total":42}}`))
+	}, false, func(srv *httptest.Server) {
+		page, size := 1, 10
+		lc := paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
+			use:        "list",
+			short:      "列出日记",
+			long:       "long",
+			path:       "/api/diaries",
+			emptyMsg:   "暂无日记记录",
+			headers:    []string{"ID", "日期"},
+			defaultSize: 10,
+			row:        func(d DiaryEntry) map[string]string { return map[string]string{} },
+		}, &page, &size)
+		out := captureStdout(t, func() {
+			if err := lc.RunE(lc, nil); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if !strings.Contains(out, "本页无数据，共 42 条记录") {
+			t.Fatalf("expected empty-page message, got %q", out)
+		}
+		if strings.Contains(out, "(无数据)") {
+			t.Fatalf("should not print the empty-table placeholder, got %q", out)
+		}
+	})
+}
+
+func TestDeleteCommandFactoryIssuesDelete(t *testing.T) {
+	var gotMethod, gotPath string
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		force := true
+		dc := deleteCommand("delete <id>", "x", "long", "日记", false,
+			func(id string) string { return "/api/diaries/" + id }, &force)
+		if err := dc.RunE(dc, []string{"d1"}); err != nil {
+			t.Fatal(err)
+		}
+		if gotMethod != "DELETE" || gotPath != "/api/diaries/d1" {
+			t.Fatalf("request = %s %s, want DELETE /api/diaries/d1", gotMethod, gotPath)
+		}
+		if rec.lastSuccess.message != "日记已删除" {
+			t.Fatalf("message = %q, want 日记已删除", rec.lastSuccess.message)
+		}
+		data, ok := rec.lastSuccess.data.(map[string]any)
+		if !ok || data["id"] != "d1" {
+			t.Fatalf("data = %+v, want id d1", rec.lastSuccess.data)
+		}
+	})
+}
+
+// TestCommandContextFallsBackToBackground covers commands invoked without
+// ExecuteContext (RunE called directly in tests), where cobra leaves the
+// context nil: the helper must not panic and must return a usable context.
+func TestCommandContextFallsBackToBackground(t *testing.T) {
+	cmd := &cobra.Command{Use: "test"}
+	if ctx := commandContext(cmd); ctx == nil {
+		t.Fatal("commandContext returned nil")
+	}
+	cmd.SetContext(context.Background())
+	if ctx := commandContext(cmd); ctx == nil {
+		t.Fatal("commandContext returned nil for set context")
+	}
 }
 
 // =============================================================================

@@ -1,10 +1,28 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"strconv"
+
+	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 )
+
+// commandContext returns the context attached to a cobra command, which the root
+// command derives from os signals (see Execute) so an interrupt cancels
+// in-flight requests. When the command was not run through ExecuteContext (unit
+// tests invoking RunE directly), cobra leaves the context nil; fall back to
+// context.Background() so those callers keep working.
+func commandContext(cmd *cobra.Command) context.Context {
+	if ctx := cmd.Context(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
 
 // confirm asks the user to confirm a destructive action.
 //
@@ -94,6 +112,120 @@ func validatePageParams(page, pageSize int) error {
 		return fmt.Errorf("每页条数不能超过 50")
 	}
 	return nil
+}
+
+// printCreateResult renders a create-style success in both modes: JSON mode
+// emits the {message, data} envelope; table mode prints a ✓ line, a blank line,
+// and the key-value detail block. Shared by the create/update/attach/link
+// commands so their success tails cannot drift apart.
+func printCreateResult(jsonMessage string, jsonData any, tableMessage string, kv map[string]string) {
+	if useJSON {
+		printer.PrintSuccess(jsonMessage, jsonData)
+		return
+	}
+	printer.PrintSuccess(tableMessage, nil)
+	fmt.Println()
+	printer.PrintKeyValue(kv)
+}
+
+// deleteCommand builds a "delete <id>" subcommand that confirms the destructive
+// action (unless --force), issues the DELETE, and renders the result. noun is
+// the Chinese resource label used in the confirmation prompt and success message
+// (e.g. "日记"); permanent words the prompt as "确认永久删除"; apiPath maps the
+// id to the API path; force receives the --force flag value. Keeps the three
+// delete commands' confirmation + call + render scaffolding in one place.
+func deleteCommand(use, short, long, noun string, permanent bool, apiPath func(id string) string, force *bool) *cobra.Command {
+	prompt := "确认删除"
+	if permanent {
+		prompt = "确认永久删除"
+	}
+	return &cobra.Command{
+		Use:   use,
+		Short: short,
+		Long:  long,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm(fmt.Sprintf("%s%s %s", prompt, noun, args[0]), *force); err != nil {
+				return err
+			}
+			if err := apiClient.Delete(commandContext(cmd), apiPath(args[0])); err != nil {
+				return err
+			}
+			printDeleteResult(noun+"已删除", args[0])
+			return nil
+		},
+	}
+}
+
+// listSpec parameterizes the shared paginated-list command. T is the API entry
+// type; row maps one entry to its table row.
+type listSpec[T any] struct {
+	use   string
+	short string
+	long  string
+	path  string
+
+	emptyMsg    string
+	headers     []string
+	row         func(T) map[string]string
+	defaultSize int
+
+	// extraQuery mutates the query values beyond page/pageSize (e.g. mimeType).
+	extraQuery func(q url.Values)
+}
+
+// paginatedListCommand builds a "list" subcommand that fetches {items, total},
+// renders a table with a "共 N 条记录" footer in table mode, and the same
+// {items, total} envelope in JSON mode. page/pageSize are bound to the provided
+// vars so each module keeps its own flag state (and default page size). A page
+// past the end (total>0 but no items) prints an explicit "本页无数据" message
+// instead of an empty "(无数据)" table followed by the total footer.
+func paginatedListCommand[T any](spec listSpec[T], pageVar, sizeVar *int) *cobra.Command {
+	return &cobra.Command{
+		Use:   spec.use,
+		Short: spec.short,
+		Long:  spec.long,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validatePageParams(*pageVar, *sizeVar); err != nil {
+				return err
+			}
+
+			query := url.Values{}
+			query.Set("page", strconv.Itoa(*pageVar))
+			query.Set("pageSize", strconv.Itoa(*sizeVar))
+			if spec.extraQuery != nil {
+				spec.extraQuery(query)
+			}
+
+			items, total, err := client.List[T](apiClient, commandContext(cmd), spec.path, query)
+			if err != nil {
+				return err
+			}
+
+			if useJSON {
+				printer.PrintSuccess("查询成功", map[string]any{"items": items, "total": total})
+				return nil
+			}
+
+			if total == 0 {
+				printer.PrintMessage(spec.emptyMsg)
+				return nil
+			}
+			if len(items) == 0 {
+				printer.PrintMessage(fmt.Sprintf("本页无数据，共 %d 条记录", total))
+				return nil
+			}
+
+			rows := make([]map[string]string, len(items))
+			for i, it := range items {
+				rows[i] = spec.row(it)
+			}
+			printer.PrintTable(spec.headers, rows)
+			fmt.Printf("\n共 %d 条记录\n", total)
+			return nil
+		},
+	}
 }
 
 // attachmentBody builds the POST body for creating an attachment reference,

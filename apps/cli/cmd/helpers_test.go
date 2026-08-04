@@ -34,14 +34,29 @@ func withStdin(t *testing.T, input string) {
 // stderr while it was swapped.
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
-	old := os.Stderr
+	return captureStream(t, &os.Stderr, fn)
+}
+
+// captureStdout swaps os.Stdout, runs fn, and returns everything written to
+// stdout while it was swapped.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	return captureStream(t, &os.Stdout, fn)
+}
+
+// captureStream swaps the given os package stream var (*os.File, i.e.
+// os.Stdout/os.Stderr), runs fn, and returns everything written to it while
+// swapped.
+func captureStream(t *testing.T, stream **os.File, fn func()) string {
+	t.Helper()
+	old := *stream
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Stderr = w
+	*stream = w
 	t.Cleanup(func() {
-		os.Stderr = old
+		*stream = old
 		w.Close()
 		r.Close()
 	})

@@ -1,13 +1,10 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"net/url"
 	"strconv"
 
 	"github.com/spf13/cobra"
-	"github.com/zeroicey/serenique-cli/internal/client"
 )
 
 // Moment types matching the API response.
@@ -60,57 +57,7 @@ var momentCmd = &cobra.Command{
 }
 
 // moment list
-var momentListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "列出闪念",
-	Long: `分页查询闪念列表。
-
-示例:
-  serenique moment list
-  serenique moment list --page 1 --page-size 20
-  serenique moment list --json`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := validatePageParams(momentListPage, momentListPageSize); err != nil {
-			return err
-		}
-
-		ctx := context.Background()
-		query := url.Values{}
-		query.Set("page", strconv.Itoa(momentListPage))
-		query.Set("pageSize", strconv.Itoa(momentListPageSize))
-
-		items, total, err := client.List[MomentEntry](apiClient, ctx, "/api/moments", query)
-		if err != nil {
-			return err
-		}
-
-		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]any{"items": items, "total": total})
-			return nil
-		}
-
-		if total == 0 {
-			printer.PrintMessage("暂无闪念记录")
-			return nil
-		}
-
-		headers := []string{"ID", "内容", "创建时间"}
-		rows := make([]map[string]string, len(items))
-		for i, m := range items {
-			preview := truncateRunes(m.Text, 50)
-			rows[i] = map[string]string{
-				"ID":   m.ID[:8] + "...",
-				"内容":   preview,
-				"创建时间": m.CreatedAt[:19],
-			}
-		}
-
-		printer.PrintTable(headers, rows)
-		fmt.Printf("\n共 %d 条记录\n", total)
-		return nil
-	},
-}
+var momentListCmd *cobra.Command
 
 var (
 	momentListPage     int
@@ -127,23 +74,14 @@ var momentCreateCmd = &cobra.Command{
   serenique moment create --text "突然想到一个好主意..."
   serenique moment create -m "记录一个灵感"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
-
 		body := map[string]string{"text": momentCreateText}
 
 		var result MomentEntry
-		if err := apiClient.Post(ctx, "/api/moments", body, &result); err != nil {
+		if err := apiClient.Post(commandContext(cmd), "/api/moments", body, &result); err != nil {
 			return err
 		}
 
-		if useJSON {
-			printer.PrintSuccess("闪念创建成功", result)
-			return nil
-		}
-
-		printer.PrintSuccess("闪念创建成功", nil)
-		fmt.Println()
-		printer.PrintKeyValue(map[string]string{
+		printCreateResult("闪念创建成功", result, "闪念创建成功", map[string]string{
 			"ID":   result.ID,
 			"内容":   result.Text,
 			"创建时间": result.CreatedAt,
@@ -164,10 +102,8 @@ var momentGetCmd = &cobra.Command{
   serenique moment get a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
-
 		var result MomentEntry
-		if err := apiClient.Get(ctx, "/api/moments/"+args[0], nil, &result); err != nil {
+		if err := apiClient.Get(commandContext(cmd), "/api/moments/"+args[0], nil, &result); err != nil {
 			return err
 		}
 
@@ -208,29 +144,7 @@ var momentGetCmd = &cobra.Command{
 }
 
 // moment delete
-var momentDeleteCmd = &cobra.Command{
-	Use:   "delete <id>",
-	Short: "删除闪念",
-	Long: `删除指定的闪念。此操作不可撤销，默认需要确认。
-
-示例:
-  serenique moment delete a1b2c3d4
-  serenique moment delete a1b2c3d4 --force`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := confirm("确认删除闪念 "+args[0], momentDeleteForce); err != nil {
-			return err
-		}
-
-		ctx := context.Background()
-		if err := apiClient.Delete(ctx, "/api/moments/"+args[0]); err != nil {
-			return err
-		}
-
-		printDeleteResult("闪念已删除", args[0])
-		return nil
-	},
-}
+var momentDeleteCmd *cobra.Command
 
 var momentDeleteForce bool
 
@@ -245,28 +159,19 @@ var momentAttachCmd = &cobra.Command{
   serenique moment attach a1b2c3d4 --blob-id e5f6a1b2 --role cover --display-name "配图"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.Background()
-
 		body := attachmentBody(momentAttachBlobID, momentAttachRole, momentAttachDisplayName,
 			momentAttachSortOrder, cmd.Flags().Changed("sort-order"), nil)
 
 		var result MomentAttachmentEntry
-		if err := apiClient.Post(ctx, "/api/moments/"+args[0]+"/attachments", body, &result); err != nil {
+		if err := apiClient.Post(commandContext(cmd), "/api/moments/"+args[0]+"/attachments", body, &result); err != nil {
 			return err
 		}
 
-		if useJSON {
-			printer.PrintSuccess("附件关联成功", result)
-			return nil
-		}
-
-		printer.PrintSuccess("附件关联成功", nil)
-		fmt.Println()
 		dn := "-"
 		if result.DisplayName != nil {
 			dn = *result.DisplayName
 		}
-		printer.PrintKeyValue(map[string]string{
+		printCreateResult("附件关联成功", result, "附件关联成功", map[string]string{
 			"ID":    result.ID,
 			"文件 ID": result.BlobID,
 			"角色":    result.Role,
@@ -298,8 +203,7 @@ var momentDetachCmd = &cobra.Command{
 			return err
 		}
 
-		ctx := context.Background()
-		if err := apiClient.Delete(ctx, "/api/moments/"+args[0]+"/attachments/"+args[1]); err != nil {
+		if err := apiClient.Delete(commandContext(cmd), "/api/moments/"+args[0]+"/attachments/"+args[1]); err != nil {
 			return err
 		}
 
@@ -311,7 +215,28 @@ var momentDetachCmd = &cobra.Command{
 var momentDetachForce bool
 
 func init() {
-	// moment list flags
+	// moment list
+	momentListCmd = paginatedListCommand[MomentEntry](listSpec[MomentEntry]{
+		use:   "list",
+		short: "列出闪念",
+		long: `分页查询闪念列表。
+
+示例:
+  serenique moment list
+  serenique moment list --page 1 --page-size 20
+  serenique moment list --json`,
+		path:        "/api/moments",
+		emptyMsg:    "暂无闪念记录",
+		headers:     []string{"ID", "内容", "创建时间"},
+		defaultSize: 10,
+		row: func(m MomentEntry) map[string]string {
+			return map[string]string{
+				"ID":   m.ID[:8] + "...",
+				"内容":   truncateRunes(m.Text, 50),
+				"创建时间": m.CreatedAt[:19],
+			}
+		},
+	}, &momentListPage, &momentListPageSize)
 	momentListCmd.Flags().IntVarP(&momentListPage, "page", "p", 1, "页码")
 	momentListCmd.Flags().IntVarP(&momentListPageSize, "page-size", "l", 10, "每页条数")
 
@@ -319,7 +244,13 @@ func init() {
 	momentCreateCmd.Flags().StringVarP(&momentCreateText, "text", "m", "", "闪念内容，最长 500 字 (必填)")
 	momentCreateCmd.MarkFlagRequired("text")
 
-	// moment delete flags
+	// moment delete
+	momentDeleteCmd = deleteCommand("delete <id>", "删除闪念", `删除指定的闪念。此操作不可撤销，默认需要确认。
+
+示例:
+  serenique moment delete a1b2c3d4
+  serenique moment delete a1b2c3d4 --force`, "闪念", false,
+		func(id string) string { return "/api/moments/" + id }, &momentDeleteForce)
 	momentDeleteCmd.Flags().BoolVarP(&momentDeleteForce, "force", "f", false, "跳过确认提示")
 
 	// moment attach flags

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -52,9 +53,12 @@ func (e *APIError) Error() string {
 }
 
 // NewClient creates a new API client.
-func NewClient(baseURL, token string) *Client {
+func NewClient(baseURL, token string) (*Client, error) {
 	// Strip trailing slash for consistent URL building
 	baseURL = strings.TrimRight(baseURL, "/")
+	if err := ValidateBaseURL(baseURL); err != nil {
+		return nil, err
+	}
 
 	return &Client{
 		BaseURL: baseURL,
@@ -62,15 +66,42 @@ func NewClient(baseURL, token string) *Client {
 		HTTPClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
-	}
+	}, nil
 }
 
-// transferHTTPClient returns an HTTP client with no request timeout, used only
-// for streaming file transfers. Uploads and downloads of large blobs (the API
-// allows up to 100MB) can legitimately run longer than DefaultTimeout (60s).
-// Context cancellation still applies, so a hung server does not hang forever.
+// ValidateBaseURL rejects a base URL that cannot produce well-formed requests —
+// an empty scheme or host, or a non-HTTP(S) scheme — with an actionable message.
+// Failing here (at client construction, right after config resolution) surfaces
+// a config typo like `http://` or a bare host immediately instead of as a
+// cryptic "http: no Host in request URL" wrapped in a generic network hint at
+// request time. The audience includes AI agents setting config via env vars.
+func ValidateBaseURL(raw string) error {
+	baseURL := strings.TrimRight(raw, "/")
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return fmt.Errorf("无效的 baseurl %q: %v", baseURL, err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("无效的 baseurl %q: 必须包含协议和主机名，例如 http://localhost:3000", baseURL)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("无效的 baseurl %q: 仅支持 http 或 https 协议", baseURL)
+	}
+	return nil
+}
+
+// transferHTTPClient returns an HTTP client with no overall request timeout,
+// used only for streaming file transfers. Uploads and downloads of large blobs
+// (the API allows up to 100MB) can legitimately run longer than DefaultTimeout
+// (60s). The transport keeps a finite ResponseHeaderTimeout so a server that
+// accepts a connection and then never sends response headers fails fast, while
+// large bodies are still allowed to stream once headers have arrived. A body
+// that stalls mid-stream is aborted by request context cancellation (the signal
+// derived root context in cmd/root.go), so a hung server does not hang forever.
 func (c *Client) transferHTTPClient() *http.Client {
-	return &http.Client{}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 30 * time.Second
+	return &http.Client{Transport: transport}
 }
 
 // =============================================================================
@@ -145,6 +176,10 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 // List sends a GET request to a paginated endpoint and unpacks the
 // {items, total} envelope. The query values are passed through unchanged
 // (callers set page/pageSize themselves).
+//
+// This stays a free function rather than a method because Go does not allow
+// generic methods on a non-generic receiver type: `func (c *Client) List[T any]`
+// is rejected with "method must have no type parameters".
 func List[T any](c *Client, ctx context.Context, path string, query url.Values) ([]T, int, error) {
 	var result struct {
 		Items []T `json:"items"`
@@ -267,8 +302,22 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 		os.Remove(tmpName) // no-op once the rename succeeds
 	}
 
-	_, err = io.Copy(tmp, resp.Body)
+	n, err := io.Copy(tmp, resp.Body)
 	if err != nil {
+		// io.Copy surfaces an unexpected EOF (server closed the body early) as
+		// io.ErrUnexpectedEOF; without this the partial body would be saved as if
+		// complete when there is no Content-Length (e.g. a proxy that strips it).
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			err = fmt.Errorf("下载中断：服务器提前关闭了连接（%d 字节已写入）", n)
+		}
+		discardTmp()
+		return fmt.Errorf("写入文件失败: %w", err)
+	}
+	// Verify the byte count when the server declared one: a truncated body over a
+	// Content-Length response that io.Copy could not detect (e.g. a proxy that
+	// closes the body early but keeps the connection) would otherwise be renamed
+	// over the target as if complete.
+	if err := verifyDownloadCount(n, resp.ContentLength); err != nil {
 		discardTmp()
 		return fmt.Errorf("写入文件失败: %w", err)
 	}
@@ -307,6 +356,16 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 // =============================================================================
 // Internal helpers
 // =============================================================================
+
+// verifyDownloadCount rejects a truncated body: when the server declared a
+// Content-Length, the received byte count must match it. A declared length of -1
+// (chunked/unknown) means no check is possible.
+func verifyDownloadCount(received, declared int64) error {
+	if declared >= 0 && received != declared {
+		return fmt.Errorf("下载不完整（收到 %d 字节，预期 %d 字节）", received, declared)
+	}
+	return nil
+}
 
 func (c *Client) url(apiPath string) string {
 	return c.BaseURL + apiPath

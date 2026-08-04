@@ -6,14 +6,18 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/zeroicey/serenique-cli/internal/client"
 	"github.com/zeroicey/serenique-cli/internal/config"
 	"github.com/zeroicey/serenique-cli/internal/output"
@@ -106,10 +110,13 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Resolve effective config (flags > env > file) and build the client
-		// directly from the result — no intermediate global.
-		resolved := config.Resolve(cfg, flagBaseURL, flagToken)
-		apiClient = client.NewClient(resolved.BaseURL, resolved.Token)
-		printer = output.NewPrinter(useJSON)
+		// directly from the result — no intermediate global. NewClient validates
+		// the resolved base URL so a config typo surfaces here with an actionable
+		// message instead of a cryptic request-time error.
+		resolved := cfg.Resolve(flagBaseURL, flagToken)
+		if apiClient, err = client.NewClient(resolved.BaseURL, resolved.Token); err != nil {
+			return err
+		}
 
 		return nil
 	},
@@ -131,16 +138,25 @@ var rootCmd = &cobra.Command{
 // is detected from os.Args up front and such early errors fall back to a JSON
 // error object on stderr instead of a plain-text line.
 func Execute() {
+	// Derive the root context from OS signals so an interrupt (Ctrl-C) cancels
+	// the in-flight request instead of terminating the process without running
+	// defers — that is what lets DownloadFile clean up its .serenique-dl-* temp
+	// file on an interrupted download. Commands use cmd.Context() so transfers
+	// are never bound to an uncancellable context.Background().
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+
 	jsonRequested := flagJSONRequested()
 	if jsonRequested {
 		useJSON = true
 	}
 
-	err := rootCmd.Execute()
+	err := rootCmd.ExecuteContext(ctx)
 	if err == nil {
+		stop()
 		return
 	}
 	renderExecutionError(err, jsonRequested)
+	stop()
 	os.Exit(1)
 }
 
@@ -168,40 +184,131 @@ func renderExecutionError(err error, jsonRequested bool) {
 }
 
 // flagJSONRequested reports whether --json or -j (with or without an explicit
-// =true/=false value) appears on the command line, without requiring cobra to
-// have parsed flags yet (Execute runs before flag parsing). It matches the
-// documented flag spellings plus the =value forms, so `-j=true` pre-arms the
-// JSON error fallback just like bare `-j` does. Values are parsed with
-// strconv.ParseBool to mirror pflag's accepted boolean spellings (1, t, true,
-// 0, f, false...). An unparseable value is treated as JSON-requested: cobra will
-// reject it with an error, and rendering that error as JSON matches the user's
-// intent. Scanning stops at the first match; bare --json/-j and =false forms
-// combine in the same way pflag's last-wins semantics handle them for the
-// common cases this pre-scan exists to cover.
+// =true/=false value) appears on the command line as an actual flag, without
+// requiring cobra to have parsed flags yet (Execute runs before flag parsing).
+// Cobra validates args and required flags before PersistentPreRunE runs, so a
+// pre-printer error still needs to know the user asked for JSON to render as a
+// JSON object on stderr.
+//
+// The scan mirrors pflag's arity rules so it neither reports a false positive
+// (a literal "--json" consumed as the value of a preceding flag, e.g. `diary
+// create -m --json`) nor misses a false negative (combined boolean shorthands
+// like `blob delete -fj`). Values are parsed with strconv.ParseBool to mirror
+// pflag's accepted boolean spellings (1, t, true, 0, f, false...). An
+// unparseable value is treated as JSON-requested: cobra will reject it with an
+// error, and rendering that error as JSON matches the user's intent. Scanning
+// stops at a "--" terminator (everything after it is positional), and bare
+// --json/-j and =false forms combine with pflag's last-wins semantics.
 func flagJSONRequested() bool {
 	return flagJSONRequestedFrom(os.Args[1:])
+}
+
+// flagScanData records which registered long and short flags consume the
+// following argument, so the pre-scan knows `-m --json` treats --json as a
+// value. A flag takes a value when its pflag NoOptDefVal is empty (string/int
+// flags); boolean flags set NoOptDefVal to "true" and never consume the next
+// argument. The sets are built from the command tree (all init()s have already
+// registered every flag by the time Execute runs).
+type flagScanData struct {
+	valueLong  map[string]bool
+	valueShort map[string]bool
+	boolShort  map[string]bool
+}
+
+func buildFlagScanData() *flagScanData {
+	d := &flagScanData{
+		valueLong:  map[string]bool{},
+		valueShort: map[string]bool{},
+		boolShort:  map[string]bool{},
+	}
+	record := func(f *pflag.Flag) {
+		takesValue := f.NoOptDefVal == ""
+		d.valueLong[f.Name] = takesValue
+		if f.Shorthand != "" {
+			if takesValue {
+				d.valueShort[f.Shorthand] = true
+			} else {
+				d.boolShort[f.Shorthand] = true
+			}
+		}
+	}
+	var visit func(c *cobra.Command)
+	visit = func(c *cobra.Command) {
+		c.Flags().VisitAll(record)
+		c.PersistentFlags().VisitAll(record)
+		for _, sub := range c.Commands() {
+			visit(sub)
+		}
+	}
+	visit(rootCmd)
+	return d
 }
 
 // flagJSONRequestedFrom is the pure argument scan used by flagJSONRequested;
 // extracted for testability.
 func flagJSONRequestedFrom(args []string) bool {
-	for _, a := range args {
+	return flagJSONRequestedFromData(args, buildFlagScanData())
+}
+
+// flagJSONRequestedFromData scans args given known flag arities. It is the pure
+// core of flagJSONRequestedFrom, factored out so tests can exercise the scanner
+// without depending on the registered command tree.
+func flagJSONRequestedFromData(args []string, d *flagScanData) bool {
+	jsonValue := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
 		switch {
-		case a == "--json" || a == "-j":
-			return true
-		case strings.HasPrefix(a, "--json="):
-			if v, err := strconv.ParseBool(a[len("--json="):]); err == nil {
-				return v
+		case a == "--":
+			// Everything after the terminator is positional, never a flag.
+			return jsonValue
+		case strings.HasPrefix(a, "--"):
+			name, val, hasVal := strings.Cut(a[2:], "=")
+			if name == "json" {
+				jsonValue = true
+				if hasVal {
+					if v, err := strconv.ParseBool(val); err == nil {
+						jsonValue = v
+					}
+				}
+				continue
 			}
-			return true // unparseable value — cobra will reject it
-		case strings.HasPrefix(a, "-j="):
-			if v, err := strconv.ParseBool(a[len("-j="):]); err == nil {
-				return v
+			// A value-taking long flag consumes the next argument (unless the
+			// value was attached with =).
+			if !hasVal && d.valueLong[name] {
+				i++
 			}
-			return true
+		case len(a) > 1 && a[0] == '-':
+			body := a[1:]
+			// Short flag with attached value: -j=true or -m=value.
+			if eq := strings.IndexByte(body, '='); eq >= 0 {
+				if body[:eq] == "j" {
+					jsonValue = true
+					if v, err := strconv.ParseBool(body[eq+1:]); err == nil {
+						jsonValue = v
+					}
+				}
+				continue
+			}
+			// Combined shorthand group: -fj (force+json), -jf, -mvalue, -mj.
+			for pos := 0; pos < len(body); pos++ {
+				ch := string(body[pos])
+				if ch == "j" {
+					jsonValue = true
+					continue
+				}
+				if d.boolShort[ch] {
+					continue
+				}
+				// First value-taking (or unknown) shorthand: the rest of the body
+				// is its value (-mvalue), or the next argument is (-m value).
+				if d.valueShort[ch] && pos == len(body)-1 {
+					i++
+				}
+				break
+			}
 		}
 	}
-	return false
+	return jsonValue
 }
 
 func init() {
