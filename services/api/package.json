@@ -1,8 +1,12 @@
 {
-  "name": "serenique-api",
+  "name": "@serenique/api",
+  "exports": {
+    ".": "./src/exports.ts"
+  },
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-    "start": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push"

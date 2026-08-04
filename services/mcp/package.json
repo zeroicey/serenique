@@ -1,0 +1,15 @@
+{
+  "name": "@serenique/mcp",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@serenique/api": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "hono": "^4.13.0",
+    "zod": "^4.4.3"
+  }
+}

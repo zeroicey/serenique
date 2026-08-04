@@ -84,11 +84,15 @@ export const blobHandler = {
   async getFile(c: Context) {
     try {
       const { buf, mimeType, filename } = await blobService.getFile(getId(c));
+      const body = buf.buffer.slice(
+        buf.byteOffset,
+        buf.byteOffset + buf.byteLength,
+      ) as ArrayBuffer;
 
       const disposition =
         c.req.query("download") === "1" ? "attachment" : "inline";
 
-      return new Response(buf, {
+      return new Response(body, {
         status: 200,
         headers: {
           "Content-Type": mimeType,
