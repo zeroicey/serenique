@@ -77,8 +77,8 @@ Each module is a self-contained Hono instance. Modules are wired in `app.ts` via
 
 The blob module is intended as a **shared storage layer** for other modules (diary, moment, and future modules like drive/netdisk). It has no business-level constraints on file types — any MIME type is accepted.
 
-- **Disk layout:** `{BLOB_ROOT}/{mime-main-type}/{YYYY}/{MM}/{uuid}.{ext}`
-  - Example: `image/2026/08/a1b2c3d4.jpg`, `application/2026/08/b2c3d4e5.pdf`
+- **Disk layout:** `{BLOB_ROOT}/objects/{mime-main-type}/{YYYY}/{MM}/{uuid}.{ext}`. Reads/deletes also fall back to the old direct-root layout for compatibility.
+  - Example: `objects/image/2026/08/a1b2c3d4.jpg`, `objects/application/2026/08/b2c3d4e5.pdf`
 - **Deduplication:** SHA-256 checksum with a unique constraint on the `checksum` column. Uploading the same file twice returns the existing record without writing to disk.
 - **Metadata:** `jsonb` column for extensible metadata (EXIF, codec info, custom tags). Not validated — left to consumer modules to define their own conventions.
 - **Image dimensions:** Extracted from binary headers (JPEG/PNG/GIF/WebP) at upload time with zero dependencies.

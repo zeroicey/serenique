@@ -3,6 +3,26 @@ import { mkdir, writeFile, unlink, readFile, readdir } from "node:fs/promises";
 import { join, dirname, extname as nodeExtname, relative } from "node:path";
 import { logger } from "@/shared/logger";
 
+export const BLOB_OBJECTS_DIR = "objects";
+
+function objectsRoot(root: string): string {
+  return join(root, BLOB_OBJECTS_DIR);
+}
+
+function managedPath(root: string, filePath: string): string {
+  return join(objectsRoot(root), filePath);
+}
+
+function legacyPath(root: string, filePath: string): string {
+  return join(root, filePath);
+}
+
+async function existingPath(root: string, filePath: string): Promise<string> {
+  const managed = managedPath(root, filePath);
+  if (await Bun.file(managed).exists()) return managed;
+  return legacyPath(root, filePath);
+}
+
 // ---------------------------------------------------------------------------
 // Lightweight image dimension extraction from binary headers.
 // No external dependencies — reads just enough bytes to parse the header.
@@ -124,26 +144,19 @@ export function buildStoragePath(
 
 /**
  * Initialize the BLOB_ROOT directory.
- * - If it doesn't exist, create it (empty → valid).
- * - If it exists, verify every top-level entry is a directory (no bare files).
+ * - If it doesn't exist, create it.
+ * - Ensure the managed objects directory exists.
+ * - Leave unrelated top-level files alone (for example macOS .DS_Store).
  */
 export async function initBlobRoot(root: string): Promise<void> {
   try {
     await mkdir(root, { recursive: true });
+    await mkdir(objectsRoot(root), { recursive: true });
   } catch (err) {
     throw new Error(`无法创建 BLOB_ROOT 目录: ${root} — ${String(err)}`);
   }
 
-  const entries = await readdir(root, { withFileTypes: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      throw new Error(
-        `BLOB_ROOT 目录必须只包含子目录，发现文件: ${entry.name}`,
-      );
-    }
-  }
-
-  logger.info({ root }, "BLOB_ROOT 目录初始化完成");
+  logger.info({ root, objectsRoot: objectsRoot(root) }, "BLOB_ROOT 目录初始化完成");
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +169,7 @@ export async function saveFile(
   filePath: string,
   buf: Buffer,
 ): Promise<void> {
-  const absPath = join(root, filePath);
+  const absPath = managedPath(root, filePath);
   await mkdir(dirname(absPath), { recursive: true });
   await writeFile(absPath, buf);
 }
@@ -166,7 +179,7 @@ export async function readFileFromStorage(
   root: string,
   filePath: string,
 ): Promise<Buffer> {
-  return readFile(join(root, filePath));
+  return readFile(await existingPath(root, filePath));
 }
 
 /** Open a file as a Blob without reading it fully into memory. */
@@ -174,7 +187,10 @@ export async function openFileFromStorage(
   root: string,
   filePath: string,
 ): Promise<{ body: Blob; size: number }> {
-  const body = Bun.file(join(root, filePath));
+  let body = Bun.file(managedPath(root, filePath));
+  if (!(await body.exists())) {
+    body = Bun.file(legacyPath(root, filePath));
+  }
   if (!(await body.exists())) {
     const err = new Error(`文件不存在: ${filePath}`) as NodeJS.ErrnoException;
     err.code = "ENOENT";
@@ -189,17 +205,24 @@ export async function deleteFileFromStorage(
   filePath: string,
 ): Promise<void> {
   try {
-    await unlink(join(root, filePath));
+    await unlink(managedPath(root, filePath));
   } catch (err) {
-    // File already gone — nothing to do
     const e = err as NodeJS.ErrnoException;
     if (e.code !== "ENOENT") throw err;
+
+    try {
+      await unlink(legacyPath(root, filePath));
+    } catch (legacyErr) {
+      const legacy = legacyErr as NodeJS.ErrnoException;
+      if (legacy.code !== "ENOENT") throw legacyErr;
+    }
   }
 }
 
 /** List every regular file under the blob store as a relative storage path. */
 export async function listStoragePaths(root: string): Promise<string[]> {
   const paths: string[] = [];
+  const base = objectsRoot(root);
 
   async function walk(dir: string): Promise<void> {
     let entries;
@@ -218,11 +241,11 @@ export async function listStoragePaths(root: string): Promise<string[]> {
         continue;
       }
       if (entry.isFile()) {
-        paths.push(relative(root, absPath));
+        paths.push(relative(base, absPath));
       }
     }
   }
 
-  await walk(root);
+  await walk(base);
   return paths.sort();
 }
