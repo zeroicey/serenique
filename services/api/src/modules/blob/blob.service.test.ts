@@ -27,21 +27,33 @@ function fakeBlobRow(overrides: Record<string, unknown> = {}) {
 
 function createMemoryBlobRepository(
   initialRows: Array<Record<string, any>> = [fakeBlobRow()],
+  options: {
+    findBlobByChecksumSequence?: Array<Record<string, any> | undefined>;
+    insertBlobError?: unknown;
+  } = {},
 ) {
   const blobsById = new Map<string, Record<string, any>>(
     initialRows.map((row) => [row.id, row]),
   );
   const attachmentsById = new Map<string, Record<string, any>>();
+  let checksumLookupCount = 0;
 
   return {
     blobsById,
     attachmentsById,
 
     async findBlobByChecksum(checksum: string) {
+      if (options.findBlobByChecksumSequence) {
+        const next = options.findBlobByChecksumSequence[checksumLookupCount];
+        checksumLookupCount += 1;
+        return next;
+      }
       return [...blobsById.values()].find((row) => row.checksum === checksum);
     },
 
     async insertBlob(input: Record<string, unknown>) {
+      if (options.insertBlobError) throw options.insertBlobError;
+
       const row: Record<string, any> = {
         metadata: {},
         width: null,
@@ -64,6 +76,10 @@ function createMemoryBlobRepository(
 
     async deleteBlob(id: string) {
       blobsById.delete(id);
+    },
+
+    async listBlobStoragePaths() {
+      return [...blobsById.values()].map((row) => String(row.storagePath));
     },
 
     async createAttachment(input: Record<string, unknown>) {
@@ -104,20 +120,32 @@ function createMemoryBlobRepository(
   };
 }
 
-function createMemoryBlobStorage(deletedPaths: string[] = []) {
+function createMemoryBlobStorage(
+  deletedPaths: string[] = [],
+  options: {
+    savedPaths?: string[];
+    diskPaths?: string[];
+    storagePath?: string;
+  } = {},
+) {
   return {
     sha256() {
       return "b".repeat(64);
     },
     buildStoragePath() {
-      return "image/2026/08/generated.png";
+      return options.storagePath ?? "image/2026/08/generated.png";
     },
-    async saveFile() {},
+    async saveFile(_root: string, path: string) {
+      options.savedPaths?.push(path);
+    },
     async readFileFromStorage() {
       return Buffer.from("file");
     },
     async deleteFileFromStorage(_root: string, path: string) {
       deletedPaths.push(path);
+    },
+    async listStoragePaths() {
+      return options.diskPaths ?? [];
     },
     extractImageDimensions() {
       return null;
@@ -210,5 +238,107 @@ describe("blob attachment lifecycle", () => {
     expect(deletedPaths).toEqual([
       "image/2026/08/0198f6bd-4f06-7289-b57d-62e8af51a4aa.png",
     ]);
+  });
+});
+
+describe("blob upload consistency", () => {
+  test("removes the saved disk file when inserting the blob row fails", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const savedPaths: string[] = [];
+    const deletedPaths: string[] = [];
+    const repository = createMemoryBlobRepository([], {
+      insertBlobError: new Error("database unavailable"),
+    });
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+      },
+      repository,
+      storage: createMemoryBlobStorage(deletedPaths, {
+        savedPaths,
+        storagePath: "text/2026/08/generated.txt",
+      }),
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+    });
+
+    await expect(
+      service.upload(new File(["hello"], "note.txt", { type: "text/plain" })),
+    ).rejects.toThrow("database unavailable");
+
+    expect(savedPaths).toEqual(["text/2026/08/generated.txt"]);
+    expect(deletedPaths).toEqual(["text/2026/08/generated.txt"]);
+    expect(repository.blobsById.size).toBe(0);
+  });
+
+  test("cleans the redundant disk file and returns the existing blob on checksum races", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const savedPaths: string[] = [];
+    const deletedPaths: string[] = [];
+    const existing = fakeBlobRow({ checksum: "b".repeat(64) });
+    const duplicateChecksumError = Object.assign(new Error("duplicate checksum"), {
+      code: "23505",
+      constraint: "blobs_checksum_unique",
+    });
+    const repository = createMemoryBlobRepository([], {
+      findBlobByChecksumSequence: [undefined, existing],
+      insertBlobError: duplicateChecksumError,
+    });
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+      },
+      repository,
+      storage: createMemoryBlobStorage(deletedPaths, {
+        savedPaths,
+        storagePath: "text/2026/08/generated.txt",
+      }),
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+    });
+
+    const result = await service.upload(
+      new File(["hello"], "note.txt", { type: "text/plain" }),
+    );
+
+    expect(result.id).toBe("0198f6bd-4f06-7289-b57d-62e8af51a4aa");
+    expect(savedPaths).toEqual(["text/2026/08/generated.txt"]);
+    expect(deletedPaths).toEqual(["text/2026/08/generated.txt"]);
+  });
+
+  test("deletes disk files that no blob row references", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const deletedPaths: string[] = [];
+    const repository = createMemoryBlobRepository([
+      fakeBlobRow({
+        storagePath: "image/2026/08/kept.png",
+      }),
+    ]);
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+      },
+      repository,
+      storage: createMemoryBlobStorage(deletedPaths, {
+        diskPaths: [
+          "image/2026/08/kept.png",
+          "application/2026/08/orphan.pdf",
+        ],
+      }),
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+    });
+
+    const result = await service.cleanupOrphanFiles();
+
+    expect(result).toEqual({
+      checked: 2,
+      deleted: ["application/2026/08/orphan.pdf"],
+      failed: [],
+    });
+    expect(deletedPaths).toEqual(["application/2026/08/orphan.pdf"]);
   });
 });

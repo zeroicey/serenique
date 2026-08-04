@@ -83,6 +83,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 - **Metadata:** `jsonb` column for extensible metadata (EXIF, codec info, custom tags). Not validated — left to consumer modules to define their own conventions.
 - **Image dimensions:** Extracted from binary headers (JPEG/PNG/GIF/WebP) at upload time with zero dependencies.
 - **Attachments:** `blob_attachments` stores business-level references (`ownerType`, `ownerId`, `role`, ordering, display name, metadata) separately from physical `blobs`. Consumer modules should attach existing blobs instead of duplicating file metadata.
+- **Consistency cleanup:** If DB insertion fails after writing a file, the just-written disk file is removed. A maintenance endpoint can delete orphan disk files that are not referenced by any `blobs.storage_path` row.
 - **File operations:** Blob deletes are physical deletes and are allowed only when no attachment references remain. Attachment deletes remove the reference only. Physical deletes remove the DB record first, then attempt disk deletion (disk failure is logged but not fatal).
 
 ### API routes
@@ -96,6 +97,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET, POST | `/api/moments` | Moment list / create |
 | DELETE | `/api/moments/:id` | Moment delete |
 | POST | `/api/blobs/upload` | Blob upload (multipart, field: `file`) |
+| POST | `/api/blobs/cleanup-orphans` | Delete disk files not referenced by blob rows |
 | GET | `/api/blobs` | Blob list (`?mimeType=image/&page=&pageSize=`) |
 | GET | `/api/blobs/:id` | Blob metadata |
 | GET | `/api/blobs/:id/file` | Blob download/preview (`?download=1` forces attachment) |

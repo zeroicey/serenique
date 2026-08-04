@@ -8,6 +8,7 @@ import type {
   BlobAttachmentEntry,
   BlobEntry,
   CreateBlobAttachmentInput,
+  BlobCleanupResult,
   ListBlobInput,
 } from "@/modules/blob/blob.types";
 import {
@@ -17,6 +18,7 @@ import {
   readFileFromStorage,
   deleteFileFromStorage,
   extractImageDimensions,
+  listStoragePaths,
 } from "@/shared/storage";
 
 // ---------------------------------------------------------------------------
@@ -34,6 +36,7 @@ export type BlobRepository = {
   findBlobByChecksum(checksum: string): Promise<BlobRow | undefined>;
   insertBlob(input: NewBlobRow): Promise<BlobRow>;
   listBlobs(input: ListBlobInput): Promise<{ items: BlobRow[]; total: number }>;
+  listBlobStoragePaths(): Promise<string[]>;
   findBlobById(id: string): Promise<BlobRow | undefined>;
   deleteBlob(id: string): Promise<void>;
   createAttachment(input: NewBlobAttachmentRow): Promise<BlobAttachmentRow>;
@@ -49,6 +52,7 @@ export type BlobStorage = {
   saveFile(root: string, filePath: string, buf: Buffer): Promise<void>;
   readFileFromStorage(root: string, filePath: string): Promise<Buffer>;
   deleteFileFromStorage(root: string, filePath: string): Promise<void>;
+  listStoragePaths(root: string): Promise<string[]>;
   extractImageDimensions(buf: Buffer): { width: number; height: number } | null;
 };
 
@@ -95,6 +99,16 @@ export function toBlobAttachmentEntry(
   };
 }
 
+function isChecksumUniqueConflict(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: unknown; constraint?: unknown };
+  return e.code === "23505" && e.constraint === "blobs_checksum_unique";
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 // ---------------------------------------------------------------------------
 // Repository / storage adapters
 // ---------------------------------------------------------------------------
@@ -134,6 +148,11 @@ const drizzleBlobRepository: BlobRepository = {
     ]);
 
     return { items, total: count };
+  },
+
+  async listBlobStoragePaths() {
+    const rows = await db.select({ storagePath: blobs.storagePath }).from(blobs);
+    return rows.map((row) => row.storagePath);
   },
 
   async findBlobById(id: string) {
@@ -185,6 +204,7 @@ const localBlobStorage: BlobStorage = {
   saveFile,
   readFileFromStorage,
   deleteFileFromStorage,
+  listStoragePaths,
   extractImageDimensions,
 };
 
@@ -243,16 +263,42 @@ export function createBlobService({
       }
 
       // --- insert record ---
-      const row = await repository.insertBlob({
-        id,
-        originalName: file.name,
-        storagePath: path,
-        mimeType,
-        size: file.size,
-        checksum,
-        width,
-        height,
-      });
+      let row: BlobRow;
+      try {
+        row = await repository.insertBlob({
+          id,
+          originalName: file.name,
+          storagePath: path,
+          mimeType,
+          size: file.size,
+          checksum,
+          width,
+          height,
+        });
+      } catch (err) {
+        try {
+          await storage.deleteFileFromStorage(serviceEnv.BLOB_ROOT, path);
+        } catch (cleanupErr) {
+          logger.error(
+            { err: cleanupErr, path },
+            "上传失败后的磁盘文件清理失败",
+          );
+        }
+
+        if (isChecksumUniqueConflict(err)) {
+          const existingAfterConflict =
+            await repository.findBlobByChecksum(checksum);
+          if (existingAfterConflict) {
+            logger.info(
+              { checksum, existingId: existingAfterConflict.id },
+              "上传时检测到 checksum 竞态冲突，返回已有记录",
+            );
+            return toPublicBlobEntry(existingAfterConflict);
+          }
+        }
+
+        throw err;
+      }
 
       logger.info({ id, mimeType, size: file.size }, "文件上传成功");
       return toPublicBlobEntry(row);
@@ -322,6 +368,30 @@ export function createBlobService({
       if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件关联不存在", 404);
 
       await repository.deleteAttachment(id);
+    },
+
+    /** Delete disk files that no blob row references. */
+    async cleanupOrphanFiles(): Promise<BlobCleanupResult> {
+      const [diskPaths, referencedPaths] = await Promise.all([
+        storage.listStoragePaths(serviceEnv.BLOB_ROOT),
+        repository.listBlobStoragePaths(),
+      ]);
+      const referenced = new Set(referencedPaths);
+      const deleted: string[] = [];
+      const failed: BlobCleanupResult["failed"] = [];
+
+      for (const path of diskPaths) {
+        if (referenced.has(path)) continue;
+
+        try {
+          await storage.deleteFileFromStorage(serviceEnv.BLOB_ROOT, path);
+          deleted.push(path);
+        } catch (err) {
+          failed.push({ path, message: errorMessage(err) });
+        }
+      }
+
+      return { checked: diskPaths.length, deleted, failed };
     },
 
     /**

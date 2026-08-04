@@ -149,4 +149,14 @@ export const blobHandler = {
       return handleError(e, c);
     }
   },
+
+  /** POST /api/blobs/cleanup-orphans — delete unreferenced disk files */
+  async cleanupOrphans(c: Context) {
+    try {
+      const result = await blobService.cleanupOrphanFiles();
+      return Res.ok("清理完成", result).build(c);
+    } catch (e) {
+      return handleError(e, c);
+    }
+  },
 };

@@ -54,3 +54,12 @@ export type BlobAttachmentEntry = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type BlobCleanupResult = {
+  checked: number;
+  deleted: string[];
+  failed: Array<{
+    path: string;
+    message: string;
+  }>;
+};

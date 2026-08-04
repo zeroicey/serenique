@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, writeFile, unlink, readFile, readdir } from "node:fs/promises";
-import { join, dirname, extname as nodeExtname } from "node:path";
+import { join, dirname, extname as nodeExtname, relative } from "node:path";
 import { logger } from "@/shared/logger";
 
 // ---------------------------------------------------------------------------
@@ -181,4 +181,34 @@ export async function deleteFileFromStorage(
     const e = err as NodeJS.ErrnoException;
     if (e.code !== "ENOENT") throw err;
   }
+}
+
+/** List every regular file under the blob store as a relative storage path. */
+export async function listStoragePaths(root: string): Promise<string[]> {
+  const paths: string[] = [];
+
+  async function walk(dir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === "ENOENT") return;
+      throw err;
+    }
+
+    for (const entry of entries) {
+      const absPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(absPath);
+        continue;
+      }
+      if (entry.isFile()) {
+        paths.push(relative(root, absPath));
+      }
+    }
+  }
+
+  await walk(root);
+  return paths.sort();
 }

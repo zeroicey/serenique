@@ -3,6 +3,7 @@ import { blobHandler } from "@/modules/blob/blob.handler";
 
 export const blobRouter = new Hono()
   .post("/blobs/upload", blobHandler.upload)
+  .post("/blobs/cleanup-orphans", blobHandler.cleanupOrphans)
   .get("/blobs", blobHandler.list)
   .post("/blobs/:id/attachments", blobHandler.createAttachment)
   .get("/blobs/:id/attachments", blobHandler.listAttachments)
