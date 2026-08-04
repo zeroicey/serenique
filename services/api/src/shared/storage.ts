@@ -169,6 +169,20 @@ export async function readFileFromStorage(
   return readFile(join(root, filePath));
 }
 
+/** Open a file as a Blob without reading it fully into memory. */
+export async function openFileFromStorage(
+  root: string,
+  filePath: string,
+): Promise<{ body: Blob; size: number }> {
+  const body = Bun.file(join(root, filePath));
+  if (!(await body.exists())) {
+    const err = new Error(`文件不存在: ${filePath}`) as NodeJS.ErrnoException;
+    err.code = "ENOENT";
+    throw err;
+  }
+  return { body, size: body.size };
+}
+
 /** Delete a file from the blob store. Does not throw if file is missing. */
 export async function deleteFileFromStorage(
   root: string,

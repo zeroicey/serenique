@@ -342,3 +342,35 @@ describe("blob upload consistency", () => {
     expect(deletedPaths).toEqual(["application/2026/08/orphan.pdf"]);
   });
 });
+
+describe("blob file transfer", () => {
+  test("returns a blob body descriptor instead of materializing a buffer", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const repository = createMemoryBlobRepository();
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+      },
+      repository,
+      storage: {
+        ...createMemoryBlobStorage(),
+        async openFileFromStorage() {
+          return { body: new Blob(["file"]), size: 4 };
+        },
+      },
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+    });
+
+    const file = await service.getFile("0198f6bd-4f06-7289-b57d-62e8af51a4aa");
+
+    expect(file).toMatchObject({
+      mimeType: "image/png",
+      filename: "daily-note.png",
+      size: 4,
+    });
+    expect(file.body).toBeInstanceOf(Blob);
+    expect("buf" in file).toBe(false);
+  });
+});

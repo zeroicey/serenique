@@ -9,13 +9,14 @@ import type {
   BlobEntry,
   CreateBlobAttachmentInput,
   BlobCleanupResult,
+  BlobFile,
   ListBlobInput,
 } from "@/modules/blob/blob.types";
 import {
   sha256,
   buildStoragePath,
   saveFile,
-  readFileFromStorage,
+  openFileFromStorage,
   deleteFileFromStorage,
   extractImageDimensions,
   listStoragePaths,
@@ -50,7 +51,10 @@ export type BlobStorage = {
   sha256(buf: Buffer): string;
   buildStoragePath(mimeType: string, id: string, originalName: string): string;
   saveFile(root: string, filePath: string, buf: Buffer): Promise<void>;
-  readFileFromStorage(root: string, filePath: string): Promise<Buffer>;
+  openFileFromStorage(
+    root: string,
+    filePath: string,
+  ): Promise<{ body: Blob; size: number }>;
   deleteFileFromStorage(root: string, filePath: string): Promise<void>;
   listStoragePaths(root: string): Promise<string[]>;
   extractImageDimensions(buf: Buffer): { width: number; height: number } | null;
@@ -202,7 +206,7 @@ const localBlobStorage: BlobStorage = {
   sha256,
   buildStoragePath,
   saveFile,
-  readFileFromStorage,
+  openFileFromStorage,
   deleteFileFromStorage,
   listStoragePaths,
   extractImageDimensions,
@@ -319,17 +323,15 @@ export function createBlobService({
       return toPublicBlobEntry(row);
     },
 
-    /** Read the raw file bytes + metadata needed for streaming. */
-    async getFile(
-      id: string,
-    ): Promise<{ buf: Buffer; mimeType: string; filename: string }> {
+    /** Open the file body + metadata needed for streaming. */
+    async getFile(id: string): Promise<BlobFile> {
       const row = await repository.findBlobById(id);
       if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
-      const buf = await storage.readFileFromStorage(
+      const { body, size } = await storage.openFileFromStorage(
         serviceEnv.BLOB_ROOT,
         row.storagePath,
       );
-      return { buf, mimeType: row.mimeType, filename: row.originalName };
+      return { body, size, mimeType: row.mimeType, filename: row.originalName };
     },
 
     /** Create a business-level attachment reference for an existing blob. */

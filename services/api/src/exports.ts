@@ -38,6 +38,7 @@ export type {
   BlobAttachmentEntry,
   BlobCleanupResult,
   BlobEntry,
+  BlobFile,
   CreateBlobAttachmentInput,
   ListBlobInput,
 } from "@/modules/blob/blob.types";

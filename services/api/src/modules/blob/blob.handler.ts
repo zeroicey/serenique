@@ -30,6 +30,50 @@ function handleError(e: unknown, c: Context) {
   return Res.internalError().build(c);
 }
 
+export function parseBlobRange(
+  rangeHeader: string | undefined,
+  size: number,
+): { start: number; end: number } | null {
+  if (!rangeHeader) return null;
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+  if (!match) return null;
+
+  const [, startText, endText] = match;
+  if (!startText && !endText) return null;
+
+  if (!startText) {
+    const suffixLength = Number(endText);
+    if (!Number.isInteger(suffixLength) || suffixLength <= 0 || size <= 0) {
+      return null;
+    }
+    const start = Math.max(size - suffixLength, 0);
+    return { start, end: size - 1 };
+  }
+
+  const start = Number(startText);
+  const end = endText ? Number(endText) : size - 1;
+  if (!Number.isInteger(start) || !Number.isInteger(end)) return null;
+  if (start < 0 || end < start || start >= size) return null;
+
+  return { start, end: Math.min(end, size - 1) };
+}
+
+function fileHeaders(
+  mimeType: string,
+  filename: string,
+  disposition: "inline" | "attachment",
+  contentLength: number,
+) {
+  return {
+    "Content-Type": mimeType,
+    "Content-Disposition": `${disposition}; filename="${encodeURIComponent(filename)}"`,
+    "Content-Length": contentLength.toString(),
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Accept-Ranges": "bytes",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -86,23 +130,36 @@ export const blobHandler = {
   /** GET /api/blobs/:id/file — download / inline preview */
   async getFile(c: Context) {
     try {
-      const { buf, mimeType, filename } = await blobService.getFile(getId(c));
-      const body = buf.buffer.slice(
-        buf.byteOffset,
-        buf.byteOffset + buf.byteLength,
-      ) as ArrayBuffer;
-
+      const { body, mimeType, filename, size } = await blobService.getFile(getId(c));
       const disposition =
         c.req.query("download") === "1" ? "attachment" : "inline";
+      const rangeHeader = c.req.header("range");
+      const range = parseBlobRange(rangeHeader, size);
+
+      if (rangeHeader && !range) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            "Content-Range": `bytes */${size}`,
+            "Accept-Ranges": "bytes",
+          },
+        });
+      }
+
+      if (range) {
+        const contentLength = range.end - range.start + 1;
+        return new Response(body.slice(range.start, range.end + 1), {
+          status: 206,
+          headers: {
+            ...fileHeaders(mimeType, filename, disposition, contentLength),
+            "Content-Range": `bytes ${range.start}-${range.end}/${size}`,
+          },
+        });
+      }
 
       return new Response(body, {
         status: 200,
-        headers: {
-          "Content-Type": mimeType,
-          "Content-Disposition": `${disposition}; filename="${encodeURIComponent(filename)}"`,
-          "Content-Length": buf.length.toString(),
-          "Cache-Control": "public, max-age=31536000, immutable",
-        },
+        headers: fileHeaders(mimeType, filename, disposition, size),
       });
     } catch (e) {
       return handleError(e, c);

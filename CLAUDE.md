@@ -84,6 +84,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 - **Image dimensions:** Extracted from binary headers (JPEG/PNG/GIF/WebP) at upload time with zero dependencies.
 - **Attachments:** `blob_attachments` stores business-level references (`ownerType`, `ownerId`, `role`, ordering, display name, metadata) separately from physical `blobs`. Consumer modules should attach existing blobs instead of duplicating file metadata.
 - **Consistency cleanup:** If DB insertion fails after writing a file, the just-written disk file is removed. A maintenance endpoint can delete orphan disk files that are not referenced by any `blobs.storage_path` row.
+- **File transfer:** Downloads return filesystem-backed `Blob` bodies instead of materializing the whole file into a `Buffer`, and support single `Range` requests with `206 Partial Content`.
 - **File operations:** Blob deletes are physical deletes and are allowed only when no attachment references remain. Attachment deletes remove the reference only. Physical deletes remove the DB record first, then attempt disk deletion (disk failure is logged but not fatal).
 
 ### API routes

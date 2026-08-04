@@ -55,6 +55,13 @@ export type BlobAttachmentEntry = {
   updatedAt: string;
 };
 
+export type BlobFile = {
+  body: Blob;
+  mimeType: string;
+  filename: string;
+  size: number;
+};
+
 export type BlobCleanupResult = {
   checked: number;
   deleted: string[];
