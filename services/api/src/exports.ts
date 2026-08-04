@@ -36,13 +36,16 @@ export { CreateMomentSchema, ListMomentSchema } from "@/modules/moment/moment.ty
 export { blobService } from "@/modules/blob/blob.service";
 export type {
   BlobAttachmentEntry,
+  BlobAccessLinkEntry,
   BlobCleanupResult,
   BlobEntry,
   BlobFile,
+  CreateBlobAccessLinkInput,
   CreateBlobAttachmentInput,
   ListBlobInput,
 } from "@/modules/blob/blob.types";
 export {
+  CreateBlobAccessLinkSchema,
   CreateBlobAttachmentSchema,
   ListBlobSchema,
 } from "@/modules/blob/blob.types";

@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { ZodError } from "zod";
 import { blobService } from "@/modules/blob/blob.service";
 import {
+  CreateBlobAccessLinkSchema,
   CreateBlobAttachmentSchema,
   ListBlobSchema,
 } from "@/modules/blob/blob.types";
@@ -130,7 +131,14 @@ export const blobHandler = {
   /** GET /api/blobs/:id/file — download / inline preview */
   async getFile(c: Context) {
     try {
-      const { body, mimeType, filename, size } = await blobService.getFile(getId(c));
+      const id = getId(c);
+      const expires = c.req.query("expires");
+      const signature = c.req.query("signature");
+      if (expires || signature) {
+        blobService.verifyAccessSignature(id, { expires, signature });
+      }
+
+      const { body, mimeType, filename, size } = await blobService.getFile(id);
       const disposition =
         c.req.query("download") === "1" ? "attachment" : "inline";
       const rangeHeader = c.req.header("range");
@@ -161,6 +169,22 @@ export const blobHandler = {
         status: 200,
         headers: fileHeaders(mimeType, filename, disposition, size),
       });
+    } catch (e) {
+      return handleError(e, c);
+    }
+  },
+
+  /** POST /api/blobs/:id/access-link — create a temporary signed access link */
+  async createAccessLink(c: Context) {
+    try {
+      const raw = await c.req.json().catch(() => ({}));
+      const body = CreateBlobAccessLinkSchema.parse(raw);
+      const requestUrl = new URL(c.req.url);
+      const result = await blobService.createAccessLink(getId(c), {
+        ...body,
+        baseUrl: requestUrl.origin,
+      });
+      return Res.ok("生成成功", result).build(c);
     } catch (e) {
       return handleError(e, c);
     }

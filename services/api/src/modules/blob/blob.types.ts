@@ -20,7 +20,19 @@ export const CreateBlobAttachmentSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
+export const CreateBlobAccessLinkSchema = z.object({
+  expiresInSeconds: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(7 * 24 * 60 * 60)
+    .default(15 * 60),
+});
+
 export type ListBlobInput = z.infer<typeof ListBlobSchema>;
+export type CreateBlobAccessLinkInput = z.infer<
+  typeof CreateBlobAccessLinkSchema
+>;
 export type CreateBlobAttachmentInput = z.infer<
   typeof CreateBlobAttachmentSchema
 >;
@@ -60,6 +72,14 @@ export type BlobFile = {
   mimeType: string;
   filename: string;
   size: number;
+};
+
+export type BlobAccessLinkEntry = {
+  url: string;
+  path: string;
+  expires: number;
+  expiresAt: string;
+  signature: string;
 };
 
 export type BlobCleanupResult = {

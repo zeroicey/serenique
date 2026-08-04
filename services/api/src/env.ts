@@ -4,6 +4,7 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
   BLOB_ROOT: z.string().min(1),
   BLOB_MAX_SIZE: z.coerce.number().positive().default(100 * 1024 * 1024), // 100 MB
+  BLOB_SIGNING_SECRET: z.string().min(32).optional(),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z
     .enum(["development", "production", "test"])

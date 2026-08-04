@@ -374,3 +374,107 @@ describe("blob file transfer", () => {
     expect("buf" in file).toBe(false);
   });
 });
+
+describe("blob signed access links", () => {
+  test("creates and validates temporary access links", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const now = new Date("2026-08-04T00:00:00.000Z");
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+        BLOB_SIGNING_SECRET: "x".repeat(48),
+      },
+      repository: createMemoryBlobRepository(),
+      storage: createMemoryBlobStorage(),
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+      now: () => now,
+    });
+
+    const link = await service.createAccessLink(
+      "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
+      {
+        baseUrl: "https://api.example.test",
+        expiresInSeconds: 60,
+      },
+    );
+
+    expect(link.expires).toBe(Math.floor(now.getTime() / 1000) + 60);
+    expect(link.expiresAt).toBe("2026-08-04T00:01:00.000Z");
+    expect(
+      link.path.startsWith(
+        "/api/blobs/0198f6bd-4f06-7289-b57d-62e8af51a4aa/file?",
+      ),
+    ).toBe(true);
+    expect(
+      link.url.startsWith(
+        "https://api.example.test/api/blobs/0198f6bd-4f06-7289-b57d-62e8af51a4aa/file?",
+      ),
+    ).toBe(true);
+    expect(link.signature.length).toBeGreaterThan(20);
+
+    expect(() =>
+      service.verifyAccessSignature("0198f6bd-4f06-7289-b57d-62e8af51a4aa", {
+        expires: String(link.expires),
+        signature: link.signature,
+      }),
+    ).not.toThrow();
+  });
+
+  test("rejects expired or tampered access signatures", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const issuedAt = new Date("2026-08-04T00:00:00.000Z");
+    const repository = createMemoryBlobRepository();
+    const issuingService = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+        BLOB_SIGNING_SECRET: "x".repeat(48),
+      },
+      repository,
+      storage: createMemoryBlobStorage(),
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+      now: () => issuedAt,
+    });
+    const link = await issuingService.createAccessLink(
+      "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
+      {
+        baseUrl: "https://api.example.test",
+        expiresInSeconds: 60,
+      },
+    );
+    const expiredService = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+        BLOB_SIGNING_SECRET: "x".repeat(48),
+      },
+      repository,
+      storage: createMemoryBlobStorage(),
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+      now: () => new Date("2026-08-04T00:02:00.000Z"),
+    });
+
+    expect(() =>
+      expiredService.verifyAccessSignature(
+        "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
+        {
+          expires: String(link.expires),
+          signature: link.signature,
+        },
+      ),
+    ).toThrow("临时访问链接已过期");
+
+    expect(() =>
+      issuingService.verifyAccessSignature(
+        "0198f6c8-3a3f-7142-8771-0dca5e5552ec",
+        {
+          expires: String(link.expires),
+          signature: link.signature,
+        },
+      ),
+    ).toThrow("临时访问签名无效");
+  });
+});

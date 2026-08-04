@@ -17,6 +17,7 @@ export class AppError extends Error {
 export const ErrorCode = {
   NOT_FOUND: "NOT_FOUND",
   VALIDATION: "VALIDATION",
+  FORBIDDEN: "FORBIDDEN",
   CONFLICT: "CONFLICT",
   INTERNAL: "INTERNAL",
 } as const;

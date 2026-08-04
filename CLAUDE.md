@@ -85,6 +85,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 - **Attachments:** `blob_attachments` stores business-level references (`ownerType`, `ownerId`, `role`, ordering, display name, metadata) separately from physical `blobs`. Consumer modules should attach existing blobs instead of duplicating file metadata.
 - **Consistency cleanup:** If DB insertion fails after writing a file, the just-written disk file is removed. A maintenance endpoint can delete orphan disk files that are not referenced by any `blobs.storage_path` row.
 - **File transfer:** Downloads return filesystem-backed `Blob` bodies instead of materializing the whole file into a `Buffer`, and support single `Range` requests with `206 Partial Content`.
+- **Signed access:** `POST /api/blobs/:id/access-link` creates HMAC links for `/api/blobs/:id/file?expires=&signature=` when `BLOB_SIGNING_SECRET` is configured. Direct file access remains available until auth middleware is added.
 - **File operations:** Blob deletes are physical deletes and are allowed only when no attachment references remain. Attachment deletes remove the reference only. Physical deletes remove the DB record first, then attempt disk deletion (disk failure is logged but not fatal).
 
 ### API routes
@@ -102,6 +103,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET | `/api/blobs` | Blob list (`?mimeType=image/&page=&pageSize=`) |
 | GET | `/api/blobs/:id` | Blob metadata |
 | GET | `/api/blobs/:id/file` | Blob download/preview (`?download=1` forces attachment) |
+| POST | `/api/blobs/:id/access-link` | Create a temporary signed access link |
 | DELETE | `/api/blobs/:id` | Blob delete (DB + disk) |
 | POST, GET | `/api/blobs/:id/attachments` | Create / list blob attachment references |
 | DELETE | `/api/blob-attachments/:id` | Delete an attachment reference only |

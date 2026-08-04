@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { eq, like, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { blobs, blobAttachments } from "@/modules/blob/blob.schema";
@@ -5,8 +6,10 @@ import { AppError, ErrorCode } from "@/shared/errors";
 import { logger } from "@/shared/logger";
 import { env } from "@/env";
 import type {
+  BlobAccessLinkEntry,
   BlobAttachmentEntry,
   BlobEntry,
+  CreateBlobAccessLinkInput,
   CreateBlobAttachmentInput,
   BlobCleanupResult,
   BlobFile,
@@ -31,7 +34,10 @@ type NewBlobRow = typeof blobs.$inferInsert;
 type BlobAttachmentRow = typeof blobAttachments.$inferSelect;
 type NewBlobAttachmentRow = typeof blobAttachments.$inferInsert;
 
-type BlobServiceEnv = Pick<typeof env, "BLOB_ROOT" | "BLOB_MAX_SIZE">;
+type BlobServiceEnv = Pick<
+  typeof env,
+  "BLOB_ROOT" | "BLOB_MAX_SIZE" | "BLOB_SIGNING_SECRET"
+>;
 
 export type BlobRepository = {
   findBlobByChecksum(checksum: string): Promise<BlobRow | undefined>;
@@ -65,6 +71,7 @@ export type CreateBlobServiceDeps = {
   repository: BlobRepository;
   storage: BlobStorage;
   randomUUID?: () => string;
+  now?: () => Date;
 };
 
 // ---------------------------------------------------------------------------
@@ -111,6 +118,32 @@ function isChecksumUniqueConflict(err: unknown): boolean {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function requireSigningSecret(serviceEnv: BlobServiceEnv): string {
+  if (!serviceEnv.BLOB_SIGNING_SECRET) {
+    throw new AppError(
+      ErrorCode.INTERNAL,
+      "未配置 BLOB_SIGNING_SECRET，无法生成临时访问链接",
+      500,
+    );
+  }
+  return serviceEnv.BLOB_SIGNING_SECRET;
+}
+
+function signBlobAccess(secret: string, blobId: string, expires: number): string {
+  return createHmac("sha256", secret)
+    .update(`${blobId}.${expires}`)
+    .digest("base64url");
+}
+
+function signaturesEqual(actual: string, expected: string): boolean {
+  const actualBuf = Buffer.from(actual);
+  const expectedBuf = Buffer.from(expected);
+  return (
+    actualBuf.length === expectedBuf.length &&
+    timingSafeEqual(actualBuf, expectedBuf)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +254,7 @@ export function createBlobService({
   repository,
   storage,
   randomUUID = () => crypto.randomUUID(),
+  now = () => new Date(),
 }: CreateBlobServiceDeps) {
   return {
     /**
@@ -332,6 +366,58 @@ export function createBlobService({
         row.storagePath,
       );
       return { body, size, mimeType: row.mimeType, filename: row.originalName };
+    },
+
+    /** Create a temporary HMAC-signed access link for a blob file. */
+    async createAccessLink(
+      blobId: string,
+      input: CreateBlobAccessLinkInput & { baseUrl?: string },
+    ): Promise<BlobAccessLinkEntry> {
+      const row = await repository.findBlobById(blobId);
+      if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
+
+      const secret = requireSigningSecret(serviceEnv);
+      const expires =
+        Math.floor(now().getTime() / 1000) + input.expiresInSeconds;
+      const signature = signBlobAccess(secret, blobId, expires);
+      const params = new URLSearchParams({
+        expires: expires.toString(),
+        signature,
+      });
+      const path = `/api/blobs/${blobId}/file?${params.toString()}`;
+      const url = input.baseUrl ? new URL(path, input.baseUrl).toString() : path;
+
+      return {
+        url,
+        path,
+        expires,
+        expiresAt: new Date(expires * 1000).toISOString(),
+        signature,
+      };
+    },
+
+    /** Validate a temporary access signature for a blob file. */
+    verifyAccessSignature(
+      blobId: string,
+      input: { expires?: string; signature?: string },
+    ): void {
+      const secret = requireSigningSecret(serviceEnv);
+      if (!input.expires || !input.signature) {
+        throw new AppError(ErrorCode.FORBIDDEN, "缺少临时访问签名", 403);
+      }
+
+      const expires = Number(input.expires);
+      if (!Number.isInteger(expires) || expires <= 0) {
+        throw new AppError(ErrorCode.FORBIDDEN, "临时访问签名无效", 403);
+      }
+      if (expires < Math.floor(now().getTime() / 1000)) {
+        throw new AppError(ErrorCode.FORBIDDEN, "临时访问链接已过期", 403);
+      }
+
+      const expected = signBlobAccess(secret, blobId, expires);
+      if (!signaturesEqual(input.signature, expected)) {
+        throw new AppError(ErrorCode.FORBIDDEN, "临时访问签名无效", 403);
+      }
     },
 
     /** Create a business-level attachment reference for an existing blob. */
