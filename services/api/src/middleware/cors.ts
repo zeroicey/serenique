@@ -7,8 +7,8 @@ import { cors as honoCors } from "hono/cors";
 export function cors() {
   return honoCors({
     origin: process.env.CORS_ORIGIN ?? "*",
-    allowMethods: ["POST", "GET", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Content-Disposition"],
     maxAge: 86400,
   });
 }
