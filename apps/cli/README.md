@@ -158,6 +158,33 @@ serenique moment detach <闪念ID> <附件关联ID>
 serenique moment detach <闪念ID> <附件关联ID> --force
 ```
 
+### 任务管理
+
+```sh
+# 任务组
+serenique task group create --title "工作"
+serenique task group list
+serenique task group list --all        # 一次返回全部记录（自动翻页）
+serenique task group get <任务组ID>
+serenique task group update <任务组ID> --title "新标题"
+serenique task group delete <任务组ID>
+serenique task group delete <任务组ID> --force  # 级联删除组内任务，跳过确认
+
+# 任务（任务必须归属于某个任务组）
+serenique task create --title "写周报" --group-id <任务组ID>
+serenique task create --title "写周报" --group-id <任务组ID> --status done
+serenique task list                       # 按创建时间倒序
+serenique task list --all                 # 一次返回全部记录（自动翻页）
+serenique task list --group-id <任务组ID>  # 按任务组过滤
+serenique task list --status done         # 按状态过滤 (todo/done/abandon)
+serenique task get <任务ID>
+serenique task update <任务ID> --title "新标题"
+serenique task update <任务ID> --status done      # completedAt 由服务端自动同步
+serenique task update <任务ID> --group-id <新任务组ID>
+serenique task delete <任务ID>
+serenique task delete <任务ID> --force
+```
+
 ### 文件管理
 
 ```sh
@@ -302,10 +329,11 @@ apps/cli/
 │   ├── config.go            # serenique config
 │   ├── diary.go             # serenique diary
 │   ├── moment.go            # serenique moment
-│   └── blob.go              # serenique blob
+│   ├── blob.go              # serenique blob
+│   └── task.go              # serenique task
 └── internal/
     ├── config/              # 配置文件读写
-    ├── client/              # HTTP 客户端
+    ├── client/              # HTTP 客户端（含 task 类型化方法）
     └── output/              # 输出格式化（表格 + JSON）
 ```
 

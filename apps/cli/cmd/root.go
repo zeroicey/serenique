@@ -339,4 +339,5 @@ func init() {
 	rootCmd.AddCommand(diaryCmd)
 	rootCmd.AddCommand(momentCmd)
 	rootCmd.AddCommand(blobCmd)
+	rootCmd.AddCommand(taskCmd)
 }
