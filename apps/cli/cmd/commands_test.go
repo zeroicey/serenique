@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -564,17 +566,16 @@ func TestListFactoryEmptyPageMessage(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"success":true,"message":"ok","data":{"items":[],"total":42}}`))
 	}, false, func(srv *httptest.Server) {
-		page, size := 1, 10
+		page, size, all := 1, 10, false
 		lc := paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
-			use:        "list",
-			short:      "列出日记",
-			long:       "long",
-			path:       "/api/diaries",
-			emptyMsg:   "暂无日记记录",
-			headers:    []string{"ID", "日期"},
-			defaultSize: 10,
-			row:        func(d DiaryEntry) map[string]string { return map[string]string{} },
-		}, &page, &size)
+			use:      "list",
+			short:    "列出日记",
+			long:     "long",
+			path:     "/api/diaries",
+			emptyMsg: "暂无日记记录",
+			headers:  []string{"ID", "日期"},
+			row:      func(d DiaryEntry) map[string]string { return map[string]string{} },
+		}, &page, &size, &all)
 		out := captureStdout(t, func() {
 			if err := lc.RunE(lc, nil); err != nil {
 				t.Fatal(err)
@@ -735,4 +736,220 @@ func TestInitRejectsMalformedBaseURL(t *testing.T) {
 	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
 		t.Fatalf("config should not be written for a malformed baseurl, stat err = %v", statErr)
 	}
+}
+
+// =============================================================================
+// moment create with attachments (one-shot create + attach)
+// =============================================================================
+
+func TestMomentAttachmentsBuildsItems(t *testing.T) {
+	items := momentAttachments([]string{"b1", "b2"}, "photo", "配图", 0, false)
+	if len(items) != 2 {
+		t.Fatalf("attachments = %d, want 2", len(items))
+	}
+	first := items[0]
+	if first["blobId"] != "b1" || first["role"] != "photo" || first["displayName"] != "配图" {
+		t.Fatalf("attachment[0] = %+v", first)
+	}
+	if _, ok := first["sortOrder"]; ok {
+		t.Fatalf("sortOrder should be omitted when --sort-order is not set: %+v", first)
+	}
+	if items[1]["blobId"] != "b2" {
+		t.Fatalf("attachment[1] = %+v, want blobId b2", items[1])
+	}
+}
+
+func TestMomentAttachmentsSequentialSortOrder(t *testing.T) {
+	items := momentAttachments([]string{"b1", "b2", "b3"}, "attachment", "", 5, true)
+	for i, want := range []int{5, 6, 7} {
+		if items[i]["sortOrder"] != want {
+			t.Fatalf("attachment[%d] sortOrder = %v, want %d", i, items[i]["sortOrder"], want)
+		}
+	}
+}
+
+func TestMomentAttachmentsOmitsDisplayNameWhenEmpty(t *testing.T) {
+	items := momentAttachments([]string{"b1"}, "attachment", "", 0, false)
+	if _, ok := items[0]["displayName"]; ok {
+		t.Fatalf("displayName should be omitted when empty: %+v", items[0])
+	}
+}
+
+func TestMomentCreateSendsAttachments(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"hello","createdAt":"2026-08-04T00:00:00Z","updatedAt":"2026-08-04T00:00:00Z","attachments":[]}}`))
+	}, true, func(srv *httptest.Server) {
+		momentCreateText = "hello"
+		momentCreateBlobIDs = []string{"b1"}
+		momentCreateRole = "cover"
+		t.Cleanup(func() {
+			momentCreateText = ""
+			momentCreateBlobIDs = nil
+			momentCreateRole = ""
+			momentCreateDisplayName = ""
+			momentCreateSortOrder = 0
+		})
+		if err := momentCreateCmd.RunE(momentCreateCmd, nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	if gotBody["text"] != "hello" {
+		t.Fatalf("text = %v, want hello", gotBody["text"])
+	}
+	atts, ok := gotBody["attachments"].([]any)
+	if !ok {
+		t.Fatalf("attachments not sent as an array: %v", gotBody["attachments"])
+	}
+	if len(atts) != 1 {
+		t.Fatalf("attachments = %d, want 1", len(atts))
+	}
+	first := atts[0].(map[string]any)
+	if first["blobId"] != "b1" || first["role"] != "cover" {
+		t.Fatalf("attachment = %+v, want blobId b1 role cover", first)
+	}
+}
+
+// =============================================================================
+// --all pagination (shared list factory)
+// =============================================================================
+
+// diaryPageJSON renders a fake list response with n items and the given total.
+// The item shape is diary-shaped; plumbing tests that decode it into other entry
+// types rely on the fact that JSON mode only counts items, not field fidelity.
+func diaryPageJSON(n, total int) string {
+	items := make([]map[string]any, 0, n)
+	for i := 0; i < n; i++ {
+		items = append(items, map[string]any{
+			"id":        fmt.Sprintf("diary-%d", i),
+			"diaryDate": "2026-08-04",
+			"content":   "x",
+			"createdAt": "2026-08-04T00:00:00Z",
+			"updatedAt": "2026-08-04T00:00:00Z",
+		})
+	}
+	b, _ := json.Marshal(map[string]any{
+		"success": true,
+		"message": "ok",
+		"data":    map[string]any{"items": items, "total": total},
+	})
+	return string(b)
+}
+
+func TestListAllFetchesAllPages(t *testing.T) {
+	var pages []string
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		page := r.URL.Query().Get("page")
+		pages = append(pages, page)
+		if got := r.URL.Query().Get("pageSize"); got != "50" {
+			t.Errorf("pageSize = %q, want 50 (API cap)", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch page {
+		case "1", "2":
+			w.Write([]byte(diaryPageJSON(50, 120)))
+		case "3":
+			w.Write([]byte(diaryPageJSON(20, 120)))
+		default:
+			t.Errorf("unexpected page request: %q", page)
+		}
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		page, size, all := 1, 10, true
+		lc := paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
+			use: "list", short: "列出日记", long: "long",
+			path:     "/api/diaries",
+			emptyMsg: "暂无日记记录",
+			headers:  []string{"ID", "日期"},
+			row:      func(d DiaryEntry) map[string]string { return map[string]string{} },
+		}, &page, &size, &all)
+		if err := lc.RunE(lc, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		if len(pages) != 3 {
+			t.Fatalf("pages requested = %v, want [1 2 3]", pages)
+		}
+		data, ok := rec.lastSuccess.data.(map[string]any)
+		if !ok {
+			t.Fatalf("data is %T, want map[string]any", rec.lastSuccess.data)
+		}
+		items, _ := data["items"].([]DiaryEntry)
+		if len(items) != 120 {
+			t.Fatalf("items = %d, want 120 (all pages combined)", len(items))
+		}
+		if data["total"] != 120 {
+			t.Fatalf("total = %v, want 120", data["total"])
+		}
+	})
+}
+
+func TestListAllStopsWhenTotalCovered(t *testing.T) {
+	var pages []string
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		pages = append(pages, r.URL.Query().Get("page"))
+		w.Header().Set("Content-Type", "application/json")
+		// A full 50-item page whose total is already covered must not trigger a
+		// second page request (the accumulated-items >= total guard).
+		w.Write([]byte(diaryPageJSON(50, 50)))
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		page, size, all := 1, 10, true
+		lc := paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
+			use: "list", short: "列出日记", long: "long",
+			path:     "/api/diaries",
+			emptyMsg: "暂无日记记录",
+			headers:  []string{"ID", "日期"},
+			row:      func(d DiaryEntry) map[string]string { return map[string]string{} },
+		}, &page, &size, &all)
+		if err := lc.RunE(lc, nil); err != nil {
+			t.Fatal(err)
+		}
+		if len(pages) != 1 {
+			t.Fatalf("pages requested = %v, want [1]", pages)
+		}
+		data := rec.lastSuccess.data.(map[string]any)
+		if items, _ := data["items"].([]DiaryEntry); len(items) != 50 {
+			t.Fatalf("items = %d, want 50", len(items))
+		}
+	})
+}
+
+func TestListAllAppliesExtraQueryEveryPage(t *testing.T) {
+	var mimeTypes []string
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		mimeTypes = append(mimeTypes, r.URL.Query().Get("mimeType"))
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(diaryPageJSON(50, 80)))
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		page, size, all := 1, 10, true
+		mime := "image/"
+		lc := paginatedListCommand[BlobEntry](listSpec[BlobEntry]{
+			use: "list", short: "列出文件", long: "long",
+			path:     "/api/blobs",
+			emptyMsg: "暂无文件记录",
+			headers:  []string{"ID"},
+			row:      func(b BlobEntry) map[string]string { return map[string]string{} },
+			extraQuery: func(q url.Values) {
+				if mime != "" {
+					q.Set("mimeType", mime)
+				}
+			},
+		}, &page, &size, &all)
+		if err := lc.RunE(lc, nil); err != nil {
+			t.Fatal(err)
+		}
+		// The filter must be applied to page 1 AND page 2, not just the first.
+		if len(mimeTypes) != 2 || mimeTypes[0] != "image/" || mimeTypes[1] != "image/" {
+			t.Fatalf("mimeType per page = %v, want [image/ image/]", mimeTypes)
+		}
+	})
 }

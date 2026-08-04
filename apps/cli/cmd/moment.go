@@ -62,19 +62,30 @@ var momentListCmd *cobra.Command
 var (
 	momentListPage     int
 	momentListPageSize int
+	momentListAll      bool
 )
 
 // moment create
 var momentCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "创建闪念",
-	Long: `创建一条闪念笔记。内容最长 500 字。
+	Long: `创建一条闪念笔记。内容最长 500 字，可同时关联已上传的文件（用 --blob-id，可重复指定多个）。
 
 示例:
   serenique moment create --text "突然想到一个好主意..."
-  serenique moment create -m "记录一个灵感"`,
+  serenique moment create -m "记录一个灵感"
+  serenique moment create -m "好想法" --blob-id e5f6a1b2 --role cover --display-name "配图"
+  serenique moment create -m "好想法" --blob-id e5f6a1b2 --blob-id a1b2c3d4`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		body := map[string]string{"text": momentCreateText}
+		body := map[string]any{"text": momentCreateText}
+		if len(momentCreateBlobIDs) > 0 {
+			// Mirror the API's MomentAttachmentInputSchema so a moment with media
+			// is created in one call instead of create + attach (the two-step
+			// dance an AI agent otherwise needs two tool calls for).
+			body["attachments"] = momentAttachments(
+				momentCreateBlobIDs, momentCreateRole, momentCreateDisplayName,
+				momentCreateSortOrder, cmd.Flags().Changed("sort-order"))
+		}
 
 		var result MomentEntry
 		if err := apiClient.Post(commandContext(cmd), "/api/moments", body, &result); err != nil {
@@ -90,7 +101,37 @@ var momentCreateCmd = &cobra.Command{
 	},
 }
 
-var momentCreateText string
+var (
+	momentCreateText        string
+	momentCreateBlobIDs     []string
+	momentCreateRole        string
+	momentCreateDisplayName string
+	momentCreateSortOrder   int
+)
+
+// momentAttachments builds the attachments array for moment create from the
+// create command's flag state, mirroring the API's MomentAttachmentInputSchema
+// ({blobId, role, displayName?, sortOrder?}). sortOrderSet controls whether
+// sortOrder is included at all (the API auto-numbers otherwise); when set with
+// multiple blobs, sort orders increment from the flag value so they never tie.
+func momentAttachments(blobIDs []string, role, displayName string, sortOrder int, sortOrderSet bool) []map[string]any {
+	attachments := make([]map[string]any, 0, len(blobIDs))
+	for i, blobID := range blobIDs {
+		item := map[string]any{
+			"blobId":   blobID,
+			"role":     role,
+			"metadata": map[string]any{},
+		}
+		if displayName != "" {
+			item["displayName"] = displayName
+		}
+		if sortOrderSet {
+			item["sortOrder"] = sortOrder + i
+		}
+		attachments = append(attachments, item)
+	}
+	return attachments
+}
 
 // moment get
 var momentGetCmd = &cobra.Command{
@@ -219,16 +260,16 @@ func init() {
 	momentListCmd = paginatedListCommand[MomentEntry](listSpec[MomentEntry]{
 		use:   "list",
 		short: "列出闪念",
-		long: `分页查询闪念列表。
+		long: `分页查询闪念列表。使用 --all 一次返回全部记录。
 
 示例:
   serenique moment list
-  serenique moment list --page 1 --page-size 20
+  serenique moment list --all
+  serenique moment list --page 1 --page-size 50
   serenique moment list --json`,
-		path:        "/api/moments",
-		emptyMsg:    "暂无闪念记录",
-		headers:     []string{"ID", "内容", "创建时间"},
-		defaultSize: 10,
+		path:     "/api/moments",
+		emptyMsg: "暂无闪念记录",
+		headers:  []string{"ID", "内容", "创建时间"},
 		row: func(m MomentEntry) map[string]string {
 			return map[string]string{
 				"ID":   shortID(m.ID),
@@ -236,12 +277,17 @@ func init() {
 				"创建时间": prefix(m.CreatedAt, 19),
 			}
 		},
-	}, &momentListPage, &momentListPageSize)
+	}, &momentListPage, &momentListPageSize, &momentListAll)
 	momentListCmd.Flags().IntVarP(&momentListPage, "page", "p", 1, "页码")
-	momentListCmd.Flags().IntVarP(&momentListPageSize, "page-size", "l", 10, "每页条数")
+	momentListCmd.Flags().IntVarP(&momentListPageSize, "page-size", "l", 50, "每页条数")
+	momentListCmd.Flags().BoolVar(&momentListAll, "all", false, "一次返回全部记录（自动翻页）")
 
 	// moment create flags
 	momentCreateCmd.Flags().StringVarP(&momentCreateText, "text", "m", "", "闪念内容，最长 500 字 (必填)")
+	momentCreateCmd.Flags().StringArrayVar(&momentCreateBlobIDs, "blob-id", nil, "要关联的文件 ID，可重复指定多个")
+	momentCreateCmd.Flags().StringVarP(&momentCreateRole, "role", "r", "attachment", "附件角色")
+	momentCreateCmd.Flags().StringVarP(&momentCreateDisplayName, "display-name", "n", "", "附件显示名称")
+	momentCreateCmd.Flags().IntVar(&momentCreateSortOrder, "sort-order", 0, "附件排序起始值（指定多个附件时依次递增）")
 	momentCreateCmd.MarkFlagRequired("text")
 
 	// moment delete

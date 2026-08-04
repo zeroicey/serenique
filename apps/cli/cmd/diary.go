@@ -27,6 +27,7 @@ var diaryListCmd *cobra.Command
 var (
 	diaryListPage     int
 	diaryListPageSize int
+	diaryListAll      bool
 )
 
 // diary create
@@ -136,16 +137,16 @@ func init() {
 	diaryListCmd = paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
 		use:   "list",
 		short: "列出日记",
-		long: `分页查询日记列表。
+		long: `分页查询日记列表。使用 --all 一次返回全部记录。
 
 示例:
   serenique diary list
-  serenique diary list --page 1 --page-size 10
+  serenique diary list --all
+  serenique diary list --page 1 --page-size 50
   serenique diary list --json`,
-		path:        "/api/diaries",
-		emptyMsg:    "暂无日记记录",
-		headers:     []string{"ID", "日期", "内容预览", "创建时间"},
-		defaultSize: 10,
+		path:     "/api/diaries",
+		emptyMsg: "暂无日记记录",
+		headers:  []string{"ID", "日期", "内容预览", "创建时间"},
 		row: func(d DiaryEntry) map[string]string {
 			return map[string]string{
 				"ID":   shortID(d.ID),
@@ -154,9 +155,10 @@ func init() {
 				"创建时间": prefix(d.CreatedAt, 10),
 			}
 		},
-	}, &diaryListPage, &diaryListPageSize)
+	}, &diaryListPage, &diaryListPageSize, &diaryListAll)
 	diaryListCmd.Flags().IntVarP(&diaryListPage, "page", "p", 1, "页码")
-	diaryListCmd.Flags().IntVarP(&diaryListPageSize, "page-size", "l", 10, "每页条数")
+	diaryListCmd.Flags().IntVarP(&diaryListPageSize, "page-size", "l", 50, "每页条数")
+	diaryListCmd.Flags().BoolVar(&diaryListAll, "all", false, "一次返回全部记录（自动翻页）")
 
 	// diary create flags
 	diaryCreateCmd.Flags().StringVarP(&diaryCreateContent, "content", "m", "", "日记内容 (必填)")

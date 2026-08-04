@@ -179,10 +179,9 @@ type listSpec[T any] struct {
 	long  string
 	path  string
 
-	emptyMsg    string
-	headers     []string
-	row         func(T) map[string]string
-	defaultSize int
+	emptyMsg string
+	headers  []string
+	row      func(T) map[string]string
 
 	// extraQuery mutates the query values beyond page/pageSize (e.g. mimeType).
 	extraQuery func(q url.Values)
@@ -191,28 +190,38 @@ type listSpec[T any] struct {
 // paginatedListCommand builds a "list" subcommand that fetches {items, total},
 // renders a table with a "共 N 条记录" footer in table mode, and the same
 // {items, total} envelope in JSON mode. page/pageSize are bound to the provided
-// vars so each module keeps its own flag state (and default page size). A page
-// past the end (total>0 but no items) prints an explicit "本页无数据" message
-// instead of an empty "(无数据)" table followed by the total footer.
-func paginatedListCommand[T any](spec listSpec[T], pageVar, sizeVar *int) *cobra.Command {
+// vars so each module keeps its own flag state (and default page size); allVar
+// backs a --all flag that walks every page so scripts and AI agents get the full
+// dataset in one call. A page past the end (total>0 but no items) prints an
+// explicit "本页无数据" message instead of an empty "(无数据)" table followed by
+// the total footer.
+func paginatedListCommand[T any](spec listSpec[T], pageVar, sizeVar *int, allVar *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   spec.use,
 		Short: spec.short,
 		Long:  spec.long,
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validatePageParams(*pageVar, *sizeVar); err != nil {
-				return err
-			}
+			ctx := commandContext(cmd)
 
-			query := url.Values{}
-			query.Set("page", strconv.Itoa(*pageVar))
-			query.Set("pageSize", strconv.Itoa(*sizeVar))
-			if spec.extraQuery != nil {
-				spec.extraQuery(query)
+			var items []T
+			var total int
+			var err error
+			if *allVar {
+				// --all overrides page/pageSize entirely.
+				items, total, err = fetchAll[T](apiClient, ctx, spec)
+			} else {
+				if err = validatePageParams(*pageVar, *sizeVar); err != nil {
+					return err
+				}
+				query := url.Values{}
+				query.Set("page", strconv.Itoa(*pageVar))
+				query.Set("pageSize", strconv.Itoa(*sizeVar))
+				if spec.extraQuery != nil {
+					spec.extraQuery(query)
+				}
+				items, total, err = client.List[T](apiClient, ctx, spec.path, query)
 			}
-
-			items, total, err := client.List[T](apiClient, commandContext(cmd), spec.path, query)
 			if err != nil {
 				return err
 			}
@@ -240,6 +249,48 @@ func paginatedListCommand[T any](spec listSpec[T], pageVar, sizeVar *int) *cobra
 			return nil
 		},
 	}
+}
+
+// maxAllPages bounds --all pagination so a misbehaving server that keeps
+// returning full pages (or an unbounded dataset) cannot make the loop run
+// forever. At pageSize 50 this allows up to 500,000 records.
+const maxAllPages = 10000
+
+// fetchAll walks every page of a paginated list endpoint at the API's maximum
+// page size (50, shared by all list endpoints) and returns the combined result.
+// It powers the list commands' --all flag, which exists so AI/script consumers
+// get the full dataset in a single call instead of having to paginate and risk
+// missing page 2+. The loop stops when a page returns fewer than pageSize items
+// (the last, possibly partial, page) or the accumulated items cover the reported
+// total; filters (spec.extraQuery, e.g. mimeType) are applied to every page.
+func fetchAll[T any](c *client.Client, ctx context.Context, spec listSpec[T]) ([]T, int, error) {
+	const pageSize = 50 // every list endpoint caps pageSize at 50
+
+	var items []T
+	total := 0
+	for page := 1; ; page++ {
+		query := url.Values{}
+		query.Set("page", strconv.Itoa(page))
+		query.Set("pageSize", strconv.Itoa(pageSize))
+		if spec.extraQuery != nil {
+			spec.extraQuery(query)
+		}
+
+		pageItems, pageTotal, err := client.List[T](c, ctx, spec.path, query)
+		if err != nil {
+			return nil, 0, err
+		}
+		total = pageTotal
+		items = append(items, pageItems...)
+
+		if len(pageItems) < pageSize || len(items) >= total {
+			break
+		}
+		if page >= maxAllPages {
+			return nil, 0, fmt.Errorf("数据量过大：已超过 %d 页（每页 %d 条），请改用分页查询", maxAllPages, pageSize)
+		}
+	}
+	return items, total, nil
 }
 
 // attachmentBody builds the POST body for creating an attachment reference,

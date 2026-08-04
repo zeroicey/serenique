@@ -72,6 +72,7 @@ var (
 	blobListPage     int
 	blobListPageSize int
 	blobListMimeType string
+	blobListAll      bool
 )
 
 // =============================================================================
@@ -532,17 +533,17 @@ func init() {
 	blobListCmd = paginatedListCommand[BlobEntry](listSpec[BlobEntry]{
 		use:   "list",
 		short: "列出文件",
-		long: `分页查询已上传的文件列表，可按 MIME 类型过滤。
+		long: `分页查询已上传的文件列表，可按 MIME 类型过滤。使用 --all 一次返回全部记录。
 
 示例:
   serenique blob list
+  serenique blob list --all
   serenique blob list --mime-type image/
-  serenique blob list --page 1 --page-size 20
+  serenique blob list --page 1 --page-size 50
   serenique blob list --json`,
-		path:        "/api/blobs",
-		emptyMsg:    "暂无文件记录",
-		headers:     []string{"ID", "文件名", "类型", "大小", "上传时间"},
-		defaultSize: 20,
+		path:     "/api/blobs",
+		emptyMsg: "暂无文件记录",
+		headers:  []string{"ID", "文件名", "类型", "大小", "上传时间"},
 		row: func(b BlobEntry) map[string]string {
 			return map[string]string{
 				"ID":   shortID(b.ID),
@@ -557,9 +558,10 @@ func init() {
 				q.Set("mimeType", blobListMimeType)
 			}
 		},
-	}, &blobListPage, &blobListPageSize)
+	}, &blobListPage, &blobListPageSize, &blobListAll)
 	blobListCmd.Flags().IntVarP(&blobListPage, "page", "p", 1, "页码")
-	blobListCmd.Flags().IntVarP(&blobListPageSize, "page-size", "l", 20, "每页条数")
+	blobListCmd.Flags().IntVarP(&blobListPageSize, "page-size", "l", 50, "每页条数")
+	blobListCmd.Flags().BoolVar(&blobListAll, "all", false, "一次返回全部记录（自动翻页）")
 	blobListCmd.Flags().StringVar(&blobListMimeType, "mime-type", "", "按 MIME 类型过滤 (如 image/)")
 
 	// blob download

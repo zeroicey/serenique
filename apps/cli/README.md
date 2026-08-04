@@ -112,8 +112,9 @@ serenique config path       # 显示配置文件路径
 ```sh
 # 列出日记
 serenique diary list
-serenique diary list --page 1 --page-size 10
-serenique diary list --json  # JSON 输出
+serenique diary list --all        # 一次返回全部记录（自动翻页）
+serenique diary list --page 1 --page-size 50
+serenique diary list --json       # JSON 输出
 
 # 创建日记
 serenique diary create -m "日记内容"
@@ -135,11 +136,14 @@ serenique diary delete <日记ID> --force  # 跳过确认
 ```sh
 # 列出闪念
 serenique moment list
-serenique moment list --page 1 --page-size 20
+serenique moment list --all        # 一次返回全部记录（自动翻页）
+serenique moment list --page 1 --page-size 50
 
-# 创建闪念（最长 500 字）
+# 创建闪念（最长 500 字），可一步关联已上传的文件
 serenique moment create --text "记录一个灵感..."
 serenique moment create -m "记录一个灵感"
+serenique moment create -m "好想法" --blob-id <文件ID> --role photo --display-name "配图"
+serenique moment create -m "好想法" --blob-id <文件ID1> --blob-id <文件ID2>
 
 # 查看闪念详情（含附件列表）
 serenique moment get <闪念ID>
@@ -164,8 +168,9 @@ serenique blob upload doc.pdf image.png
 
 # 文件列表
 serenique blob list
-serenique blob list --mime-type image/  # 按类型过滤
-serenique blob list --page 1 --page-size 20
+serenique blob list --all                 # 一次返回全部记录（自动翻页）
+serenique blob list --mime-type image/    # 按类型过滤
+serenique blob list --page 1 --page-size 50
 
 # 查看文件详情
 serenique blob info <文件ID>
