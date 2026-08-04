@@ -1,0 +1,596 @@
+package cmd
+
+import (
+	"context"
+	"fmt"
+	"net/url"
+	"strconv"
+
+	"github.com/spf13/cobra"
+)
+
+// Blob types matching the API response.
+type BlobEntry struct {
+	ID           string                 `json:"id"`
+	OriginalName string                 `json:"originalName"`
+	MimeType     string                 `json:"mimeType"`
+	Size         int64                  `json:"size"`
+	Checksum     string                 `json:"checksum"`
+	Metadata     map[string]interface{} `json:"metadata"`
+	Width        *int                   `json:"width"`
+	Height       *int                   `json:"height"`
+	Duration     *float64               `json:"duration"`
+	CreatedAt    string                 `json:"createdAt"`
+}
+
+type BlobListResult struct {
+	Items []BlobEntry `json:"items"`
+	Total int         `json:"total"`
+}
+
+type BlobAttachmentEntry struct {
+	ID          string                 `json:"id"`
+	BlobID      string                 `json:"blobId"`
+	OwnerType   string                 `json:"ownerType"`
+	OwnerID     string                 `json:"ownerId"`
+	Role        string                 `json:"role"`
+	DisplayName *string                `json:"displayName"`
+	SortOrder   int                    `json:"sortOrder"`
+	Metadata    map[string]interface{} `json:"metadata"`
+	CreatedAt   string                 `json:"createdAt"`
+	UpdatedAt   string                 `json:"updatedAt"`
+}
+
+type BlobAccessLinkEntry struct {
+	URL       string `json:"url"`
+	Path      string `json:"path"`
+	Expires   int64  `json:"expires"`
+	ExpiresAt string `json:"expiresAt"`
+	Signature string `json:"signature"`
+}
+
+type BlobCleanupResult struct {
+	Checked int      `json:"checked"`
+	Deleted []string `json:"deleted"`
+	Failed  []struct {
+		Path    string `json:"path"`
+		Message string `json:"message"`
+	} `json:"failed"`
+}
+
+// blobCmd is the parent blob command.
+var blobCmd = &cobra.Command{
+	Use:   "blob",
+	Short: "文件管理",
+	Long:  "管理文件（上传、下载、查看元数据、创建临时链接、关联到业务实体等）。",
+}
+
+// =============================================================================
+// blob list
+// =============================================================================
+
+var blobListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "列出文件",
+	Long: `分页查询已上传的文件列表，可按 MIME 类型过滤。
+
+示例:
+  serenique blob list
+  serenique blob list --mime-type image/
+  serenique blob list --page 1 --page-size 20
+  serenique blob list --json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		query := url.Values{}
+		query.Set("page", strconv.Itoa(blobListPage))
+		query.Set("pageSize", strconv.Itoa(blobListPageSize))
+		if blobListMimeType != "" {
+			query.Set("mimeType", blobListMimeType)
+		}
+
+		var result BlobListResult
+		if err := apiClient.Get(ctx, "/api/blobs", query, &result); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		if useJSON {
+			printer.PrintSuccess("查询成功", result)
+			return nil
+		}
+
+		if result.Total == 0 {
+			printer.PrintMessage("暂无文件记录")
+			return nil
+		}
+
+		headers := []string{"ID", "文件名", "类型", "大小", "上传时间"}
+		rows := make([]map[string]string, len(result.Items))
+		for i, b := range result.Items {
+			rows[i] = map[string]string{
+				"ID":     b.ID[:8] + "...",
+				"文件名":   b.OriginalName,
+				"类型":     b.MimeType,
+				"大小":     formatSize(b.Size),
+				"上传时间":   b.CreatedAt[:10],
+			}
+		}
+
+		printer.PrintTable(headers, rows)
+		fmt.Printf("\n共 %d 条记录\n", result.Total)
+		return nil
+	},
+}
+
+var (
+	blobListPage     int
+	blobListPageSize int
+	blobListMimeType string
+)
+
+// =============================================================================
+// blob upload
+// =============================================================================
+
+var blobUploadCmd = &cobra.Command{
+	Use:   "upload <file...>",
+	Short: "上传文件",
+	Long: `上传一个或多个文件到 Serenique。支持多文件同时上传。
+
+文件通过 SHA-256 去重 —— 相同内容的文件不会重复存储。
+
+示例:
+  serenique blob upload photo.jpg
+  serenique blob upload ./images/*.jpg
+  serenique blob upload doc.pdf image.png`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		successCount := 0
+		failCount := 0
+
+		for _, filePath := range args {
+			fmt.Printf("上传中: %s ... ", filePath)
+
+			var result BlobEntry
+			err := apiClient.UploadFile(ctx, "/api/blobs/upload", filePath, &result)
+			if err != nil {
+				failCount++
+				fmt.Printf("失败\n  %s\n", err.Error())
+				continue
+			}
+			successCount++
+			fmt.Printf("✓\n")
+			if !useJSON {
+				fmt.Printf("  ID: %s, 大小: %s, 类型: %s\n", result.ID, formatSize(result.Size), result.MimeType)
+			} else {
+				printer.PrintSuccess("上传成功", result)
+			}
+		}
+
+		if !useJSON {
+			fmt.Printf("\n上传完成: %d 成功, %d 失败\n", successCount, failCount)
+		}
+		return nil
+	},
+}
+
+// =============================================================================
+// blob info
+// =============================================================================
+
+var blobInfoCmd = &cobra.Command{
+	Use:   "info <id>",
+	Short: "查看文件详情",
+	Long: `查看指定文件的元数据信息。
+
+示例:
+  serenique blob info a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var result BlobEntry
+		if err := apiClient.Get(ctx, "/api/blobs/"+args[0], nil, &result); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		if useJSON {
+			printer.PrintSuccess("查询成功", result)
+			return nil
+		}
+
+		data := map[string]string{
+			"ID":      result.ID,
+			"文件名":     result.OriginalName,
+			"MIME 类型": result.MimeType,
+			"大小":      formatSize(result.Size),
+			"SHA-256": result.Checksum,
+			"上传时间":    result.CreatedAt,
+		}
+		if result.Width != nil && result.Height != nil {
+			data["尺寸"] = fmt.Sprintf("%d x %d", *result.Width, *result.Height)
+		}
+		printer.PrintKeyValue(data)
+		return nil
+	},
+}
+
+// =============================================================================
+// blob download
+// =============================================================================
+
+var blobDownloadCmd = &cobra.Command{
+	Use:   "download <id>",
+	Short: "下载文件",
+	Long: `下载指定文件。默认使用原始文件名保存到当前目录。
+
+示例:
+  serenique blob download a1b2c3d4
+  serenique blob download a1b2c3d4 --output ./downloads/photo.jpg
+  serenique blob download a1b2c3d4 --download  # 强制作为附件下载`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		blobID := args[0]
+
+		// Get metadata first to know the original filename
+		ctx := context.Background()
+		var info BlobEntry
+
+		outputPath := blobDownloadOutput
+		if outputPath == "" {
+			if err := apiClient.Get(ctx, "/api/blobs/"+blobID, nil, &info); err != nil {
+				printer.PrintError(err.Error())
+				return nil
+			}
+			outputPath = info.OriginalName
+		}
+
+		fmt.Printf("下载中: %s -> %s ...\n", blobID, outputPath)
+
+		if err := apiClient.DownloadFile(ctx, blobID, outputPath, blobDownloadForce); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		printer.PrintSuccess(fmt.Sprintf("文件已保存到 %s", outputPath), nil)
+		return nil
+	},
+}
+
+var (
+	blobDownloadOutput string
+	blobDownloadForce  bool
+)
+
+// =============================================================================
+// blob link
+// =============================================================================
+
+var blobLinkCmd = &cobra.Command{
+	Use:   "link <id>",
+	Short: "创建临时访问链接",
+	Long: `为文件创建一个带签名的临时访问链接。
+
+示例:
+  serenique blob link a1b2c3d4
+  serenique blob link a1b2c3d4 --expires-in 3600  # 1小时后过期`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		body := map[string]int{"expiresInSeconds": blobLinkExpiresIn}
+
+		var result BlobAccessLinkEntry
+		if err := apiClient.Post(ctx, "/api/blobs/"+args[0]+"/access-link", body, &result); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		if useJSON {
+			printer.PrintSuccess("生成成功", result)
+			return nil
+		}
+
+		printer.PrintSuccess("临时访问链接已生成", nil)
+		fmt.Println()
+		printer.PrintKeyValue(map[string]string{
+			"URL":     result.URL,
+			"过期时间":    result.ExpiresAt,
+			"有效时长":    fmt.Sprintf("%d 秒", blobLinkExpiresIn),
+		})
+		return nil
+	},
+}
+
+var blobLinkExpiresIn int
+
+// =============================================================================
+// blob delete
+// =============================================================================
+
+var blobDeleteCmd = &cobra.Command{
+	Use:   "delete <id>",
+	Short: "删除文件",
+	Long: `删除指定文件（磁盘文件 + 数据库记录）。如果文件仍被业务实体引用，会返回错误。
+
+示例:
+  serenique blob delete a1b2c3d4
+  serenique blob delete a1b2c3d4 --force`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !blobDeleteForce {
+			fmt.Printf("确认永久删除文件 %s？(y/N): ", args[0])
+			var response string
+			fmt.Scanln(&response)
+			if response != "y" && response != "Y" {
+				printer.PrintMessage("已取消")
+				return nil
+			}
+		}
+
+		ctx := context.Background()
+		if err := apiClient.Delete(ctx, "/api/blobs/"+args[0]); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		printer.PrintMessage("✓ 文件已删除")
+		return nil
+	},
+}
+
+var blobDeleteForce bool
+
+// =============================================================================
+// blob attach
+// =============================================================================
+
+var blobAttachCmd = &cobra.Command{
+	Use:   "attach <blob-id>",
+	Short: "创建业务关联",
+	Long: `将文件关联到业务实体（如日记、闪念等）。
+
+示例:
+  serenique blob attach a1b2c3d4 --owner-type diary --owner-id b2c3d4e5
+  serenique blob attach a1b2c3d4 --owner-type diary --owner-id b2c3d4e5 --role cover --display-name "封面图"`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		body := map[string]interface{}{
+			"ownerType":  blobAttachOwnerType,
+			"ownerId":    blobAttachOwnerID,
+			"role":       blobAttachRole,
+			"sortOrder":  blobAttachSortOrder,
+			"metadata":   map[string]interface{}{},
+		}
+		if blobAttachDisplayName != "" {
+			body["displayName"] = blobAttachDisplayName
+		}
+
+		var result BlobAttachmentEntry
+		if err := apiClient.Post(ctx, "/api/blobs/"+args[0]+"/attachments", body, &result); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		printer.PrintSuccess("关联成功", result)
+		return nil
+	},
+}
+
+var (
+	blobAttachOwnerType   string
+	blobAttachOwnerID     string
+	blobAttachRole        string
+	blobAttachDisplayName string
+	blobAttachSortOrder   int
+)
+
+// =============================================================================
+// blob attachments
+// =============================================================================
+
+var blobAttachmentsCmd = &cobra.Command{
+	Use:   "attachments <blob-id>",
+	Short: "查看业务关联",
+	Long: `查看指定文件的所有业务关联记录。
+
+示例:
+  serenique blob attachments a1b2c3d4`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var result []BlobAttachmentEntry
+		if err := apiClient.Get(ctx, "/api/blobs/"+args[0]+"/attachments", nil, &result); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		if useJSON {
+			printer.PrintSuccess("查询成功", map[string]interface{}{"items": result, "count": len(result)})
+			return nil
+		}
+
+		if len(result) == 0 {
+			printer.PrintMessage("暂无业务关联")
+			return nil
+		}
+
+		headers := []string{"ID", "所属类型", "所属ID", "角色", "显示名称"}
+		rows := make([]map[string]string, len(result))
+		for i, a := range result {
+			dn := "-"
+			if a.DisplayName != nil {
+				dn = *a.DisplayName
+			}
+			rows[i] = map[string]string{
+				"ID":     a.ID[:8] + "...",
+				"所属类型":   a.OwnerType,
+				"所属ID":   a.OwnerID[:8] + "...",
+				"角色":     a.Role,
+				"显示名称":   dn,
+			}
+		}
+
+		printer.PrintTable(headers, rows)
+		return nil
+	},
+}
+
+// =============================================================================
+// blob detach
+// =============================================================================
+
+var blobDetachCmd = &cobra.Command{
+	Use:   "detach <attachment-id>",
+	Short: "删除业务关联",
+	Long: `删除一条业务关联记录。此操作仅删除引用，不会删除物理文件。
+
+示例:
+  serenique blob detach c3d4e5f6
+  serenique blob detach c3d4e5f6 --force`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !blobDetachForce {
+			fmt.Printf("确认删除业务关联 %s？(y/N): ", args[0])
+			var response string
+			fmt.Scanln(&response)
+			if response != "y" && response != "Y" {
+				printer.PrintMessage("已取消")
+				return nil
+			}
+		}
+
+		ctx := context.Background()
+		if err := apiClient.Delete(ctx, "/api/blob-attachments/"+args[0]); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		printer.PrintMessage("✓ 业务关联已删除")
+		return nil
+	},
+}
+
+var blobDetachForce bool
+
+// =============================================================================
+// blob cleanup
+// =============================================================================
+
+var blobCleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "清理孤儿文件",
+	Long: `清理磁盘上未被数据库引用的孤立文件。
+
+⚠️ 这是一个维护操作，建议在服务低负载时执行。
+
+示例:
+  serenique blob cleanup
+  serenique blob cleanup --force`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if !blobCleanupForce {
+			fmt.Print("确认清理孤儿文件？此操作会删除磁盘文件。(y/N): ")
+			var response string
+			fmt.Scanln(&response)
+			if response != "y" && response != "Y" {
+				printer.PrintMessage("已取消")
+				return nil
+			}
+		}
+
+		ctx := context.Background()
+
+		var result BlobCleanupResult
+		if err := apiClient.Post(ctx, "/api/blobs/cleanup-orphans", nil, &result); err != nil {
+			printer.PrintError(err.Error())
+			return nil
+		}
+
+		if useJSON {
+			printer.PrintSuccess("清理完成", result)
+			return nil
+		}
+
+		fmt.Printf("✓ 清理完成\n")
+		fmt.Printf("  检查文件: %d\n", result.Checked)
+		fmt.Printf("  已删除:   %d\n", len(result.Deleted))
+		if len(result.Failed) > 0 {
+			fmt.Printf("  失败:     %d\n", len(result.Failed))
+			for _, f := range result.Failed {
+				fmt.Printf("    - %s: %s\n", f.Path, f.Message)
+			}
+		}
+		return nil
+	},
+}
+
+var blobCleanupForce bool
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+func formatSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// =============================================================================
+// Registration
+// =============================================================================
+
+func init() {
+	// blob list
+	blobListCmd.Flags().IntVarP(&blobListPage, "page", "p", 1, "页码")
+	blobListCmd.Flags().IntVarP(&blobListPageSize, "page-size", "l", 20, "每页条数")
+	blobListCmd.Flags().StringVar(&blobListMimeType, "mime-type", "", "按 MIME 类型过滤 (如 image/)")
+
+	// blob download
+	blobDownloadCmd.Flags().StringVarP(&blobDownloadOutput, "output", "o", "", "输出文件路径（默认使用原始文件名）")
+	blobDownloadCmd.Flags().BoolVar(&blobDownloadForce, "download", false, "强制作为附件下载")
+
+	// blob link
+	blobLinkCmd.Flags().IntVarP(&blobLinkExpiresIn, "expires-in", "e", 900, "过期时间（秒），默认 900（15分钟），最长 604800（7天）")
+
+	// blob delete
+	blobDeleteCmd.Flags().BoolVarP(&blobDeleteForce, "force", "f", false, "跳过确认提示")
+
+	// blob attach
+	blobAttachCmd.Flags().StringVar(&blobAttachOwnerType, "owner-type", "", "业务实体类型 (必填)")
+	blobAttachCmd.Flags().StringVar(&blobAttachOwnerID, "owner-id", "", "业务实体 ID (必填)")
+	blobAttachCmd.Flags().StringVarP(&blobAttachRole, "role", "r", "attachment", "关联角色")
+	blobAttachCmd.Flags().StringVarP(&blobAttachDisplayName, "display-name", "n", "", "显示名称")
+	blobAttachCmd.Flags().IntVar(&blobAttachSortOrder, "sort-order", 0, "排序权重")
+	blobAttachCmd.MarkFlagRequired("owner-type")
+	blobAttachCmd.MarkFlagRequired("owner-id")
+
+	// blob detach
+	blobDetachCmd.Flags().BoolVarP(&blobDetachForce, "force", "f", false, "跳过确认提示")
+
+	// blob cleanup
+	blobCleanupCmd.Flags().BoolVarP(&blobCleanupForce, "force", "f", false, "跳过确认提示")
+
+	blobCmd.AddCommand(blobListCmd)
+	blobCmd.AddCommand(blobUploadCmd)
+	blobCmd.AddCommand(blobInfoCmd)
+	blobCmd.AddCommand(blobDownloadCmd)
+	blobCmd.AddCommand(blobLinkCmd)
+	blobCmd.AddCommand(blobDeleteCmd)
+	blobCmd.AddCommand(blobAttachCmd)
+	blobCmd.AddCommand(blobAttachmentsCmd)
+	blobCmd.AddCommand(blobDetachCmd)
+	blobCmd.AddCommand(blobCleanupCmd)
+}

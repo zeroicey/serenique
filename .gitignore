@@ -5,3 +5,6 @@
 .env
 
 node_modules/
+
+# Go build artifacts
+apps/cli/bin/
