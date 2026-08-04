@@ -114,7 +114,7 @@ func TestDownloadFileWritesBody(t *testing.T) {
 	})
 
 	out := filepath.Join(dir, "out.bin")
-	if err := c.DownloadFile(context.Background(), "b1", out, true); err != nil {
+	if err := c.DownloadFile(context.Background(), "b1", out, true, false); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(out)
@@ -136,7 +136,7 @@ func TestDownloadFileRemovesPartialOnError(t *testing.T) {
 	})
 
 	out := filepath.Join(dir, "partial.bin")
-	err := c.DownloadFile(context.Background(), "b1", out, false)
+	err := c.DownloadFile(context.Background(), "b1", out, false, false)
 	if err == nil {
 		t.Fatal("expected error for truncated body")
 	}
@@ -144,7 +144,7 @@ func TestDownloadFileRemovesPartialOnError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
-		t.Fatalf("partial file should have been removed, stat err = %v", statErr)
+		t.Fatalf("partial file should not exist at the final path, stat err = %v", statErr)
 	}
 }
 
@@ -156,7 +156,7 @@ func TestDownloadFileMapsAPIError(t *testing.T) {
 	})
 
 	out := filepath.Join(dir, "nope.bin")
-	err := c.DownloadFile(context.Background(), "missing", out, false)
+	err := c.DownloadFile(context.Background(), "missing", out, false, false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -209,6 +209,76 @@ func TestDoTreats500SuccessEnvelopeAsError(t *testing.T) {
 	}
 	if apiErr.HTTPStatus != 500 {
 		t.Fatalf("HTTPStatus = %d, want 500", apiErr.HTTPStatus)
+	}
+}
+
+func TestDownloadFileRefusesExistingWithoutOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("new-content"))
+	})
+
+	out := filepath.Join(dir, "out.bin")
+	if err := os.WriteFile(out, []byte("old-content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := c.DownloadFile(context.Background(), "b1", out, false, false)
+	if err == nil {
+		t.Fatal("expected error when target exists and overwrite is false")
+	}
+	if !strings.Contains(err.Error(), "目标文件已存在") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, readErr := os.ReadFile(out)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(data) != "old-content" {
+		t.Fatalf("existing file was clobbered: %q, want old-content", data)
+	}
+}
+
+func TestDownloadFileOverwritesWithOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("new-content"))
+	})
+
+	out := filepath.Join(dir, "out.bin")
+	if err := os.WriteFile(out, []byte("old-content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.DownloadFile(context.Background(), "b1", out, false, true); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "new-content" {
+		t.Fatalf("content = %q, want new-content", data)
+	}
+}
+
+func TestDownloadFileLeavesNoTempFiles(t *testing.T) {
+	dir := t.TempDir()
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("payload"))
+	})
+
+	out := filepath.Join(dir, "out.bin")
+	if err := c.DownloadFile(context.Background(), "b1", out, false, false); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "out.bin" {
+		t.Fatalf("expected only out.bin in dir, got %d entries: %v", len(entries), entries)
 	}
 }
 

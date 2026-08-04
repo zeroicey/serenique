@@ -12,6 +12,7 @@ var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "管理 CLI 配置",
 	Long:  "查看或修改 Serenique CLI 的配置文件 (~/.serenique/config.yaml)。",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -20,10 +21,12 @@ var configCmd = &cobra.Command{
 
 		configPath, _ := config.Path()
 		if useJSON {
+			// Never echo the raw token to stdout (captured/logged by AI/scripts);
+			// mirror the masking used in table mode.
 			printer.PrintSuccess("配置信息", map[string]any{
 				"configPath": configPath,
 				"baseurl":    cfg.BaseURL,
-				"token":      cfg.Token,
+				"token":      maskToken(cfg.Token),
 			})
 			return nil
 		}
@@ -78,7 +81,13 @@ var configSetCmd = &cobra.Command{
 		}
 
 		if useJSON {
-			printer.PrintSuccess("配置已更新", map[string]any{"key": key, "value": value})
+			// Mask the echoed value when it is a secret so --json output (captured
+			// and logged by AI/scripts) never contains the raw token.
+			echoValue := value
+			if key == "token" {
+				echoValue = maskToken(value)
+			}
+			printer.PrintSuccess("配置已更新", map[string]any{"key": key, "value": echoValue})
 			return nil
 		}
 
@@ -92,6 +101,7 @@ var configPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "显示配置文件路径",
 	Long:  "显示 Serenique CLI 配置文件的完整路径。",
+	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, err := config.Path()
 		if err != nil {

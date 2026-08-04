@@ -101,6 +101,16 @@ func Save(cfg *Config) error {
 		return err
 	}
 
+	// Write through a symlinked config to its resolved target so save and load
+	// treat symlinks the same way (Load deliberately skips chmod through links).
+	// Otherwise the atomic rename below would replace the symlink with a new
+	// regular file, silently detaching it from its target.
+	if fi, err := os.Lstat(configPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		if target, err := filepath.EvalSymlinks(configPath); err == nil {
+			configPath = target
+		}
+	}
+
 	dir := filepath.Dir(configPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("创建配置目录失败 (%s): %w", dir, err)

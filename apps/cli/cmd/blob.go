@@ -61,6 +61,7 @@ var blobCmd = &cobra.Command{
 	Use:   "blob",
 	Short: "文件管理",
 	Long:  "管理文件（上传、下载、查看元数据、创建临时链接、关联到业务实体等）。",
+	Args:  cobra.NoArgs,
 }
 
 // =============================================================================
@@ -77,7 +78,12 @@ var blobListCmd = &cobra.Command{
   serenique blob list --mime-type image/
   serenique blob list --page 1 --page-size 20
   serenique blob list --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validatePageParams(blobListPage, blobListPageSize); err != nil {
+			return err
+		}
+
 		ctx := context.Background()
 		query := url.Values{}
 		query.Set("page", strconv.Itoa(blobListPage))
@@ -105,11 +111,11 @@ var blobListCmd = &cobra.Command{
 		rows := make([]map[string]string, len(items))
 		for i, b := range items {
 			rows[i] = map[string]string{
-				"ID":     b.ID[:8] + "...",
-				"文件名":   b.OriginalName,
-				"类型":     b.MimeType,
-				"大小":     formatSize(b.Size),
-				"上传时间":   b.CreatedAt[:10],
+				"ID":   b.ID[:8] + "...",
+				"文件名":  b.OriginalName,
+				"类型":   b.MimeType,
+				"大小":   formatSize(b.Size),
+				"上传时间": b.CreatedAt[:10],
 			}
 		}
 
@@ -185,10 +191,11 @@ var blobUploadCmd = &cobra.Command{
 		}
 
 		if useJSON {
+			// "succeeded"/"failed" read as counts, not booleans.
 			printer.PrintSuccess("上传结果", map[string]any{
-				"success": successCount,
-				"failed":  failCount,
-				"results": results,
+				"succeeded": successCount,
+				"failed":    failCount,
+				"results":   results,
 			})
 			if firstErr != nil {
 				return firstErr
@@ -280,7 +287,9 @@ var blobDownloadCmd = &cobra.Command{
 			}
 		}
 
-		// Never silently overwrite an existing file; require an explicit --force.
+		// Fast-fail when the target already exists; the client re-checks
+		// atomically immediately before its rename, so this is only an early
+		// UX optimization (avoids downloading a large file before erroring).
 		if !blobDownloadOverwrite {
 			if _, err := os.Stat(outputPath); err == nil {
 				return fmt.Errorf("目标文件已存在: %s（如需覆盖请使用 --force）", outputPath)
@@ -291,7 +300,7 @@ var blobDownloadCmd = &cobra.Command{
 			fmt.Printf("下载中: %s -> %s ...\n", blobID, outputPath)
 		}
 
-		if err := apiClient.DownloadFile(ctx, blobID, outputPath, blobDownloadForce); err != nil {
+		if err := apiClient.DownloadFile(ctx, blobID, outputPath, blobDownloadAttachment, blobDownloadOverwrite); err != nil {
 			return err
 		}
 
@@ -302,7 +311,7 @@ var blobDownloadCmd = &cobra.Command{
 
 var (
 	blobDownloadOutput     string
-	blobDownloadForce      bool // --download: force Content-Disposition: attachment
+	blobDownloadAttachment bool // --download: force Content-Disposition: attachment
 	blobDownloadOverwrite  bool // --force: overwrite an existing local file
 )
 
@@ -320,6 +329,12 @@ var blobLinkCmd = &cobra.Command{
   serenique blob link a1b2c3d4 --expires-in 3600  # 1小时后过期`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// The API rejects expires-in outside [1, 604800]; fail with an actionable
+		// message before hitting the network.
+		if blobLinkExpiresIn < 1 || blobLinkExpiresIn > 604800 {
+			return fmt.Errorf("过期时间必须在 1 到 604800 秒之间（最长 7 天）")
+		}
+
 		ctx := context.Background()
 
 		body := map[string]int{"expiresInSeconds": blobLinkExpiresIn}
@@ -337,9 +352,9 @@ var blobLinkCmd = &cobra.Command{
 		printer.PrintSuccess("临时访问链接已生成", nil)
 		fmt.Println()
 		printer.PrintKeyValue(map[string]string{
-			"URL":     result.URL,
-			"过期时间":    result.ExpiresAt,
-			"有效时长":    fmt.Sprintf("%d 秒", blobLinkExpiresIn),
+			"URL":  result.URL,
+			"过期时间": result.ExpiresAt,
+			"有效时长": fmt.Sprintf("%d 秒", blobLinkExpiresIn),
 		})
 		return nil
 	},
@@ -370,7 +385,7 @@ var blobDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		printer.PrintMessage("✓ 文件已删除")
+		printDeleteResult("文件已删除", args[0])
 		return nil
 	},
 }
@@ -398,20 +413,11 @@ var blobAttachCmd = &cobra.Command{
 
 		ctx := context.Background()
 
-		// The API's attachment schema defaults sortOrder to 0; only send it when
-		// the user explicitly passed --sort-order.
-		body := map[string]any{
-			"ownerType": blobAttachOwnerType,
-			"ownerId":   blobAttachOwnerID,
-			"role":      blobAttachRole,
-			"metadata":  map[string]any{},
-		}
-		if cmd.Flags().Changed("sort-order") {
-			body["sortOrder"] = blobAttachSortOrder
-		}
-		if blobAttachDisplayName != "" {
-			body["displayName"] = blobAttachDisplayName
-		}
+		body := attachmentBody(args[0], blobAttachRole, blobAttachDisplayName,
+			blobAttachSortOrder, cmd.Flags().Changed("sort-order"), map[string]any{
+				"ownerType": blobAttachOwnerType,
+				"ownerId":   blobAttachOwnerID,
+			})
 
 		var result BlobAttachmentEntry
 		if err := apiClient.Post(ctx, "/api/blobs/"+args[0]+"/attachments", body, &result); err != nil {
@@ -430,11 +436,11 @@ var blobAttachCmd = &cobra.Command{
 			dn = *result.DisplayName
 		}
 		printer.PrintKeyValue(map[string]string{
-			"ID":     result.ID,
-			"所属类型":   result.OwnerType,
-			"所属ID":   result.OwnerID,
-			"角色":     result.Role,
-			"显示名称":   dn,
+			"ID":   result.ID,
+			"所属类型": result.OwnerType,
+			"所属ID": result.OwnerID,
+			"角色":   result.Role,
+			"显示名称": dn,
 		})
 		return nil
 	},
@@ -469,7 +475,8 @@ var blobAttachmentsCmd = &cobra.Command{
 		}
 
 		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]any{"items": result, "count": len(result)})
+			// Match the {items, total} envelope used by every other list command.
+			printer.PrintSuccess("查询成功", map[string]any{"items": result, "total": len(result)})
 			return nil
 		}
 
@@ -486,11 +493,11 @@ var blobAttachmentsCmd = &cobra.Command{
 				dn = *a.DisplayName
 			}
 			rows[i] = map[string]string{
-				"ID":     a.ID[:8] + "...",
-				"所属类型":   a.OwnerType,
-				"所属ID":   a.OwnerID[:8] + "...",
-				"角色":     a.Role,
-				"显示名称":   dn,
+				"ID":   a.ID[:8] + "...",
+				"所属类型": a.OwnerType,
+				"所属ID": a.OwnerID[:8] + "...",
+				"角色":   a.Role,
+				"显示名称": dn,
 			}
 		}
 
@@ -522,7 +529,7 @@ var blobDetachCmd = &cobra.Command{
 			return err
 		}
 
-		printer.PrintMessage("✓ 业务关联已删除")
+		printDeleteResult("业务关联已删除", args[0])
 		return nil
 	},
 }
@@ -543,6 +550,7 @@ var blobCleanupCmd = &cobra.Command{
 示例:
   serenique blob cleanup
   serenique blob cleanup --force`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := confirm("确认清理孤儿文件？此操作会删除磁盘文件", blobCleanupForce); err != nil {
 			return err
@@ -560,13 +568,17 @@ var blobCleanupCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("✓ 清理完成\n")
-		fmt.Printf("  检查文件: %d\n", result.Checked)
-		fmt.Printf("  已删除:   %d\n", len(result.Deleted))
+		// Render through the printer (not raw fmt) so cleanup output follows the
+		// same ✓-prefix / key-value conventions as every other command.
+		printer.PrintMessage("✓ 清理完成")
+		printer.PrintKeyValue(map[string]string{
+			"检查文件": strconv.Itoa(result.Checked),
+			"已删除":  strconv.Itoa(len(result.Deleted)),
+		})
 		if len(result.Failed) > 0 {
-			fmt.Printf("  失败:     %d\n", len(result.Failed))
+			printer.PrintMessage(fmt.Sprintf("  失败: %d", len(result.Failed)))
 			for _, f := range result.Failed {
-				fmt.Printf("    - %s: %s\n", f.Path, f.Message)
+				printer.PrintMessage(fmt.Sprintf("    - %s: %s", f.Path, f.Message))
 			}
 		}
 		return nil
@@ -604,7 +616,7 @@ func init() {
 
 	// blob download
 	blobDownloadCmd.Flags().StringVarP(&blobDownloadOutput, "output", "o", "", "输出文件路径（默认使用原始文件名）")
-	blobDownloadCmd.Flags().BoolVar(&blobDownloadForce, "download", false, "强制作为附件下载")
+	blobDownloadCmd.Flags().BoolVar(&blobDownloadAttachment, "download", false, "强制作为附件下载")
 	blobDownloadCmd.Flags().BoolVarP(&blobDownloadOverwrite, "force", "f", false, "覆盖已存在的本地文件")
 
 	// blob link

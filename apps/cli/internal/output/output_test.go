@@ -116,6 +116,25 @@ func TestPrintTableAlignsByDisplayWidth(t *testing.T) {
 	}
 }
 
+func TestTableSeparatorMatchesBodyWidth(t *testing.T) {
+	p := NewPrinter(false)
+	stdout, _ := runWithWriters(func() {
+		p.PrintTable([]string{"ID", "日期", "内容"}, []map[string]string{
+			{"ID": "abc12345", "日期": "2026-08-04", "内容": "测试内容预览"},
+			{"ID": "xy", "日期": "2026-08-03", "内容": "短"},
+		})
+	})
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatal("expected at least header + separator")
+	}
+	// The dashed separator must span exactly the body's display width, not
+	// overhang by 2 columns per column.
+	if displayWidth(lines[1]) != displayWidth(lines[0]) {
+		t.Fatalf("separator width %d != header width %d", displayWidth(lines[1]), displayWidth(lines[0]))
+	}
+}
+
 func TestDisplayWidth(t *testing.T) {
 	cases := []struct {
 		in   string

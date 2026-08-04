@@ -17,10 +17,9 @@ import (
 
 // Shared state set by the root command's PersistentPreRunE.
 var (
-	resolvedConfig *config.Config
-	apiClient      *client.Client
-	printer        output.Printer
-	useJSON        bool
+	apiClient *client.Client
+	printer   output.Printer
+	useJSON   bool
 )
 
 // flag overrides
@@ -99,11 +98,10 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		// Resolve effective config (flags > env > file)
-		resolvedConfig = config.Resolve(cfg, flagBaseURL, flagToken)
-
-		// Create client and printer
-		apiClient = client.NewClient(resolvedConfig.BaseURL, resolvedConfig.Token)
+		// Resolve effective config (flags > env > file) and build the client
+		// directly from the result — no intermediate global.
+		resolved := config.Resolve(cfg, flagBaseURL, flagToken)
+		apiClient = client.NewClient(resolved.BaseURL, resolved.Token)
 		printer = output.NewPrinter(useJSON)
 
 		return nil
@@ -115,20 +113,46 @@ var rootCmd = &cobra.Command{
 
 // Execute runs the root command and owns error rendering: the returned error is
 // printed exactly once (via the printer when available, so --json mode gets a
-// structured error object on stderr; plain-text otherwise for errors that
-// happen before PersistentPreRunE set the printer up, e.g. unknown flags or
-// invalid argument counts). Command handlers must not print errors themselves.
+// structured error object on stderr; plain-text otherwise). Command handlers
+// must not print errors themselves.
+//
+// Cobra validates args and required flags before PersistentPreRunE runs, so
+// errors like `diary get --json` with a missing id occur before the printer is
+// constructed. To keep --json mode a reliable contract for AI/scripts, --json/-j
+// is detected from os.Args up front and such early errors fall back to a JSON
+// error object on stderr instead of a plain-text line.
 func Execute() {
+	jsonRequested := flagJSONRequested()
+	if jsonRequested {
+		useJSON = true
+	}
+
 	err := rootCmd.Execute()
 	if err == nil {
 		return
 	}
 	if printer != nil {
 		printer.PrintError(err.Error())
+	} else if jsonRequested {
+		output.NewPrinter(true).PrintError(err.Error())
 	} else {
 		fmt.Fprintf(os.Stderr, "✗ 错误: %s\n", err.Error())
 	}
 	os.Exit(1)
+}
+
+// flagJSONRequested reports whether --json or -j appears on the command line
+// without requiring cobra to have parsed flags yet (Execute runs before flag
+// parsing). It matches the documented flag spellings; exotic forms such as
+// --json=true still work because cobra parses them, they just do not pre-arm
+// the JSON fallback for pre-printer errors.
+func flagJSONRequested() bool {
+	for _, a := range os.Args[1:] {
+		if a == "--json" || a == "-j" {
+			return true
+		}
+	}
+	return false
 }
 
 func init() {

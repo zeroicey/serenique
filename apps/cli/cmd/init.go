@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -31,6 +32,7 @@ var initCmd = &cobra.Command{
 
 		// Prompts are written to stderr so stdout stays a clean channel (and a
 		// single parseable JSON document in --json mode).
+		eof := false
 		if flagBaseURL != "" {
 			cfg.BaseURL = flagBaseURL
 		} else {
@@ -40,6 +42,8 @@ var initCmd = &cobra.Command{
 				if input != "" {
 					cfg.BaseURL = input
 				}
+			} else {
+				eof = true
 			}
 		}
 
@@ -52,7 +56,17 @@ var initCmd = &cobra.Command{
 				if input != "" {
 					cfg.Token = input
 				}
+			} else {
+				eof = true
 			}
+		}
+
+		// Non-interactive stdin (pipe, CI, AI agent) hits EOF immediately: the
+		// prompts above read nothing. Without explicit --baseurl/--token this
+		// would silently write the untouched default/localhost config, which is
+		// never what the caller asked for. Fail loudly instead.
+		if eof && flagBaseURL == "" && flagToken == "" {
+			return errors.New("检测到非交互式输入（EOF）：请通过 --baseurl/--token 参数指定，或在终端中运行 serenique init")
 		}
 
 		if err := config.Save(cfg); err != nil {
@@ -61,10 +75,12 @@ var initCmd = &cobra.Command{
 
 		configPath, _ := config.Path()
 		if useJSON {
+			// Never echo the raw token to stdout: --json output is captured and
+			// logged by AI/script consumers. Mirror the masking used in table mode.
 			printer.PrintSuccess("配置已保存", map[string]any{
 				"configPath": configPath,
 				"baseurl":    cfg.BaseURL,
-				"token":      cfg.Token,
+				"token":      maskToken(cfg.Token),
 			})
 			return nil
 		}

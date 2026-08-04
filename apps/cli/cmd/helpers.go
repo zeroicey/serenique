@@ -42,3 +42,52 @@ func truncateRunes(s string, n int) string {
 	}
 	return string(r[:n]) + "..."
 }
+
+// printDeleteResult renders a destructive-action success. Table mode keeps the
+// "✓ " prefix; JSON mode emits the same {message, data} envelope as create/get
+// so AI/script consumers do not have to special-case deletes.
+func printDeleteResult(message, id string) {
+	if useJSON {
+		printer.PrintSuccess(message, map[string]any{"id": id})
+		return
+	}
+	printer.PrintMessage("✓ " + message)
+}
+
+// validatePageParams rejects out-of-range list pagination up front with an
+// actionable Chinese message, instead of letting the server return a generic
+// validation error (the API enforces page>=1 and pageSize<=50).
+func validatePageParams(page, pageSize int) error {
+	if page < 1 {
+		return fmt.Errorf("页码必须大于等于 1")
+	}
+	if pageSize < 1 {
+		return fmt.Errorf("每页条数必须大于等于 1")
+	}
+	if pageSize > 50 {
+		return fmt.Errorf("每页条数不能超过 50")
+	}
+	return nil
+}
+
+// attachmentBody builds the POST body for creating an attachment reference,
+// shared by the moment and blob attach commands so the two never drift apart.
+// sortOrder is only included when explicitly set (the server auto-increments it
+// otherwise); extra fields (e.g. ownerType/ownerId) are merged in.
+func attachmentBody(blobID, role, displayName string, sortOrder int, sortOrderSet bool, extra map[string]any) map[string]any {
+	body := map[string]any{
+		"blobId":   blobID,
+		"role":     role,
+		"metadata": map[string]any{},
+	}
+	if sortOrderSet {
+		body["sortOrder"] = sortOrder
+	}
+	if displayName != "" {
+		body["displayName"] = displayName
+	}
+	for k, v := range extra {
+		body[k] = v
+	}
+	return body
+}

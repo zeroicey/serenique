@@ -24,6 +24,7 @@ var diaryCmd = &cobra.Command{
 	Use:   "diary",
 	Short: "日记管理",
 	Long:  "管理日记，支持创建、查看、更新和删除日记。",
+	Args:  cobra.NoArgs,
 }
 
 // diary list
@@ -37,6 +38,10 @@ var diaryListCmd = &cobra.Command{
   serenique diary list --page 1 --page-size 10
   serenique diary list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validatePageParams(diaryListPage, diaryListPageSize); err != nil {
+			return err
+		}
+
 		ctx := context.Background()
 		query := url.Values{}
 		query.Set("page", strconv.Itoa(diaryListPage))
@@ -62,10 +67,10 @@ var diaryListCmd = &cobra.Command{
 		for i, d := range items {
 			preview := truncateRunes(d.Content, 40)
 			rows[i] = map[string]string{
-				"ID":     d.ID[:8] + "...",
-				"日期":     d.DiaryDate,
-				"内容预览":   preview,
-				"创建时间":   d.CreatedAt[:10],
+				"ID":   d.ID[:8] + "...",
+				"日期":   d.DiaryDate,
+				"内容预览": preview,
+				"创建时间": d.CreatedAt[:10],
 			}
 		}
 
@@ -148,11 +153,11 @@ var diaryGetCmd = &cobra.Command{
 		}
 
 		printer.PrintKeyValue(map[string]string{
-			"ID":     result.ID,
-			"日期":     result.DiaryDate,
-			"内容":     result.Content,
-			"创建时间":   result.CreatedAt,
-			"更新时间":   result.UpdatedAt,
+			"ID":   result.ID,
+			"日期":   result.DiaryDate,
+			"内容":   result.Content,
+			"创建时间": result.CreatedAt,
+			"更新时间": result.UpdatedAt,
 		})
 		return nil
 	},
@@ -216,7 +221,7 @@ var diaryDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		printer.PrintMessage("✓ 日记已删除")
+		printDeleteResult("日记已删除", args[0])
 		return nil
 	},
 }

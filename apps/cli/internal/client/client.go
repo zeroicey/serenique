@@ -148,7 +148,7 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 func List[T any](c *Client, ctx context.Context, path string, query url.Values) ([]T, int, error) {
 	var result struct {
 		Items []T `json:"items"`
-		Total int  `json:"total"`
+		Total int `json:"total"`
 	}
 	if err := c.Get(ctx, path, query, &result); err != nil {
 		return nil, 0, err
@@ -211,7 +211,14 @@ func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string
 
 // DownloadFile downloads a blob file and saves it to outputPath.
 // If forceAttachment is true, adds ?download=1 to force Content-Disposition: attachment.
-func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath string, forceAttachment bool) error {
+// If overwrite is false, an existing file at outputPath is never replaced.
+//
+// The body is written to a temp file in the destination directory and atomically
+// renamed onto outputPath only after a fully-received copy, so an interrupted
+// run never leaves a partial file at the final path, and the overwrite check
+// happens immediately before the rename (closing the TOCTOU window between a
+// caller's earlier existence check and the actual write).
+func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath string, forceAttachment, overwrite bool) error {
 	query := url.Values{}
 	if forceAttachment {
 		query.Set("download", "1")
@@ -247,21 +254,42 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 		return fmt.Errorf("下载失败 (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 
-	out, err := os.Create(outputPath)
+	// Write to a temp file in the destination directory (so the final rename is
+	// atomic on the same filesystem) rather than directly to outputPath.
+	dir := filepath.Dir(outputPath)
+	tmp, err := os.CreateTemp(dir, ".serenique-dl-*")
 	if err != nil {
-		return fmt.Errorf("无法创建输出文件 %s: %w", outputPath, err)
+		return fmt.Errorf("无法创建临时文件（目标目录: %s）: %w", dir, err)
+	}
+	tmpName := tmp.Name()
+	discardTmp := func() {
+		tmp.Close()
+		os.Remove(tmpName) // no-op once the rename succeeds
 	}
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(tmp, resp.Body)
 	if err != nil {
-		out.Close()
-		os.Remove(outputPath) // don't leave a partial download behind
+		discardTmp()
 		return fmt.Errorf("写入文件失败: %w", err)
 	}
-
-	if err := out.Close(); err != nil {
-		os.Remove(outputPath)
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
 		return fmt.Errorf("关闭文件失败: %w", err)
+	}
+
+	// Refuse to silently replace an existing file. The check runs immediately
+	// before the atomic rename, minimizing the window in which a file created
+	// between a caller's earlier existence check and this write could be clobbered.
+	if !overwrite {
+		if _, err := os.Lstat(outputPath); err == nil {
+			os.Remove(tmpName)
+			return fmt.Errorf("目标文件已存在: %s（如需覆盖请使用 --force）", outputPath)
+		}
+	}
+
+	if err := os.Rename(tmpName, outputPath); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("保存文件失败 (%s): %w", outputPath, err)
 	}
 
 	return nil

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -164,6 +165,42 @@ func TestLoadSkipsChmodOnSymlink(t *testing.T) {
 	}
 	if perm := fi.Mode().Perm(); perm != 0o644 {
 		t.Fatalf("symlink target perms changed to %o, want 644", perm)
+	}
+}
+
+func TestSaveWritesThroughSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.yaml")
+	link := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(target, []byte("baseurl: http://old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+
+	SetPath(link)
+	defer SetPath("")
+
+	if err := Save(&Config{BaseURL: "http://new", Token: "t"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The link must still be a symlink (not silently replaced by a regular file)
+	// and its target must hold the new config — save and load agree on symlinks.
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("config symlink was replaced with a regular file")
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "http://new") {
+		t.Fatalf("symlink target not updated: %q", data)
 	}
 }
 

@@ -93,9 +93,12 @@ func (p *TablePrinter) PrintTable(headers []string, rows []map[string]string) {
 
 	printLine(headers)
 
+	// Separator cells span exactly the cell width (no +2) so the dashed line,
+	// joined with the same 2-space padding as content cells, matches the body's
+	// total display width instead of overhanging by 2 columns per column.
 	sep := make([]string, len(headers))
 	for i := range sep {
-		sep[i] = strings.Repeat("-", widths[i]+2)
+		sep[i] = strings.Repeat("-", widths[i])
 	}
 	fmt.Fprintln(stdout, strings.Join(sep, padding))
 
@@ -158,16 +161,16 @@ func displayWidth(s string) int {
 func runeWidth(r rune) int {
 	switch {
 	case r >= 0x1100 && r <= 0x115F, // Hangul Jamo
-		r >= 0x2E80 && r <= 0x303E, // CJK Radicals, Kangxi, CJK Symbols/Punct
-		r >= 0x3041 && r <= 0x33FF, // Hiragana, Katakana, CJK Compatibility
-		r >= 0x3400 && r <= 0x4DBF, // CJK Unified Ideographs Extension A
-		r >= 0x4E00 && r <= 0x9FFF, // CJK Unified Ideographs
-		r >= 0xA000 && r <= 0xA4CF, // Yi Syllables
-		r >= 0xAC00 && r <= 0xD7A3, // Hangul Syllables
-		r >= 0xF900 && r <= 0xFAFF, // CJK Compatibility Ideographs
-		r >= 0xFE30 && r <= 0xFE4F, // CJK Compatibility Forms
-		r >= 0xFF00 && r <= 0xFF60, // Fullwidth Forms
-		r >= 0xFFE0 && r <= 0xFFE6, // Fullwidth Signs
+		r >= 0x2E80 && r <= 0x303E,   // CJK Radicals, Kangxi, CJK Symbols/Punct
+		r >= 0x3041 && r <= 0x33FF,   // Hiragana, Katakana, CJK Compatibility
+		r >= 0x3400 && r <= 0x4DBF,   // CJK Unified Ideographs Extension A
+		r >= 0x4E00 && r <= 0x9FFF,   // CJK Unified Ideographs
+		r >= 0xA000 && r <= 0xA4CF,   // Yi Syllables
+		r >= 0xAC00 && r <= 0xD7A3,   // Hangul Syllables
+		r >= 0xF900 && r <= 0xFAFF,   // CJK Compatibility Ideographs
+		r >= 0xFE30 && r <= 0xFE4F,   // CJK Compatibility Forms
+		r >= 0xFF00 && r <= 0xFF60,   // Fullwidth Forms
+		r >= 0xFFE0 && r <= 0xFFE6,   // Fullwidth Signs
 		r >= 0x1F300 && r <= 0x1F64F, // Emoji
 		r >= 0x20000 && r <= 0x2FFFD: // CJK Unified Ideographs Extension B+
 		return 2
@@ -203,8 +206,8 @@ func (p *JSONPrinter) PrintSuccess(message string, data any) {
 	}
 	// If data is already a struct/map, wrap with message
 	type successOutput struct {
-		Message string      `json:"message"`
-		Data    any `json:"data"`
+		Message string `json:"message"`
+		Data    any    `json:"data"`
 	}
 	p.print(successOutput{Message: message, Data: data})
 }

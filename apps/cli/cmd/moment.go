@@ -12,22 +12,39 @@ import (
 
 // Moment types matching the API response.
 type MomentEntry struct {
-	ID          string                   `json:"id"`
-	Text        string                   `json:"text"`
-	CreatedAt   string                   `json:"createdAt"`
-	UpdatedAt   string                   `json:"updatedAt"`
-	Attachments []MomentAttachmentEntry  `json:"attachments"`
+	ID          string                  `json:"id"`
+	Text        string                  `json:"text"`
+	CreatedAt   string                  `json:"createdAt"`
+	UpdatedAt   string                  `json:"updatedAt"`
+	Attachments []MomentAttachmentEntry `json:"attachments"`
+}
+
+// MomentBlobEntry matches the API's nested blob object inside a moment
+// attachment (moment.types.ts MomentBlobEntry). The API always includes it, so
+// JSON mode round-trips the full payload including the ready fileUrl.
+type MomentBlobEntry struct {
+	ID           string         `json:"id"`
+	OriginalName string         `json:"originalName"`
+	MimeType     string         `json:"mimeType"`
+	Size         int64          `json:"size"`
+	Metadata     map[string]any `json:"metadata"`
+	Width        *int           `json:"width"`
+	Height       *int           `json:"height"`
+	Duration     *float64       `json:"duration"`
+	CreatedAt    string         `json:"createdAt"`
+	FileURL      string         `json:"fileUrl"`
 }
 
 // MomentAttachmentEntry matches the API's moment attachment record.
 type MomentAttachmentEntry struct {
-	ID          string  `json:"id"`
-	BlobID      string  `json:"blobId"`
-	Role        string  `json:"role"`
-	DisplayName *string `json:"displayName"`
-	SortOrder   int     `json:"sortOrder"`
-	CreatedAt   string  `json:"createdAt"`
-	UpdatedAt   string  `json:"updatedAt"`
+	ID          string           `json:"id"`
+	BlobID      string           `json:"blobId"`
+	Role        string           `json:"role"`
+	DisplayName *string          `json:"displayName"`
+	SortOrder   int              `json:"sortOrder"`
+	CreatedAt   string           `json:"createdAt"`
+	UpdatedAt   string           `json:"updatedAt"`
+	Blob        *MomentBlobEntry `json:"blob,omitempty"`
 }
 
 // momentCmd is the parent moment command.
@@ -35,6 +52,7 @@ var momentCmd = &cobra.Command{
 	Use:   "moment",
 	Short: "闪念管理",
 	Long:  "管理闪念笔记（轻量级快速记录），支持创建、列出、删除和附件关联。",
+	Args:  cobra.NoArgs,
 }
 
 // moment list
@@ -48,6 +66,10 @@ var momentListCmd = &cobra.Command{
   serenique moment list --page 1 --page-size 20
   serenique moment list --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validatePageParams(momentListPage, momentListPageSize); err != nil {
+			return err
+		}
+
 		ctx := context.Background()
 		query := url.Values{}
 		query.Set("page", strconv.Itoa(momentListPage))
@@ -167,7 +189,7 @@ var momentGetCmd = &cobra.Command{
 					dn = *a.DisplayName
 				}
 				rows[i] = map[string]string{
-					"ID":     a.ID[:8] + "...",
+					"ID":    a.ID[:8] + "...",
 					"文件 ID": a.BlobID[:8] + "...",
 					"角色":    a.Role,
 					"显示名称":  dn,
@@ -200,7 +222,7 @@ var momentDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		printer.PrintMessage("✓ 闪念已删除")
+		printDeleteResult("闪念已删除", args[0])
 		return nil
 	},
 }
@@ -220,20 +242,8 @@ var momentAttachCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
 
-		// The server auto-increments sortOrder to preserve insertion order when
-		// it is omitted. Only send it when the user explicitly passed
-		// --sort-order, otherwise every attach pins to order 0.
-		body := map[string]any{
-			"blobId":   momentAttachBlobID,
-			"role":     momentAttachRole,
-			"metadata": map[string]any{},
-		}
-		if cmd.Flags().Changed("sort-order") {
-			body["sortOrder"] = momentAttachSortOrder
-		}
-		if momentAttachDisplayName != "" {
-			body["displayName"] = momentAttachDisplayName
-		}
+		body := attachmentBody(momentAttachBlobID, momentAttachRole, momentAttachDisplayName,
+			momentAttachSortOrder, cmd.Flags().Changed("sort-order"), nil)
 
 		var result MomentAttachmentEntry
 		if err := apiClient.Post(ctx, "/api/moments/"+args[0]+"/attachments", body, &result); err != nil {
@@ -252,10 +262,10 @@ var momentAttachCmd = &cobra.Command{
 			dn = *result.DisplayName
 		}
 		printer.PrintKeyValue(map[string]string{
-			"ID":     result.ID,
-			"文件 ID":  result.BlobID,
-			"角色":     result.Role,
-			"显示名称":   dn,
+			"ID":    result.ID,
+			"文件 ID": result.BlobID,
+			"角色":    result.Role,
+			"显示名称":  dn,
 		})
 		return nil
 	},
@@ -288,7 +298,7 @@ var momentDetachCmd = &cobra.Command{
 			return err
 		}
 
-		printer.PrintMessage("✓ 附件关联已删除")
+		printDeleteResult("附件关联已删除", args[1])
 		return nil
 	},
 }
