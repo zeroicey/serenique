@@ -25,12 +25,22 @@ export {
 // ---- Moment module ----
 export { momentService } from "@/modules/moment/moment.service";
 export type {
+  AddMomentAttachmentInput,
+  DeleteMomentAttachmentInput,
   MomentEntry,
+  MomentAttachmentEntry,
+  MomentBlobEntry,
   CreateMomentInput,
   ListMomentInput,
+  GetMomentInput,
   DeleteMomentInput,
 } from "@/modules/moment/moment.types";
-export { CreateMomentSchema, ListMomentSchema } from "@/modules/moment/moment.types";
+export {
+  AddMomentAttachmentSchema,
+  CreateMomentSchema,
+  ListMomentSchema,
+  MomentAttachmentInputSchema,
+} from "@/modules/moment/moment.types";
 
 // ---- Blob module ----
 export { blobService } from "@/modules/blob/blob.service";

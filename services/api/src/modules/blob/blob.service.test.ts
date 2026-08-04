@@ -239,6 +239,68 @@ describe("blob attachment lifecycle", () => {
       "image/2026/08/0198f6bd-4f06-7289-b57d-62e8af51a4aa.png",
     ]);
   });
+
+  test("rejects moment attachments from the generic blob API", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+      },
+      repository: createMemoryBlobRepository(),
+      storage: createMemoryBlobStorage(),
+    });
+
+    await expect(
+      service.createAttachment("0198f6bd-4f06-7289-b57d-62e8af51a4aa", {
+        ownerType: "moment",
+        ownerId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001",
+        role: "attachment",
+        sortOrder: 0,
+        metadata: {},
+      }),
+    ).rejects.toMatchObject({
+      code: "VALIDATION",
+      status: 400,
+    });
+  });
+
+  test("rejects deleting moment attachments from the generic blob API", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const repository = createMemoryBlobRepository();
+    repository.attachmentsById.set("0198f6bf-8564-705c-8b95-56227195c5db", {
+      id: "0198f6bf-8564-705c-8b95-56227195c5db",
+      blobId: "0198f6bd-4f06-7289-b57d-62e8af51a4aa",
+      ownerType: "moment",
+      ownerId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001",
+      role: "attachment",
+      displayName: null,
+      sortOrder: 0,
+      metadata: {},
+      createdAt: new Date("2026-08-04T12:01:00.000Z"),
+      updatedAt: new Date("2026-08-04T12:01:00.000Z"),
+    });
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+      },
+      repository,
+      storage: createMemoryBlobStorage(),
+    });
+
+    await expect(
+      service.deleteAttachment("0198f6bf-8564-705c-8b95-56227195c5db"),
+    ).rejects.toMatchObject({
+      code: "VALIDATION",
+      status: 400,
+    });
+    expect(
+      repository.attachmentsById.has("0198f6bf-8564-705c-8b95-56227195c5db"),
+    ).toBe(true);
+  });
 });
 
 describe("blob upload consistency", () => {
@@ -306,6 +368,32 @@ describe("blob upload consistency", () => {
     expect(result.id).toBe("0198f6bd-4f06-7289-b57d-62e8af51a4aa");
     expect(savedPaths).toEqual(["text/2026/08/generated.txt"]);
     expect(deletedPaths).toEqual(["text/2026/08/generated.txt"]);
+  });
+
+  test("sniffs disguised SVG uploads and stores their MIME type as SVG", async () => {
+    setTestEnv();
+    const { createBlobService } = (await import("./blob.service")) as any;
+    const repository = createMemoryBlobRepository([]);
+    const service = createBlobService({
+      env: {
+        BLOB_ROOT: "/tmp/serenique-api-blob-test",
+        BLOB_MAX_SIZE: 104857600,
+      },
+      repository,
+      storage: createMemoryBlobStorage([], {
+        storagePath: "image/2026/08/disguised.svg",
+      }),
+      randomUUID: () => "0198f6c3-30da-7193-b914-3e92383fe0ca",
+    });
+
+    const result = await service.upload(
+      new File(["  <?xml version=\"1.0\"?><svg></svg>"], "disguised.png", {
+        type: "image/png",
+      }),
+    );
+
+    expect(result.mimeType).toBe("image/svg+xml");
+    expect(repository.blobsById.get(result.id)?.mimeType).toBe("image/svg+xml");
   });
 
   test("deletes disk files that no blob row references", async () => {

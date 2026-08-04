@@ -6,7 +6,7 @@ import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const moments = pgTable("moments", {
   id: uuid("id").defaultRandom().primaryKey(),
-  content: text("content").notNull(),
+  text: text("text").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

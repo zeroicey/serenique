@@ -4,13 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Serenique is a personal journaling and note-taking API. It is a monorepo with services under `services/`. Currently the only service is `services/api`.
+Serenique is a personal journaling and note-taking API. It is a monorepo with services under `services/`. Current services are `services/api` and `services/mcp`.
 
 **Tech stack:** Bun runtime, Hono web framework, PostgreSQL via Drizzle ORM, Zod validation, Pino logging, TypeScript with strict mode.
 
 ## Commands
 
-All commands run from `services/api/`:
+Common commands from the repository root:
+
+```sh
+bun install
+bun run typecheck
+bun test
+docker compose up -d --build api mcp
+```
+
+API-specific commands run from `services/api/`:
 
 ```sh
 bun install          # Install dependencies
@@ -21,7 +30,7 @@ bun run db:migrate   # Apply pending migrations to the database
 bun run db:push      # Push schema directly to DB (bypasses migrations, works in CI)
 ```
 
-Environment variables are loaded from `services/api/.env` by Bun automatically in dev. Required variables for Docker are set in the Dockerfile.
+Runtime environment for Docker Compose is loaded from the project root `.env`. Service-local `.env` files are not used. Keep secrets out of images; root `.dockerignore` excludes `.env` files from the build context.
 
 ## Architecture
 
@@ -29,7 +38,7 @@ Environment variables are loaded from `services/api/.env` by Bun automatically i
 services/api/src/
 ├── index.ts          — Entry point: validates env, initialises blob root, creates app
 ├── app.ts            — App factory: wires middleware, routes, error handler, 404
-├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, PORT, NODE_ENV)
+├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, PORT, NODE_ENV)
 ├── db/
 │   ├── connection.ts — Single Drizzle client + Postgres pool (shared across all modules)
 │   └── schema.ts     — Central schema registry that Drizzle Kit reads for migrations
@@ -97,7 +106,8 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET, POST | `/api/diaries` | Diary list / create |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
 | GET, POST | `/api/moments` | Moment list / create |
-| DELETE | `/api/moments/:id` | Moment delete |
+| GET, DELETE | `/api/moments/:id` | Moment detail / delete |
+| POST, DELETE | `/api/moments/:id/attachments[/:attachmentId]` | Moment attachment create / delete |
 | POST | `/api/blobs/upload` | Blob upload (multipart, field: `file`) |
 | POST | `/api/blobs/cleanup-orphans` | Delete disk files not referenced by blob rows |
 | GET | `/api/blobs` | Blob list (`?mimeType=image/&page=&pageSize=`) |
@@ -113,7 +123,16 @@ User-facing messages are in Chinese.
 ## Docker
 
 ```sh
-docker build -t serenique-api services/api
+docker compose up -d --build api mcp
+```
+
+Docker Compose reads `.env` from the project root. See `.env.example` for the expected keys. `BLOB_ROOT` is fixed to `/data/blobs` inside the containers and persisted through the `blob-data` volume. `DATABASE_URL` is required; the entrypoint rewrites localhost database hosts to `host.docker.internal` for container access.
+
+Manual image builds use the repository root as context:
+
+```sh
+docker build -t serenique-api -f services/api/Dockerfile .
+docker build -t serenique-mcp -f services/mcp/Dockerfile .
 
 docker run -p 3000:3000 \
   -e DATABASE_URL=postgresql://serenique:serenique@host:5432/serenique \
@@ -123,4 +142,4 @@ docker run -p 3000:3000 \
   serenique-api
 ```
 
-Default values in Dockerfile: `PORT=3000`, `NODE_ENV=production`, `BLOB_ROOT=/data/blobs`, `BLOB_MAX_SIZE=104857600` (100 MB).
+Default values in Dockerfiles: `NODE_ENV=production`, `BLOB_ROOT=/data/blobs`, `BLOB_MAX_SIZE=104857600` (100 MB), API `PORT=3000`, MCP `PORT=3001`, MCP `MCP_TRANSPORT=streamable-http`.

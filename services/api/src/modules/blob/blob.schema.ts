@@ -57,5 +57,12 @@ export const blobAttachments = pgTable(
   (table) => [
     index("blob_attachments_blob_id_idx").on(table.blobId),
     index("blob_attachments_owner_idx").on(table.ownerType, table.ownerId),
+    index("blob_attachments_owner_order_idx").on(
+      table.ownerType,
+      table.ownerId,
+      table.sortOrder,
+      table.createdAt,
+      table.id,
+    ),
   ],
 );

@@ -16,7 +16,7 @@ const MomentIdSchema = z.object({
 });
 
 const CreateMomentToolSchema = CreateMomentSchema.extend({
-  content: CreateMomentSchema.shape.content.describe("闪念内容，最长 500 字"),
+  text: CreateMomentSchema.shape.text.describe("闪念内容，最长 500 字"),
 });
 
 const ListMomentToolSchema = ListMomentSchema.extend({

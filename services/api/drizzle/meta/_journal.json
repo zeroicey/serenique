@@ -36,6 +36,13 @@
       "when": 1785846012497,
       "tag": "0004_add_blob_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785850768000,
+      "tag": "0005_rename_moment_content_to_text",
+      "breakpoints": true
     }
   ]
 }

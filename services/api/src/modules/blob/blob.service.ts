@@ -39,6 +39,8 @@ type BlobServiceEnv = Pick<
   "BLOB_ROOT" | "BLOB_MAX_SIZE" | "BLOB_SIGNING_SECRET"
 >;
 
+const RESERVED_OWNER_TYPES = new Set(["moment"]);
+
 export type BlobRepository = {
   findBlobByChecksum(checksum: string): Promise<BlobRow | undefined>;
   insertBlob(input: NewBlobRow): Promise<BlobRow>;
@@ -144,6 +146,35 @@ function signaturesEqual(actual: string, expected: string): boolean {
     actualBuf.length === expectedBuf.length &&
     timingSafeEqual(actualBuf, expectedBuf)
   );
+}
+
+function looksLikeSvg(buf: Buffer): boolean {
+  const header = buf
+    .subarray(0, Math.min(buf.length, 1024))
+    .toString("utf8")
+    .replace(/^\uFEFF/, "")
+    .trimStart()
+    .toLowerCase();
+
+  return header.startsWith("<svg") || (
+    header.startsWith("<?xml") &&
+    header.includes("<svg")
+  );
+}
+
+function normalizeUploadedMimeType(file: File, buf: Buffer): string {
+  if (looksLikeSvg(buf)) return "image/svg+xml";
+  return file.type || "application/octet-stream";
+}
+
+function assertGenericAttachmentOwnerType(ownerType: string) {
+  if (RESERVED_OWNER_TYPES.has(ownerType)) {
+    throw new AppError(
+      ErrorCode.VALIDATION,
+      "该业务类型的附件请使用对应模块 API 创建或删除",
+      400,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -284,7 +315,7 @@ export function createBlobService({
 
       // --- persist to disk ---
       const id = randomUUID();
-      const mimeType = file.type || "application/octet-stream";
+      const mimeType = normalizeUploadedMimeType(file, buf);
       const path = storage.buildStoragePath(mimeType, id, file.name);
 
       await storage.saveFile(serviceEnv.BLOB_ROOT, path, buf);
@@ -425,6 +456,8 @@ export function createBlobService({
       blobId: string,
       input: CreateBlobAttachmentInput,
     ): Promise<BlobAttachmentEntry> {
+      assertGenericAttachmentOwnerType(input.ownerType);
+
       const blob = await repository.findBlobById(blobId);
       if (!blob) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
 
@@ -454,6 +487,7 @@ export function createBlobService({
     async deleteAttachment(id: string): Promise<void> {
       const row = await repository.findAttachmentById(id);
       if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件关联不存在", 404);
+      assertGenericAttachmentOwnerType(row.ownerType);
 
       await repository.deleteAttachment(id);
     },

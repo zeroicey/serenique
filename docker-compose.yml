@@ -6,12 +6,12 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - BLOB_ROOT=/data/blobs
-      - BLOB_MAX_SIZE=104857600
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the project root .env}
+      BLOB_ROOT: /data/blobs
+      BLOB_MAX_SIZE: ${BLOB_MAX_SIZE:-104857600}
       # Required for `blob link` (signed access links). Must be >= 32 chars.
-      - BLOB_SIGNING_SECRET=${BLOB_SIGNING_SECRET:-dev-only-signing-secret-change-me-0123456789abcdef}
-      - NODE_ENV=production
+      BLOB_SIGNING_SECRET: ${BLOB_SIGNING_SECRET:-}
+      NODE_ENV: production
     volumes:
       - blob-data:/data/blobs
     extra_hosts:
@@ -24,14 +24,16 @@ services:
       dockerfile: services/mcp/Dockerfile
     ports:
       - "3001:3001"
+    depends_on:
+      - api
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - BLOB_ROOT=/data/blobs
-      - BLOB_MAX_SIZE=104857600
-      - NODE_ENV=production
-      - MCP_TRANSPORT=sse
-      - PORT=3001
-      - SERENIQUE_API_BASE_URL=http://localhost:3000
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the project root .env}
+      BLOB_ROOT: /data/blobs
+      BLOB_MAX_SIZE: ${BLOB_MAX_SIZE:-104857600}
+      NODE_ENV: production
+      MCP_TRANSPORT: streamable-http
+      PORT: 3001
+      SERENIQUE_API_BASE_URL: http://api:3000
     volumes:
       - blob-data:/data/blobs
     extra_hosts:
