@@ -12,14 +12,14 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1785866500000,
+      "when": 1785828000000,
       "tag": "0001_clean_diary_fields",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1754300720000,
+      "when": 1785830000000,
       "tag": "0002_add_moment_updated_at",
       "breakpoints": true
     },
@@ -42,6 +42,13 @@
       "version": "7",
       "when": 1785850768000,
       "tag": "0005_rename_moment_content_to_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785862531886,
+      "tag": "0006_rich_franklin_richards",
       "breakpoints": true
     }
   ]

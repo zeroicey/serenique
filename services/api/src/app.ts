@@ -4,6 +4,7 @@ import { cors, logger } from "@/middleware";
 import { diaryRouter } from "@/modules/diary";
 import { momentRouter } from "@/modules/moment";
 import { blobRouter } from "@/modules/blob";
+import { taskRouter } from "@/modules/task";
 import { Res } from "@/shared/response";
 import { logger as pinoLogger } from "@/shared/logger";
 
@@ -33,7 +34,9 @@ export function createApp(env: Env) {
   //
   app.get("/health", (c) => Res.ok("服务运行中", { status: "ok" }).build(c));
   app.get("/", (c) =>
-    Res.ok("Serenique API", { modules: ["diary", "moment", "blob"] }).build(c),
+    Res.ok("Serenique API", {
+      modules: ["diary", "moment", "blob", "task"],
+    }).build(c),
   );
 
   // ---- 4. API modules -----------------------------------------------------
@@ -42,6 +45,7 @@ export function createApp(env: Env) {
   app.route("/api", diaryRouter);
   app.route("/api", momentRouter);
   app.route("/api", blobRouter);
+  app.route("/api", taskRouter);
 
   // ---- 5. 404 fallback ----------------------------------------------------
   app.notFound((c) => Res.notFound("接口不存在").build(c));

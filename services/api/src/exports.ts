@@ -60,6 +60,32 @@ export {
   ListBlobSchema,
 } from "@/modules/blob/blob.types";
 
+// ---- Task module ----
+export { taskService } from "@/modules/task/task.service";
+export type {
+  TaskEntry,
+  TaskGroupEntry,
+  CreateTaskInput,
+  CreateTaskGroupInput,
+  ListTaskInput,
+  ListTaskGroupInput,
+  GetTaskInput,
+  GetTaskGroupInput,
+  UpdateTaskInput,
+  UpdateTaskGroupInput,
+  DeleteTaskInput,
+  DeleteTaskGroupInput,
+} from "@/modules/task/task.types";
+export {
+  CreateTaskSchema,
+  UpdateTaskSchema,
+  ListTaskSchema,
+  CreateTaskGroupSchema,
+  ListTaskGroupSchema,
+  UpdateTaskGroupSchema,
+  TaskStatusSchema,
+} from "@/modules/task/task.types";
+
 // ---- Shared utilities ----
 export { AppError, ErrorCode } from "@/shared/errors";
 export type { ErrorCode as ErrorCodeType } from "@/shared/errors";
