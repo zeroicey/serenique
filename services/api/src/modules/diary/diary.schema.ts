@@ -2,14 +2,13 @@ import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Diary table definition — Drizzle schema for PostgreSQL.
+// diary_date (YYYY-MM-DD) is unique: one entry per day.
 // ---------------------------------------------------------------------------
 
 export const diaries = pgTable("diaries", {
   id: uuid("id").defaultRandom().primaryKey(),
-  title: text("title").notNull(),
+  diaryDate: text("diary_date").notNull().unique(),
   content: text("content").notNull(),
-  mood: text("mood"),
-  weather: text("weather"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

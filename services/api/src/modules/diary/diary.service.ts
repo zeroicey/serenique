@@ -15,13 +15,21 @@ import { eq, sql } from "drizzle-orm";
 // Diary service — business logic and database operations.
 // ---------------------------------------------------------------------------
 
+/** Format a JS Date to YYYY-MM-DD. */
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Check that a date string is not in the future. */
+function isFutureDate(dateStr: string): boolean {
+  return dateStr > todayStr();
+}
+
 function toEntry(row: typeof diaries.$inferSelect): DiaryEntry {
   return {
     id: row.id,
-    title: row.title,
+    diaryDate: row.diaryDate,
     content: row.content,
-    mood: row.mood,
-    weather: row.weather,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -29,7 +37,26 @@ function toEntry(row: typeof diaries.$inferSelect): DiaryEntry {
 
 export const diaryService = {
   async create(input: CreateDiaryInput): Promise<DiaryEntry> {
-    const [row] = await db.insert(diaries).values(input).returning();
+    const diaryDate = input.diaryDate ?? todayStr();
+
+    // Reject future dates
+    if (isFutureDate(diaryDate)) {
+      throw new AppError(ErrorCode.VALIDATION, "不能创建未来日期的日记", 400);
+    }
+
+    // One entry per day
+    const [existing] = await db
+      .select({ id: diaries.id })
+      .from(diaries)
+      .where(eq(diaries.diaryDate, diaryDate));
+    if (existing) {
+      throw new AppError(ErrorCode.VALIDATION, `${diaryDate} 的日记已存在`, 409);
+    }
+
+    const [row] = await db
+      .insert(diaries)
+      .values({ diaryDate, content: input.content })
+      .returning();
     return toEntry(row);
   },
 

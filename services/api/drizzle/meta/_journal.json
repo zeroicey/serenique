@@ -8,6 +8,13 @@
       "when": 1785826786862,
       "tag": "0000_wakeful_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785866500000,
+      "tag": "0001_clean_diary_fields",
+      "breakpoints": true
     }
   ]
 }

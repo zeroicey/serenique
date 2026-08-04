@@ -4,11 +4,15 @@ import { z } from "zod";
 // Diary module — request/response types
 // ---------------------------------------------------------------------------
 
+/** YYYY-MM-DD date string validation. */
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
 export const CreateDiarySchema = z.object({
-  title: z.string().min(1).max(200),
   content: z.string().min(1),
-  mood: z.string().optional(),
-  weather: z.string().optional(),
+  diaryDate: z
+    .string()
+    .regex(dateRegex, "日期格式必须为 YYYY-MM-DD")
+    .optional(),
 });
 
 export const ListDiarySchema = z.object({
@@ -17,10 +21,7 @@ export const ListDiarySchema = z.object({
 });
 
 export const UpdateDiaryBodySchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  content: z.string().min(1).optional(),
-  mood: z.string().nullable().optional(),
-  weather: z.string().nullable().optional(),
+  content: z.string().min(1),
 });
 
 export type CreateDiaryInput = z.infer<typeof CreateDiarySchema>;
@@ -34,10 +35,8 @@ export type DeleteDiaryInput = { id: string };
 
 export type DiaryEntry = {
   id: string;
-  title: string;
+  diaryDate: string;
   content: string;
-  mood: string | null;
-  weather: string | null;
   createdAt: string;
   updatedAt: string;
 };
