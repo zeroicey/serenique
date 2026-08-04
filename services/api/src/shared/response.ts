@@ -3,7 +3,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 // ---------------------------------------------------------------------------
 // Unified API response — same shape for success and error.
-// Only `success`, `code`, `message` are always present.
+// Only `success` and `message` are always present.
 // `data` and `error` are omitted when undefined.
 //
 // Inspired by the serenique Java project's ApiResponse + ApiResponses pattern:
@@ -16,17 +16,14 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 class ResBuilder<T = never> {
   private _httpStatus: number;
-  private _code: string;
   private _data: T | undefined;
   private _error: unknown;
 
   constructor(
     private _success: boolean,
-    code: string,
     private _message: string,
     httpStatus: number,
   ) {
-    this._code = code;
     this._httpStatus = httpStatus;
     this._data = undefined;
     this._error = undefined;
@@ -44,12 +41,9 @@ class ResBuilder<T = never> {
     return this;
   }
 
-  /** Override HTTP status — the code is derived from the status. */
+  /** Override HTTP status. */
   status(httpStatus: number): this {
     this._httpStatus = httpStatus;
-    if (!this._success) {
-      this._code = statusToCode(httpStatus);
-    }
     return this;
   }
 
@@ -57,7 +51,6 @@ class ResBuilder<T = never> {
   build(c: Context): Response {
     const body: Record<string, unknown> = {
       success: this._success,
-      code: this._code,
       message: this._message,
     };
     if (this._data !== undefined) body.data = this._data;
@@ -67,78 +60,62 @@ class ResBuilder<T = never> {
   }
 }
 
-// ---- Status → code mapping -------------------------------------------------
-
-function statusToCode(status: number): string {
-  switch (status) {
-    case 400: return "BAD_REQUEST";
-    case 401: return "UNAUTHORIZED";
-    case 403: return "FORBIDDEN";
-    case 404: return "NOT_FOUND";
-    case 409: return "CONFLICT";
-    case 422: return "VALIDATION_FAILED";
-    case 429: return "TOO_MANY_REQUESTS";
-    default:
-      return status >= 500 ? "INTERNAL_ERROR" : "BAD_REQUEST";
-  }
-}
-
 // ---- Static factory --------------------------------------------------------
 
 export const Res = {
   /** Start a success builder. */
   success(msg: string): ResBuilder<never> {
-    return new ResBuilder(true, "SUCCESS", msg, 200);
+    return new ResBuilder(true, msg, 200);
   },
 
   /** Start an error builder. */
   error(msg: string): ResBuilder<never> {
-    return new ResBuilder(false, "BAD_REQUEST", msg, 400);
+    return new ResBuilder(false, msg, 400);
   },
 
   // -- Success shortcuts --
 
   ok<T>(msg: string, data: T) {
-    return new ResBuilder<T>(true, "SUCCESS", msg, 200).data(data);
+    return new ResBuilder<T>(true, msg, 200).data(data);
   },
 
   created<T>(msg: string, data: T) {
-    return new ResBuilder<T>(true, "SUCCESS", msg, 201).data(data);
+    return new ResBuilder<T>(true, msg, 201).data(data);
   },
 
   noContent(msg: string) {
-    return new ResBuilder(true, "SUCCESS", msg, 204);
+    return new ResBuilder(true, msg, 204);
   },
 
   // -- Error shortcuts --
 
   badRequest(msg: string) {
-    return new ResBuilder(false, "BAD_REQUEST", msg, 400);
+    return new ResBuilder(false, msg, 400);
   },
 
   validationFailed(msg: string, err?: unknown) {
-    const b = new ResBuilder(false, "VALIDATION_FAILED", msg, 400);
+    const b = new ResBuilder(false, msg, 400);
     if (err !== undefined) b.error(err);
     return b;
   },
 
   unauthorized(msg: string) {
-    return new ResBuilder(false, "UNAUTHORIZED", msg, 401);
+    return new ResBuilder(false, msg, 401);
   },
 
   forbidden(msg: string) {
-    return new ResBuilder(false, "FORBIDDEN", msg, 403);
+    return new ResBuilder(false, msg, 403);
   },
 
   notFound(msg: string) {
-    return new ResBuilder(false, "NOT_FOUND", msg, 404);
+    return new ResBuilder(false, msg, 404);
   },
 
   conflict(msg: string) {
-    return new ResBuilder(false, "CONFLICT", msg, 409);
+    return new ResBuilder(false, msg, 409);
   },
 
   internalError(msg = "Internal server error") {
-    return new ResBuilder(false, "INTERNAL_ERROR", msg, 500);
+    return new ResBuilder(false, msg, 500);
   },
 };
