@@ -49,6 +49,11 @@ class ResBuilder<T = never> {
 
   /** Build the Hono Response. Fields with undefined values are excluded from JSON. */
   build(c: Context): Response {
+    // 204 No Content must not carry a body or Content-Type (RFC 9110).
+    if (this._httpStatus === 204) {
+      return c.body(null, 204);
+    }
+
     const body: Record<string, unknown> = {
       success: this._success,
       message: this._message,

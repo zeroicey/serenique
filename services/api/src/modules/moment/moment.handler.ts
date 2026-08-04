@@ -35,6 +35,9 @@ function handleError(e: unknown, c: Context) {
   if (e instanceof ZodError) {
     return Res.validationFailed("参数校验失败", e.issues).build(c);
   }
+  if (e instanceof SyntaxError) {
+    return Res.badRequest("请求体必须是合法的 JSON").build(c);
+  }
   logger.error({ err: e }, "Unhandled error in moment handler");
   return Res.internalError().build(c);
 }
