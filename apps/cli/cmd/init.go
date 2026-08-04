@@ -20,15 +20,11 @@ var initCmd = &cobra.Command{
 也可以通过命令行参数直接设置：
   serenique init --baseurl http://localhost:3000 --token mytoken`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Loads the existing config (or defaults) so re-init can reuse values.
+		// The path is already pinned by PersistentPreRunE via --config/-c.
 		cfg, err := config.Load()
 		if err != nil {
 			return err
-		}
-
-		// Load existing config if available (for re-init)
-		existing, _ := config.Load()
-		if existing != nil {
-			cfg = existing
 		}
 
 		scanner := bufio.NewScanner(os.Stdin)

@@ -9,6 +9,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - BLOB_ROOT=/data/blobs
       - BLOB_MAX_SIZE=104857600
+      # Required for `blob link` (signed access links). Must be >= 32 chars.
+      - BLOB_SIGNING_SECRET=${BLOB_SIGNING_SECRET:-dev-only-signing-secret-change-me-0123456789abcdef}
       - NODE_ENV=production
     volumes:
       - blob-data:/data/blobs

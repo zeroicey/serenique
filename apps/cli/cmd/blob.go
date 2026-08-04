@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strconv"
 
 	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 )
 
 // Blob types matching the API response.
@@ -21,11 +23,6 @@ type BlobEntry struct {
 	Height       *int                   `json:"height"`
 	Duration     *float64               `json:"duration"`
 	CreatedAt    string                 `json:"createdAt"`
-}
-
-type BlobListResult struct {
-	Items []BlobEntry `json:"items"`
-	Total int         `json:"total"`
 }
 
 type BlobAttachmentEntry struct {
@@ -88,25 +85,25 @@ var blobListCmd = &cobra.Command{
 			query.Set("mimeType", blobListMimeType)
 		}
 
-		var result BlobListResult
-		if err := apiClient.Get(ctx, "/api/blobs", query, &result); err != nil {
+		items, total, err := client.List[BlobEntry](apiClient, ctx, "/api/blobs", query)
+		if err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {
-			printer.PrintSuccess("查询成功", result)
+			printer.PrintSuccess("查询成功", map[string]interface{}{"items": items, "total": total})
 			return nil
 		}
 
-		if result.Total == 0 {
+		if total == 0 {
 			printer.PrintMessage("暂无文件记录")
 			return nil
 		}
 
 		headers := []string{"ID", "文件名", "类型", "大小", "上传时间"}
-		rows := make([]map[string]string, len(result.Items))
-		for i, b := range result.Items {
+		rows := make([]map[string]string, len(items))
+		for i, b := range items {
 			rows[i] = map[string]string{
 				"ID":     b.ID[:8] + "...",
 				"文件名":   b.OriginalName,
@@ -117,7 +114,7 @@ var blobListCmd = &cobra.Command{
 		}
 
 		printer.PrintTable(headers, rows)
-		fmt.Printf("\n共 %d 条记录\n", result.Total)
+		fmt.Printf("\n共 %d 条记录\n", total)
 		return nil
 	},
 }
@@ -146,30 +143,64 @@ var blobUploadCmd = &cobra.Command{
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
+
+		// uploadResult describes one file's outcome. In JSON mode the whole
+		// batch is emitted as a single document so stdout stays valid JSON.
+		type uploadResult struct {
+			File   string `json:"file"`
+			BlobID string `json:"blobId,omitempty"`
+			Error  string `json:"error,omitempty"`
+		}
+
 		successCount := 0
 		failCount := 0
+		results := make([]uploadResult, 0, len(args))
+		var firstErr error
 
 		for _, filePath := range args {
-			fmt.Printf("上传中: %s ... ", filePath)
+			if !useJSON {
+				fmt.Printf("上传中: %s ... ", filePath)
+			}
 
 			var result BlobEntry
 			err := apiClient.UploadFile(ctx, "/api/blobs/upload", filePath, &result)
 			if err != nil {
 				failCount++
-				fmt.Printf("失败\n  %s\n", err.Error())
+				results = append(results, uploadResult{File: filePath, Error: err.Error()})
+				if !useJSON {
+					fmt.Printf("失败\n  %s\n", err.Error())
+				} else {
+					printer.PrintError(err.Error())
+				}
+				if firstErr == nil {
+					firstErr = err
+				}
 				continue
 			}
+
 			successCount++
-			fmt.Printf("✓\n")
+			results = append(results, uploadResult{File: filePath, BlobID: result.ID})
 			if !useJSON {
+				fmt.Printf("✓\n")
 				fmt.Printf("  ID: %s, 大小: %s, 类型: %s\n", result.ID, formatSize(result.Size), result.MimeType)
-			} else {
-				printer.PrintSuccess("上传成功", result)
 			}
 		}
 
-		if !useJSON {
-			fmt.Printf("\n上传完成: %d 成功, %d 失败\n", successCount, failCount)
+		if useJSON {
+			printer.PrintSuccess("上传结果", map[string]interface{}{
+				"success": successCount,
+				"failed":  failCount,
+				"results": results,
+			})
+			if firstErr != nil {
+				return firstErr
+			}
+			return nil
+		}
+
+		fmt.Printf("\n上传完成: %d 成功, %d 失败\n", successCount, failCount)
+		if firstErr != nil {
+			return firstErr
 		}
 		return nil
 	},
@@ -193,7 +224,7 @@ var blobInfoCmd = &cobra.Command{
 		var result BlobEntry
 		if err := apiClient.Get(ctx, "/api/blobs/"+args[0], nil, &result); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {
@@ -242,16 +273,25 @@ var blobDownloadCmd = &cobra.Command{
 		if outputPath == "" {
 			if err := apiClient.Get(ctx, "/api/blobs/"+blobID, nil, &info); err != nil {
 				printer.PrintError(err.Error())
-				return nil
+				return err
 			}
-			outputPath = info.OriginalName
+			// The original name is server-controlled; never pass it straight to
+			// os.Create — strip any directory components so a malicious
+			// originalName cannot overwrite files outside the working directory.
+			outputPath = filepath.Base(info.OriginalName)
+			if outputPath == "" || outputPath == "." || outputPath == string(filepath.Separator) {
+				printer.PrintError(fmt.Sprintf("无法从文件名 %q 推导出安全的保存路径，请使用 --output 指定", info.OriginalName))
+				return fmt.Errorf("原始文件名不安全")
+			}
 		}
 
-		fmt.Printf("下载中: %s -> %s ...\n", blobID, outputPath)
+		if !useJSON {
+			fmt.Printf("下载中: %s -> %s ...\n", blobID, outputPath)
+		}
 
 		if err := apiClient.DownloadFile(ctx, blobID, outputPath, blobDownloadForce); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		printer.PrintSuccess(fmt.Sprintf("文件已保存到 %s", outputPath), nil)
@@ -285,7 +325,7 @@ var blobLinkCmd = &cobra.Command{
 		var result BlobAccessLinkEntry
 		if err := apiClient.Post(ctx, "/api/blobs/"+args[0]+"/access-link", body, &result); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {
@@ -333,7 +373,7 @@ var blobDeleteCmd = &cobra.Command{
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/blobs/"+args[0]); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		printer.PrintMessage("✓ 文件已删除")
@@ -357,14 +397,21 @@ var blobAttachCmd = &cobra.Command{
   serenique blob attach a1b2c3d4 --owner-type diary --owner-id b2c3d4e5 --role cover --display-name "封面图"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// The API reserves the "moment" owner type for the moment module.
+		if blobAttachOwnerType == "moment" {
+			err := fmt.Errorf("owner-type 为 moment 时，请使用 `serenique moment attach <moment-id> --blob-id %s`", args[0])
+			printer.PrintError(err.Error())
+			return err
+		}
+
 		ctx := context.Background()
 
 		body := map[string]interface{}{
-			"ownerType":  blobAttachOwnerType,
-			"ownerId":    blobAttachOwnerID,
-			"role":       blobAttachRole,
-			"sortOrder":  blobAttachSortOrder,
-			"metadata":   map[string]interface{}{},
+			"ownerType": blobAttachOwnerType,
+			"ownerId":   blobAttachOwnerID,
+			"role":      blobAttachRole,
+			"sortOrder": blobAttachSortOrder,
+			"metadata":  map[string]interface{}{},
 		}
 		if blobAttachDisplayName != "" {
 			body["displayName"] = blobAttachDisplayName
@@ -373,10 +420,27 @@ var blobAttachCmd = &cobra.Command{
 		var result BlobAttachmentEntry
 		if err := apiClient.Post(ctx, "/api/blobs/"+args[0]+"/attachments", body, &result); err != nil {
 			printer.PrintError(err.Error())
+			return err
+		}
+
+		if useJSON {
+			printer.PrintSuccess("关联成功", result)
 			return nil
 		}
 
-		printer.PrintSuccess("关联成功", result)
+		printer.PrintSuccess("关联成功", nil)
+		fmt.Println()
+		dn := "-"
+		if result.DisplayName != nil {
+			dn = *result.DisplayName
+		}
+		printer.PrintKeyValue(map[string]string{
+			"ID":     result.ID,
+			"所属类型":   result.OwnerType,
+			"所属ID":   result.OwnerID,
+			"角色":     result.Role,
+			"显示名称":   dn,
+		})
 		return nil
 	},
 }
@@ -407,7 +471,7 @@ var blobAttachmentsCmd = &cobra.Command{
 		var result []BlobAttachmentEntry
 		if err := apiClient.Get(ctx, "/api/blobs/"+args[0]+"/attachments", nil, &result); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {
@@ -468,7 +532,7 @@ var blobDetachCmd = &cobra.Command{
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/blob-attachments/"+args[0]); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		printer.PrintMessage("✓ 业务关联已删除")
@@ -508,7 +572,7 @@ var blobCleanupCmd = &cobra.Command{
 		var result BlobCleanupResult
 		if err := apiClient.Post(ctx, "/api/blobs/cleanup-orphans", nil, &result); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {

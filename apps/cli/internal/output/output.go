@@ -16,9 +16,17 @@ package output
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"sort"
 	"strings"
-	"text/tabwriter"
+)
+
+// stdout and stderr are the output streams. They are package vars so tests can
+// capture them; commands never write directly to the terminal.
+var (
+	stdout io.Writer = os.Stdout
+	stderr io.Writer = os.Stderr
 )
 
 // Printer is the output interface. Commands use this to render results
@@ -56,61 +64,116 @@ type TablePrinter struct{}
 
 func (p *TablePrinter) PrintTable(headers []string, rows []map[string]string) {
 	if len(rows) == 0 {
-		fmt.Println("(无数据)")
+		fmt.Fprintln(stdout, "(无数据)")
 		return
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	// Compute the display width of each column across header and rows so CJK
+	// characters (which render at double width) align correctly.
+	widths := make([]int, len(headers))
+	for i, h := range headers {
+		widths[i] = displayWidth(h)
+	}
+	for _, row := range rows {
+		for i, h := range headers {
+			if w := displayWidth(row[h]); w > widths[i] {
+				widths[i] = w
+			}
+		}
+	}
 
-	// Header
-	fmt.Fprintln(w, strings.Join(headers, "\t"))
+	padding := "  "
+	printLine := func(cells []string) {
+		parts := make([]string, len(cells))
+		for i, cell := range cells {
+			parts[i] = cell + strings.Repeat(" ", widths[i]-displayWidth(cell))
+		}
+		fmt.Fprintln(stdout, strings.Join(parts, padding))
+	}
 
-	// Separator
+	printLine(headers)
+
 	sep := make([]string, len(headers))
 	for i := range sep {
-		sep[i] = strings.Repeat("-", len(headers[i])+4)
+		sep[i] = strings.Repeat("-", widths[i]+2)
 	}
-	fmt.Fprintln(w, strings.Join(sep, "\t"))
+	fmt.Fprintln(stdout, strings.Join(sep, padding))
 
-	// Rows
 	for _, row := range rows {
-		cols := make([]string, len(headers))
+		cells := make([]string, len(headers))
 		for i, h := range headers {
-			cols[i] = row[h]
+			cells[i] = row[h]
 		}
-		fmt.Fprintln(w, strings.Join(cols, "\t"))
+		printLine(cells)
 	}
-
-	w.Flush()
 }
 
 func (p *TablePrinter) PrintKeyValue(data map[string]string) {
-	maxKeyLen := 0
+	keys := make([]string, 0, len(data))
 	for k := range data {
-		if len(k) > maxKeyLen {
-			maxKeyLen = len(k)
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	maxKeyLen := 0
+	for _, k := range keys {
+		if w := displayWidth(k); w > maxKeyLen {
+			maxKeyLen = w
 		}
 	}
 
-	for k, v := range data {
-		fmt.Printf("%-*s  %s\n", maxKeyLen, k+":", v)
+	for _, k := range keys {
+		pad := maxKeyLen - displayWidth(k)
+		fmt.Fprintf(stdout, "%s:%s  %s\n", k, strings.Repeat(" ", pad), data[k])
 	}
 }
 
 func (p *TablePrinter) PrintSuccess(message string, data interface{}) {
-	fmt.Printf("✓ %s\n", message)
+	fmt.Fprintf(stdout, "✓ %s\n", message)
 	if data != nil {
 		b, _ := json.MarshalIndent(data, "", "  ")
-		fmt.Println(string(b))
+		fmt.Fprintln(stdout, string(b))
 	}
 }
 
 func (p *TablePrinter) PrintError(message string) {
-	fmt.Fprintf(os.Stderr, "✗ 错误: %s\n", message)
+	fmt.Fprintf(stderr, "✗ 错误: %s\n", message)
 }
 
 func (p *TablePrinter) PrintMessage(message string) {
-	fmt.Println(message)
+	fmt.Fprintln(stdout, message)
+}
+
+// displayWidth returns the on-screen width of a string, counting East Asian
+// wide characters as 2 columns so CJK content aligns in tables and key/value
+// output. ASCII and Latin-1 count as 1 column.
+func displayWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		w += runeWidth(r)
+	}
+	return w
+}
+
+func runeWidth(r rune) int {
+	switch {
+	case r >= 0x1100 && r <= 0x115F, // Hangul Jamo
+		r >= 0x2E80 && r <= 0x303E, // CJK Radicals, Kangxi, CJK Symbols/Punct
+		r >= 0x3041 && r <= 0x33FF, // Hiragana, Katakana, CJK Compatibility
+		r >= 0x3400 && r <= 0x4DBF, // CJK Unified Ideographs Extension A
+		r >= 0x4E00 && r <= 0x9FFF, // CJK Unified Ideographs
+		r >= 0xA000 && r <= 0xA4CF, // Yi Syllables
+		r >= 0xAC00 && r <= 0xD7A3, // Hangul Syllables
+		r >= 0xF900 && r <= 0xFAFF, // CJK Compatibility Ideographs
+		r >= 0xFE30 && r <= 0xFE4F, // CJK Compatibility Forms
+		r >= 0xFF00 && r <= 0xFF60, // Fullwidth Forms
+		r >= 0xFFE0 && r <= 0xFFE6, // Fullwidth Signs
+		r >= 0x1F300 && r <= 0x1F64F, // Emoji
+		r >= 0x20000 && r <= 0x2FFFD: // CJK Unified Ideographs Extension B+
+		return 2
+	default:
+		return 1
+	}
 }
 
 // =============================================================================
@@ -151,7 +214,7 @@ func (p *JSONPrinter) PrintError(message string) {
 		Error string `json:"error"`
 	}
 	b, _ := json.MarshalIndent(errorOutput{Error: message}, "", "  ")
-	fmt.Fprintln(os.Stderr, string(b))
+	fmt.Fprintln(stderr, string(b))
 }
 
 func (p *JSONPrinter) PrintMessage(message string) {
@@ -161,8 +224,8 @@ func (p *JSONPrinter) PrintMessage(message string) {
 func (p *JSONPrinter) print(v interface{}) {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, `{"error": "JSON序列化失败: %s"}`, err.Error())
+		fmt.Fprintf(stderr, `{"error": "JSON序列化失败: %s"}`, err.Error())
 		return
 	}
-	fmt.Println(string(b))
+	fmt.Fprintln(stdout, string(b))
 }

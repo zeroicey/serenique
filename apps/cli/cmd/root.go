@@ -6,6 +6,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -29,6 +30,36 @@ var (
 	flagConfig  string
 )
 
+// Build-time version metadata, injected via -X main.version etc. (see Makefile).
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = ""
+)
+
+// SetVersion wires the ldflags-injected build metadata into the root command
+// so `serenique --version` reports it. Called from main before Execute.
+func SetVersion(v, c, d string) {
+	if v != "" {
+		version = v
+	}
+	if c != "" {
+		commit = c
+	}
+	if d != "" {
+		date = d
+	}
+
+	display := version
+	if commit != "" && commit != "unknown" {
+		display = fmt.Sprintf("%s (commit %s)", display, commit)
+	}
+	if date != "" {
+		display = fmt.Sprintf("%s, built %s", display, date)
+	}
+	rootCmd.Version = display
+}
+
 // rootCmd is the base command.
 var rootCmd = &cobra.Command{
 	Use:   "serenique",
@@ -41,9 +72,18 @@ var rootCmd = &cobra.Command{
   - 上传和管理文件（上传、下载、关联到业务实体）
 
 使用 "serenique [command] --help" 查看各命令的详细用法。`,
+	// Errors are already printed by the command handlers (printer.PrintError)
+	// or are self-explanatory; do not dump usage text on top of them.
+	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip config loading for init command — it creates the config
-		if cmd.Name() == "init" || (cmd.Parent() != nil && cmd.Parent().Name() == "init") {
+		// Honor --config/-c before loading config. This runs for every command
+		// (including init) so `serenique init --config ...` writes to the target.
+		if flagConfig != "" {
+			config.SetPath(flagConfig)
+		}
+
+		// init creates the config itself — skip loading for it.
+		if cmd.Name() == "init" {
 			return nil
 		}
 

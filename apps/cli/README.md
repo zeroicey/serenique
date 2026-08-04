@@ -96,6 +96,7 @@ serenique blob download <文件ID>
 | `--token` | `-t` | 认证令牌（覆盖配置文件） |
 | `--json` | `-j` | JSON 格式输出（适合 AI 和脚本消费） |
 | `--config` | `-c` | 配置文件路径（默认 `~/.serenique/config.yaml`） |
+| `--version` | | 显示版本信息（由 Makefile 构建元数据注入） |
 
 ### 配置管理
 
@@ -137,11 +138,17 @@ serenique moment list
 serenique moment list --page 1 --page-size 20
 
 # 创建闪念（最长 500 字）
-serenique moment create -m "记录一个灵感..."
+serenique moment create --text "记录一个灵感..."
+serenique moment create -m "记录一个灵感"
 
 # 删除闪念
 serenique moment delete <闪念ID>
 serenique moment delete <闪念ID> --force
+
+# 为闪念关联附件
+serenique moment attach <闪念ID> --blob-id <文件ID> --role cover --display-name "配图"
+serenique moment detach <闪念ID> <附件关联ID>
+serenique moment detach <闪念ID> <附件关联ID> --force
 ```
 
 ### 文件管理
@@ -242,12 +249,35 @@ baseurl: http://localhost:3000
 token: ""
 ```
 
+可通过 `--config` / `-c` 全局选项指定其他配置文件路径，也可以通过
+`SERENIQUE_CONFIG_DIR` 环境变量指定配置目录（该目录下的 `config.yaml` 会被使用）：
+
+```sh
+serenique --config /path/to/myconfig.yaml diary list
+export SERENIQUE_CONFIG_DIR=/path/to/config-dir
+serenique diary list
+```
+
 配置优先级（从高到低）：
 
 1. 命令行选项 `--baseurl` / `--token`
 2. 环境变量 `SERENIQUE_BASEURL` / `SERENIQUE_TOKEN`
-3. 配置文件 `~/.serenique/config.yaml`
+3. 配置文件 `~/.serenique/config.yaml`（或用 `--config` / `SERENIQUE_CONFIG_DIR` 指定）
 4. 默认值（baseurl: `http://localhost:3000`, token: `""`）
+
+配置文件以 `0600` 权限写入（含 token 时不会对同机其他用户可见）。
+
+## 脚本与 AI 使用
+
+- `--json` / `-j` 模式下，stdout 只会输出一段可解析的 JSON，进度与错误信息写入 stderr。
+- 所有命令在 API 或参数出错时都以非零退出码结束（成功为 0），可在脚本中通过
+  `$?` 或 `&&` 判断成败。
+
+## 临时访问链接（blob link）
+
+`serenique blob link` 依赖后端 `BLOB_SIGNING_SECRET` 环境变量（至少 32 个字符）。
+未配置时该命令会报错。请确保部署的 API 已配置该变量（`services/api/.env` 与
+`docker-compose.yml` 中均提供了开发默认值）。
 
 ## 项目结构
 
@@ -272,7 +302,7 @@ apps/cli/
 
 ## 技术栈
 
-- **语言**: Go 1.22+
+- **语言**: Go 1.26.3+（见 `go.mod`）
 - **CLI 框架**: [cobra](https://github.com/spf13/cobra) — Kubernetes、GitHub CLI 同款
 - **配置解析**: [yaml.v3](https://gopkg.in/yaml.v3)
 - **依赖数量**: 极少（4 个依赖），编译快、二进制小

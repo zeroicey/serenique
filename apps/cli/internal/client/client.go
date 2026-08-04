@@ -37,12 +37,6 @@ type APIResponse struct {
 	Error   json.RawMessage `json:"error,omitempty"`
 }
 
-// ListResult is the paginated list response shape.
-type ListResult struct {
-	Items json.RawMessage `json:"items"`
-	Total int             `json:"total"`
-}
-
 // APIError wraps an error returned by the API.
 type APIError struct {
 	Message    string
@@ -140,6 +134,20 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 	return c.do(req, nil)
 }
 
+// List sends a GET request to a paginated endpoint and unpacks the
+// {items, total} envelope. The query values are passed through unchanged
+// (callers set page/pageSize themselves).
+func List[T any](c *Client, ctx context.Context, path string, query url.Values) ([]T, int, error) {
+	var result struct {
+		Items []T `json:"items"`
+		Total int  `json:"total"`
+	}
+	if err := c.Get(ctx, path, query, &result); err != nil {
+		return nil, 0, err
+	}
+	return result.Items, result.Total, nil
+}
+
 // =============================================================================
 // File upload
 // =============================================================================
@@ -228,11 +236,17 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 	if err != nil {
 		return fmt.Errorf("无法创建输出文件 %s: %w", outputPath, err)
 	}
-	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
+		out.Close()
+		os.Remove(outputPath) // don't leave a partial download behind
 		return fmt.Errorf("写入文件失败: %w", err)
+	}
+
+	if err := out.Close(); err != nil {
+		os.Remove(outputPath)
+		return fmt.Errorf("关闭文件失败: %w", err)
 	}
 
 	return nil

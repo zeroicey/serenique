@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 )
 
 // Diary types matching the API response.
@@ -16,11 +17,6 @@ type DiaryEntry struct {
 	Content   string `json:"content"`
 	CreatedAt string `json:"createdAt"`
 	UpdatedAt string `json:"updatedAt"`
-}
-
-type DiaryListResult struct {
-	Items []DiaryEntry `json:"items"`
-	Total int          `json:"total"`
 }
 
 // diaryCmd is the parent diary command.
@@ -46,25 +42,25 @@ var diaryListCmd = &cobra.Command{
 		query.Set("page", strconv.Itoa(diaryListPage))
 		query.Set("pageSize", strconv.Itoa(diaryListPageSize))
 
-		var result DiaryListResult
-		if err := apiClient.Get(ctx, "/api/diaries", query, &result); err != nil {
+		items, total, err := client.List[DiaryEntry](apiClient, ctx, "/api/diaries", query)
+		if err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {
-			printer.PrintSuccess("查询成功", result)
+			printer.PrintSuccess("查询成功", map[string]interface{}{"items": items, "total": total})
 			return nil
 		}
 
-		if result.Total == 0 {
+		if total == 0 {
 			printer.PrintMessage("暂无日记记录")
 			return nil
 		}
 
 		headers := []string{"ID", "日期", "内容预览", "创建时间"}
-		rows := make([]map[string]string, len(result.Items))
-		for i, d := range result.Items {
+		rows := make([]map[string]string, len(items))
+		for i, d := range items {
 			preview := d.Content
 			if len(preview) > 40 {
 				preview = preview[:40] + "..."
@@ -78,7 +74,7 @@ var diaryListCmd = &cobra.Command{
 		}
 
 		printer.PrintTable(headers, rows)
-		fmt.Printf("\n共 %d 条记录\n", result.Total)
+		fmt.Printf("\n共 %d 条记录\n", total)
 		return nil
 	},
 }
@@ -109,7 +105,7 @@ var diaryCreateCmd = &cobra.Command{
 		var result DiaryEntry
 		if err := apiClient.Post(ctx, "/api/diaries", body, &result); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {
@@ -149,7 +145,7 @@ var diaryGetCmd = &cobra.Command{
 		var result DiaryEntry
 		if err := apiClient.Get(ctx, "/api/diaries/"+args[0], nil, &result); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		if useJSON {
@@ -185,7 +181,7 @@ var diaryUpdateCmd = &cobra.Command{
 		var result DiaryEntry
 		if err := apiClient.Put(ctx, "/api/diaries/"+args[0], body, &result); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		printer.PrintSuccess("日记更新成功", result)
@@ -219,7 +215,7 @@ var diaryDeleteCmd = &cobra.Command{
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/diaries/"+args[0]); err != nil {
 			printer.PrintError(err.Error())
-			return nil
+			return err
 		}
 
 		printer.PrintMessage("✓ 日记已删除")
