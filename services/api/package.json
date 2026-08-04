@@ -1,5 +1,5 @@
 {
-  "name": "api",
+  "name": "serenique-api",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
     "start": "bun run --hot src/index.ts",
