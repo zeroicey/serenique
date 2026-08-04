@@ -12,9 +12,11 @@ import (
 
 // Moment types matching the API response.
 type MomentEntry struct {
-	ID        string `json:"id"`
-	Text      string `json:"text"`
-	CreatedAt string `json:"createdAt"`
+	ID          string                   `json:"id"`
+	Text        string                   `json:"text"`
+	CreatedAt   string                   `json:"createdAt"`
+	UpdatedAt   string                   `json:"updatedAt"`
+	Attachments []MomentAttachmentEntry  `json:"attachments"`
 }
 
 // MomentAttachmentEntry matches the API's moment attachment record.
@@ -53,12 +55,11 @@ var momentListCmd = &cobra.Command{
 
 		items, total, err := client.List[MomentEntry](apiClient, ctx, "/api/moments", query)
 		if err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
 		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]interface{}{"items": items, "total": total})
+			printer.PrintSuccess("查询成功", map[string]any{"items": items, "total": total})
 			return nil
 		}
 
@@ -70,10 +71,7 @@ var momentListCmd = &cobra.Command{
 		headers := []string{"ID", "内容", "创建时间"}
 		rows := make([]map[string]string, len(items))
 		for i, m := range items {
-			preview := m.Text
-			if len(preview) > 50 {
-				preview = preview[:50] + "..."
-			}
+			preview := truncateRunes(m.Text, 50)
 			rows[i] = map[string]string{
 				"ID":   m.ID[:8] + "...",
 				"内容":   preview,
@@ -108,7 +106,6 @@ var momentCreateCmd = &cobra.Command{
 
 		var result MomentEntry
 		if err := apiClient.Post(ctx, "/api/moments", body, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -130,6 +127,59 @@ var momentCreateCmd = &cobra.Command{
 
 var momentCreateText string
 
+// moment get
+var momentGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "查看闪念详情",
+	Long: `根据 ID 查看闪念的完整内容及其附件列表。
+
+示例:
+  serenique moment get a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var result MomentEntry
+		if err := apiClient.Get(ctx, "/api/moments/"+args[0], nil, &result); err != nil {
+			return err
+		}
+
+		if useJSON {
+			printer.PrintSuccess("查询成功", result)
+			return nil
+		}
+
+		printer.PrintKeyValue(map[string]string{
+			"ID":   result.ID,
+			"内容":   result.Text,
+			"创建时间": result.CreatedAt,
+			"更新时间": result.UpdatedAt,
+		})
+
+		if len(result.Attachments) > 0 {
+			fmt.Println()
+			printer.PrintMessage("附件:")
+			headers := []string{"ID", "文件 ID", "角色", "显示名称", "排序"}
+			rows := make([]map[string]string, len(result.Attachments))
+			for i, a := range result.Attachments {
+				dn := "-"
+				if a.DisplayName != nil {
+					dn = *a.DisplayName
+				}
+				rows[i] = map[string]string{
+					"ID":     a.ID[:8] + "...",
+					"文件 ID": a.BlobID[:8] + "...",
+					"角色":    a.Role,
+					"显示名称":  dn,
+					"排序":    strconv.Itoa(a.SortOrder),
+				}
+			}
+			printer.PrintTable(headers, rows)
+		}
+		return nil
+	},
+}
+
 // moment delete
 var momentDeleteCmd = &cobra.Command{
 	Use:   "delete <id>",
@@ -141,19 +191,12 @@ var momentDeleteCmd = &cobra.Command{
   serenique moment delete a1b2c3d4 --force`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !momentDeleteForce {
-			fmt.Printf("确认删除闪念 %s？(y/N): ", args[0])
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				printer.PrintMessage("已取消")
-				return nil
-			}
+		if err := confirm("确认删除闪念 "+args[0], momentDeleteForce); err != nil {
+			return err
 		}
 
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/moments/"+args[0]); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -177,11 +220,16 @@ var momentAttachCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
 
-		body := map[string]interface{}{
-			"blobId":    momentAttachBlobID,
-			"role":      momentAttachRole,
-			"sortOrder": momentAttachSortOrder,
-			"metadata":  map[string]interface{}{},
+		// The server auto-increments sortOrder to preserve insertion order when
+		// it is omitted. Only send it when the user explicitly passed
+		// --sort-order, otherwise every attach pins to order 0.
+		body := map[string]any{
+			"blobId":   momentAttachBlobID,
+			"role":     momentAttachRole,
+			"metadata": map[string]any{},
+		}
+		if cmd.Flags().Changed("sort-order") {
+			body["sortOrder"] = momentAttachSortOrder
 		}
 		if momentAttachDisplayName != "" {
 			body["displayName"] = momentAttachDisplayName
@@ -189,7 +237,6 @@ var momentAttachCmd = &cobra.Command{
 
 		var result MomentAttachmentEntry
 		if err := apiClient.Post(ctx, "/api/moments/"+args[0]+"/attachments", body, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -232,19 +279,12 @@ var momentDetachCmd = &cobra.Command{
   serenique moment detach a1b2c3d4 e5f6a1b2 --force`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !momentDetachForce {
-			fmt.Printf("确认删除闪念附件 %s？(y/N): ", args[1])
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				printer.PrintMessage("已取消")
-				return nil
-			}
+		if err := confirm("确认删除闪念附件 "+args[1], momentDetachForce); err != nil {
+			return err
 		}
 
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/moments/"+args[0]+"/attachments/"+args[1]); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -279,6 +319,7 @@ func init() {
 
 	momentCmd.AddCommand(momentListCmd)
 	momentCmd.AddCommand(momentCreateCmd)
+	momentCmd.AddCommand(momentGetCmd)
 	momentCmd.AddCommand(momentDeleteCmd)
 	momentCmd.AddCommand(momentAttachCmd)
 	momentCmd.AddCommand(momentDetachCmd)

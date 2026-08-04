@@ -44,12 +44,11 @@ var diaryListCmd = &cobra.Command{
 
 		items, total, err := client.List[DiaryEntry](apiClient, ctx, "/api/diaries", query)
 		if err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
 		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]interface{}{"items": items, "total": total})
+			printer.PrintSuccess("查询成功", map[string]any{"items": items, "total": total})
 			return nil
 		}
 
@@ -61,10 +60,7 @@ var diaryListCmd = &cobra.Command{
 		headers := []string{"ID", "日期", "内容预览", "创建时间"}
 		rows := make([]map[string]string, len(items))
 		for i, d := range items {
-			preview := d.Content
-			if len(preview) > 40 {
-				preview = preview[:40] + "..."
-			}
+			preview := truncateRunes(d.Content, 40)
 			rows[i] = map[string]string{
 				"ID":     d.ID[:8] + "...",
 				"日期":     d.DiaryDate,
@@ -104,7 +100,6 @@ var diaryCreateCmd = &cobra.Command{
 
 		var result DiaryEntry
 		if err := apiClient.Post(ctx, "/api/diaries", body, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -144,7 +139,6 @@ var diaryGetCmd = &cobra.Command{
 
 		var result DiaryEntry
 		if err := apiClient.Get(ctx, "/api/diaries/"+args[0], nil, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -180,11 +174,22 @@ var diaryUpdateCmd = &cobra.Command{
 
 		var result DiaryEntry
 		if err := apiClient.Put(ctx, "/api/diaries/"+args[0], body, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
-		printer.PrintSuccess("日记更新成功", result)
+		if useJSON {
+			printer.PrintSuccess("日记更新成功", result)
+			return nil
+		}
+
+		printer.PrintSuccess("日记更新成功", nil)
+		fmt.Println()
+		printer.PrintKeyValue(map[string]string{
+			"ID":   result.ID,
+			"日期":   result.DiaryDate,
+			"内容":   result.Content,
+			"创建时间": result.CreatedAt,
+		})
 		return nil
 	},
 }
@@ -202,19 +207,12 @@ var diaryDeleteCmd = &cobra.Command{
   serenique diary delete a1b2c3d4 --force`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !diaryDeleteForce {
-			fmt.Printf("确认删除日记 %s？(y/N): ", args[0])
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				printer.PrintMessage("已取消")
-				return nil
-			}
+		if err := confirm("确认删除日记 "+args[0], diaryDeleteForce); err != nil {
+			return err
 		}
 
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/diaries/"+args[0]); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 

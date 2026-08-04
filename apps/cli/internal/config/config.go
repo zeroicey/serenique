@@ -60,15 +60,6 @@ func Path() (string, error) {
 	return filepath.Join(home, ".serenique", "config.yaml"), nil
 }
 
-// ConfigDir returns the directory containing the config file.
-func ConfigDir() (string, error) {
-	configPath, err := Path()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Dir(configPath), nil
-}
-
 // Load reads the config from disk. Returns the default config if the file
 // does not exist.
 func Load() (*Config, error) {
@@ -92,7 +83,11 @@ func Load() (*Config, error) {
 
 	// Tighten permissions on a pre-existing file so a stored token is never
 	// left world-readable (best effort — do not fail the load on chmod errors).
-	_ = os.Chmod(configPath, 0o600)
+	// Skip symlinks: os.Chmod would follow the link and alter the permissions of
+	// an arbitrary target the user did not intend to touch.
+	if fi, err := os.Lstat(configPath); err == nil && fi.Mode()&os.ModeSymlink == 0 {
+		_ = os.Chmod(configPath, 0o600)
+	}
 
 	return cfg, nil
 }

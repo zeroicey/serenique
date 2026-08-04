@@ -29,11 +29,12 @@ var initCmd = &cobra.Command{
 
 		scanner := bufio.NewScanner(os.Stdin)
 
-		// BaseURL
+		// Prompts are written to stderr so stdout stays a clean channel (and a
+		// single parseable JSON document in --json mode).
 		if flagBaseURL != "" {
 			cfg.BaseURL = flagBaseURL
 		} else {
-			fmt.Printf("API 服务地址 [%s]: ", cfg.BaseURL)
+			fmt.Fprintf(os.Stderr, "API 服务地址 [%s]: ", cfg.BaseURL)
 			if scanner.Scan() {
 				input := strings.TrimSpace(scanner.Text())
 				if input != "" {
@@ -42,11 +43,10 @@ var initCmd = &cobra.Command{
 			}
 		}
 
-		// Token
 		if flagToken != "" {
 			cfg.Token = flagToken
 		} else {
-			fmt.Printf("认证令牌 (可选，直接回车跳过) [%s]: ", maskToken(cfg.Token))
+			fmt.Fprintf(os.Stderr, "认证令牌 (可选，直接回车跳过) [%s]: ", maskToken(cfg.Token))
 			if scanner.Scan() {
 				input := strings.TrimSpace(scanner.Text())
 				if input != "" {
@@ -60,6 +60,15 @@ var initCmd = &cobra.Command{
 		}
 
 		configPath, _ := config.Path()
+		if useJSON {
+			printer.PrintSuccess("配置已保存", map[string]any{
+				"configPath": configPath,
+				"baseurl":    cfg.BaseURL,
+				"token":      cfg.Token,
+			})
+			return nil
+		}
+
 		fmt.Printf("\n✓ 配置已保存到 %s\n", configPath)
 		fmt.Printf("  baseurl: %s\n", cfg.BaseURL)
 		if cfg.Token != "" {
@@ -80,9 +89,4 @@ func maskToken(token string) string {
 		return strings.Repeat("*", len(token))
 	}
 	return token[:4] + strings.Repeat("*", len(token)-8) + token[len(token)-4:]
-}
-
-func init() {
-	initCmd.Flags().StringVar(&flagBaseURL, "baseurl", "", "API 服务地址")
-	initCmd.Flags().StringVar(&flagToken, "token", "", "认证令牌")
 }

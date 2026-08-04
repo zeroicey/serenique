@@ -168,3 +168,58 @@ func TestDownloadFileMapsAPIError(t *testing.T) {
 		t.Fatalf("Message = %q, want %q", apiErr.Message, "文件不存在")
 	}
 }
+
+func TestDoTreatsNonEnvelope500AsError(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	})
+
+	err := c.Get(context.Background(), "/api/diaries/x", nil, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.HTTPStatus != 500 {
+		t.Fatalf("HTTPStatus = %d, want 500", apiErr.HTTPStatus)
+	}
+	if !strings.Contains(apiErr.Message, "Internal Server Error") {
+		t.Fatalf("message should surface the raw body, got %q", apiErr.Message)
+	}
+}
+
+func TestDoTreats500SuccessEnvelopeAsError(t *testing.T) {
+	// A hypothetical HTTP 500 envelope with success:true must still be an error;
+	// the HTTP status alone decides.
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"success":true,"message":"boom","data":{}}`))
+	})
+
+	err := c.Get(context.Background(), "/api/x", nil, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.HTTPStatus != 500 {
+		t.Fatalf("HTTPStatus = %d, want 500", apiErr.HTTPStatus)
+	}
+}
+
+func TestDoTreats2xxSuccessFalseEnvelopeAsError(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"success":false,"message":"nope"}`))
+	})
+
+	err := c.Get(context.Background(), "/api/x", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for success:false envelope")
+	}
+}

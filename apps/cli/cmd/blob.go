@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -13,29 +14,29 @@ import (
 
 // Blob types matching the API response.
 type BlobEntry struct {
-	ID           string                 `json:"id"`
-	OriginalName string                 `json:"originalName"`
-	MimeType     string                 `json:"mimeType"`
-	Size         int64                  `json:"size"`
-	Checksum     string                 `json:"checksum"`
-	Metadata     map[string]interface{} `json:"metadata"`
-	Width        *int                   `json:"width"`
-	Height       *int                   `json:"height"`
-	Duration     *float64               `json:"duration"`
-	CreatedAt    string                 `json:"createdAt"`
+	ID           string         `json:"id"`
+	OriginalName string         `json:"originalName"`
+	MimeType     string         `json:"mimeType"`
+	Size         int64          `json:"size"`
+	Checksum     string         `json:"checksum"`
+	Metadata     map[string]any `json:"metadata"`
+	Width        *int           `json:"width"`
+	Height       *int           `json:"height"`
+	Duration     *float64       `json:"duration"`
+	CreatedAt    string         `json:"createdAt"`
 }
 
 type BlobAttachmentEntry struct {
-	ID          string                 `json:"id"`
-	BlobID      string                 `json:"blobId"`
-	OwnerType   string                 `json:"ownerType"`
-	OwnerID     string                 `json:"ownerId"`
-	Role        string                 `json:"role"`
-	DisplayName *string                `json:"displayName"`
-	SortOrder   int                    `json:"sortOrder"`
-	Metadata    map[string]interface{} `json:"metadata"`
-	CreatedAt   string                 `json:"createdAt"`
-	UpdatedAt   string                 `json:"updatedAt"`
+	ID          string         `json:"id"`
+	BlobID      string         `json:"blobId"`
+	OwnerType   string         `json:"ownerType"`
+	OwnerID     string         `json:"ownerId"`
+	Role        string         `json:"role"`
+	DisplayName *string        `json:"displayName"`
+	SortOrder   int            `json:"sortOrder"`
+	Metadata    map[string]any `json:"metadata"`
+	CreatedAt   string         `json:"createdAt"`
+	UpdatedAt   string         `json:"updatedAt"`
 }
 
 type BlobAccessLinkEntry struct {
@@ -87,12 +88,11 @@ var blobListCmd = &cobra.Command{
 
 		items, total, err := client.List[BlobEntry](apiClient, ctx, "/api/blobs", query)
 		if err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
 		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]interface{}{"items": items, "total": total})
+			printer.PrintSuccess("查询成功", map[string]any{"items": items, "total": total})
 			return nil
 		}
 
@@ -169,8 +169,6 @@ var blobUploadCmd = &cobra.Command{
 				results = append(results, uploadResult{File: filePath, Error: err.Error()})
 				if !useJSON {
 					fmt.Printf("失败\n  %s\n", err.Error())
-				} else {
-					printer.PrintError(err.Error())
 				}
 				if firstErr == nil {
 					firstErr = err
@@ -187,7 +185,7 @@ var blobUploadCmd = &cobra.Command{
 		}
 
 		if useJSON {
-			printer.PrintSuccess("上传结果", map[string]interface{}{
+			printer.PrintSuccess("上传结果", map[string]any{
 				"success": successCount,
 				"failed":  failCount,
 				"results": results,
@@ -223,7 +221,6 @@ var blobInfoCmd = &cobra.Command{
 
 		var result BlobEntry
 		if err := apiClient.Get(ctx, "/api/blobs/"+args[0], nil, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -272,7 +269,6 @@ var blobDownloadCmd = &cobra.Command{
 		outputPath := blobDownloadOutput
 		if outputPath == "" {
 			if err := apiClient.Get(ctx, "/api/blobs/"+blobID, nil, &info); err != nil {
-				printer.PrintError(err.Error())
 				return err
 			}
 			// The original name is server-controlled; never pass it straight to
@@ -280,8 +276,14 @@ var blobDownloadCmd = &cobra.Command{
 			// originalName cannot overwrite files outside the working directory.
 			outputPath = filepath.Base(info.OriginalName)
 			if outputPath == "" || outputPath == "." || outputPath == string(filepath.Separator) {
-				printer.PrintError(fmt.Sprintf("无法从文件名 %q 推导出安全的保存路径，请使用 --output 指定", info.OriginalName))
-				return fmt.Errorf("原始文件名不安全")
+				return fmt.Errorf("无法从文件名 %q 推导出安全的保存路径，请使用 --output 指定", info.OriginalName)
+			}
+		}
+
+		// Never silently overwrite an existing file; require an explicit --force.
+		if !blobDownloadOverwrite {
+			if _, err := os.Stat(outputPath); err == nil {
+				return fmt.Errorf("目标文件已存在: %s（如需覆盖请使用 --force）", outputPath)
 			}
 		}
 
@@ -290,7 +292,6 @@ var blobDownloadCmd = &cobra.Command{
 		}
 
 		if err := apiClient.DownloadFile(ctx, blobID, outputPath, blobDownloadForce); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -300,8 +301,9 @@ var blobDownloadCmd = &cobra.Command{
 }
 
 var (
-	blobDownloadOutput string
-	blobDownloadForce  bool
+	blobDownloadOutput     string
+	blobDownloadForce      bool // --download: force Content-Disposition: attachment
+	blobDownloadOverwrite  bool // --force: overwrite an existing local file
 )
 
 // =============================================================================
@@ -324,7 +326,6 @@ var blobLinkCmd = &cobra.Command{
 
 		var result BlobAccessLinkEntry
 		if err := apiClient.Post(ctx, "/api/blobs/"+args[0]+"/access-link", body, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -360,19 +361,12 @@ var blobDeleteCmd = &cobra.Command{
   serenique blob delete a1b2c3d4 --force`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !blobDeleteForce {
-			fmt.Printf("确认永久删除文件 %s？(y/N): ", args[0])
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				printer.PrintMessage("已取消")
-				return nil
-			}
+		if err := confirm("确认永久删除文件 "+args[0], blobDeleteForce); err != nil {
+			return err
 		}
 
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/blobs/"+args[0]); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -399,19 +393,21 @@ var blobAttachCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// The API reserves the "moment" owner type for the moment module.
 		if blobAttachOwnerType == "moment" {
-			err := fmt.Errorf("owner-type 为 moment 时，请使用 `serenique moment attach <moment-id> --blob-id %s`", args[0])
-			printer.PrintError(err.Error())
-			return err
+			return fmt.Errorf("owner-type 为 moment 时，请使用 `serenique moment attach <moment-id> --blob-id %s`", args[0])
 		}
 
 		ctx := context.Background()
 
-		body := map[string]interface{}{
+		// The API's attachment schema defaults sortOrder to 0; only send it when
+		// the user explicitly passed --sort-order.
+		body := map[string]any{
 			"ownerType": blobAttachOwnerType,
 			"ownerId":   blobAttachOwnerID,
 			"role":      blobAttachRole,
-			"sortOrder": blobAttachSortOrder,
-			"metadata":  map[string]interface{}{},
+			"metadata":  map[string]any{},
+		}
+		if cmd.Flags().Changed("sort-order") {
+			body["sortOrder"] = blobAttachSortOrder
 		}
 		if blobAttachDisplayName != "" {
 			body["displayName"] = blobAttachDisplayName
@@ -419,7 +415,6 @@ var blobAttachCmd = &cobra.Command{
 
 		var result BlobAttachmentEntry
 		if err := apiClient.Post(ctx, "/api/blobs/"+args[0]+"/attachments", body, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -470,12 +465,11 @@ var blobAttachmentsCmd = &cobra.Command{
 
 		var result []BlobAttachmentEntry
 		if err := apiClient.Get(ctx, "/api/blobs/"+args[0]+"/attachments", nil, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
 		if useJSON {
-			printer.PrintSuccess("查询成功", map[string]interface{}{"items": result, "count": len(result)})
+			printer.PrintSuccess("查询成功", map[string]any{"items": result, "count": len(result)})
 			return nil
 		}
 
@@ -519,19 +513,12 @@ var blobDetachCmd = &cobra.Command{
   serenique blob detach c3d4e5f6 --force`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !blobDetachForce {
-			fmt.Printf("确认删除业务关联 %s？(y/N): ", args[0])
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				printer.PrintMessage("已取消")
-				return nil
-			}
+		if err := confirm("确认删除业务关联 "+args[0], blobDetachForce); err != nil {
+			return err
 		}
 
 		ctx := context.Background()
 		if err := apiClient.Delete(ctx, "/api/blob-attachments/"+args[0]); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -557,21 +544,14 @@ var blobCleanupCmd = &cobra.Command{
   serenique blob cleanup
   serenique blob cleanup --force`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if !blobCleanupForce {
-			fmt.Print("确认清理孤儿文件？此操作会删除磁盘文件。(y/N): ")
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				printer.PrintMessage("已取消")
-				return nil
-			}
+		if err := confirm("确认清理孤儿文件？此操作会删除磁盘文件", blobCleanupForce); err != nil {
+			return err
 		}
 
 		ctx := context.Background()
 
 		var result BlobCleanupResult
 		if err := apiClient.Post(ctx, "/api/blobs/cleanup-orphans", nil, &result); err != nil {
-			printer.PrintError(err.Error())
 			return err
 		}
 
@@ -625,6 +605,7 @@ func init() {
 	// blob download
 	blobDownloadCmd.Flags().StringVarP(&blobDownloadOutput, "output", "o", "", "输出文件路径（默认使用原始文件名）")
 	blobDownloadCmd.Flags().BoolVar(&blobDownloadForce, "download", false, "强制作为附件下载")
+	blobDownloadCmd.Flags().BoolVarP(&blobDownloadOverwrite, "force", "f", false, "覆盖已存在的本地文件")
 
 	// blob link
 	blobLinkCmd.Flags().IntVarP(&blobLinkExpiresIn, "expires-in", "e", 900, "过期时间（秒），默认 900（15分钟），最长 604800（7天）")

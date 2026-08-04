@@ -65,12 +65,20 @@ func NewClient(baseURL, token string) *Client {
 	}
 }
 
+// transferHTTPClient returns an HTTP client with no request timeout, used only
+// for streaming file transfers. Uploads and downloads of large blobs (the API
+// allows up to 100MB) can legitimately run longer than DefaultTimeout (60s).
+// Context cancellation still applies, so a hung server does not hang forever.
+func (c *Client) transferHTTPClient() *http.Client {
+	return &http.Client{}
+}
+
 // =============================================================================
 // Generic request methods
 // =============================================================================
 
 // Get sends a GET request and unmarshals the response data into result.
-func (c *Client) Get(ctx context.Context, path string, query url.Values, result interface{}) error {
+func (c *Client) Get(ctx context.Context, path string, query url.Values, result any) error {
 	fullURL := c.url(path)
 	if len(query) > 0 {
 		fullURL += "?" + query.Encode()
@@ -86,7 +94,7 @@ func (c *Client) Get(ctx context.Context, path string, query url.Values, result 
 }
 
 // Post sends a POST request with a JSON body and unmarshals the response data into result.
-func (c *Client) Post(ctx context.Context, path string, body interface{}, result interface{}) error {
+func (c *Client) Post(ctx context.Context, path string, body any, result any) error {
 	var bodyReader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -107,7 +115,7 @@ func (c *Client) Post(ctx context.Context, path string, body interface{}, result
 }
 
 // Put sends a PUT request with a JSON body and unmarshals the response data into result.
-func (c *Client) Put(ctx context.Context, path string, body interface{}, result interface{}) error {
+func (c *Client) Put(ctx context.Context, path string, body any, result any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("序列化请求体失败: %w", err)
@@ -155,7 +163,7 @@ func List[T any](c *Client, ctx context.Context, path string, query url.Values) 
 // UploadFile uploads a single file via multipart/form-data.
 // The file is sent under the field name "file" as expected by the API.
 // The result is unmarshalled from the API response data field.
-func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string, result interface{}) error {
+func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string, result any) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("无法打开文件 %s: %w", filePath, err)
@@ -164,6 +172,10 @@ func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string
 
 	// Use a pipe for streaming large files without buffering entirely in memory
 	pr, pw := io.Pipe()
+	// If request construction fails after this point we return early without
+	// sending anything; closing the read end unblocks the writer goroutine below
+	// so it does not leak blocked forever inside io.Copy.
+	defer pr.Close()
 	writer := multipart.NewWriter(pw)
 
 	// Write multipart body in a goroutine
@@ -189,7 +201,8 @@ func (c *Client) UploadFile(ctx context.Context, apiPath string, filePath string
 	}
 	c.setHeaders(req)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	return c.do(req, result)
+	// File transfers are not bound by the 60s JSON-endpoint timeout.
+	return c.doWithClient(c.transferHTTPClient(), req, result)
 }
 
 // =============================================================================
@@ -216,7 +229,9 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 	}
 	c.setHeaders(req)
 
-	resp, err := c.HTTPClient.Do(req)
+	// Downloads stream the file body; they are not bound by the 60s
+	// JSON-endpoint timeout (context cancellation still applies).
+	resp, err := c.transferHTTPClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("下载请求失败: %w", err)
 	}
@@ -267,9 +282,18 @@ func (c *Client) setHeaders(req *http.Request) {
 	}
 }
 
-// do executes the request, parses the unified response, and unmarshals data into result.
-func (c *Client) do(req *http.Request, result interface{}) error {
-	resp, err := c.HTTPClient.Do(req)
+// do executes the request with the default (timeout-bounded) client, parses the
+// unified response, and unmarshals data into result.
+func (c *Client) do(req *http.Request, result any) error {
+	return c.doWithClient(c.HTTPClient, req, result)
+}
+
+// doWithClient executes a request with the given HTTP client, treating any
+// non-2xx status as an error even when the body is not the unified envelope
+// (Hono default error, proxy error page, HTML, empty body...). When the envelope
+// parses its message is preferred; otherwise the raw body is surfaced.
+func (c *Client) doWithClient(hc *http.Client, req *http.Request, result any) error {
+	resp, err := hc.Do(req)
 	if err != nil {
 		return fmt.Errorf("请求失败: %w\n提示: 请检查 baseurl 配置和网络连接 (当前: %s)", err, c.BaseURL)
 	}
@@ -286,7 +310,25 @@ func (c *Client) do(req *http.Request, result interface{}) error {
 	}
 
 	var apiResp APIResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
+	parseErr := json.Unmarshal(body, &apiResp)
+
+	// Non-2xx status is always an error, even for a success:true envelope or a
+	// non-envelope body.
+	if resp.StatusCode >= 400 {
+		if parseErr == nil {
+			return &APIError{Message: apiResp.Message, HTTPStatus: resp.StatusCode, Details: apiResp.Error}
+		}
+		snippet := strings.TrimSpace(string(body))
+		if len(snippet) > 300 {
+			snippet = snippet[:300] + "..."
+		}
+		if snippet == "" {
+			snippet = "(空响应体)"
+		}
+		return &APIError{Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, snippet), HTTPStatus: resp.StatusCode}
+	}
+
+	if parseErr != nil {
 		return fmt.Errorf("服务器返回了意外的响应格式 (HTTP %d): %s", resp.StatusCode, string(body))
 	}
 

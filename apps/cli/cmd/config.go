@@ -19,6 +19,15 @@ var configCmd = &cobra.Command{
 		}
 
 		configPath, _ := config.Path()
+		if useJSON {
+			printer.PrintSuccess("配置信息", map[string]any{
+				"configPath": configPath,
+				"baseurl":    cfg.BaseURL,
+				"token":      cfg.Token,
+			})
+			return nil
+		}
+
 		fmt.Printf("配置文件: %s\n", configPath)
 		fmt.Println()
 		fmt.Printf("baseurl: %s\n", cfg.BaseURL)
@@ -68,6 +77,11 @@ var configSetCmd = &cobra.Command{
 			return err
 		}
 
+		if useJSON {
+			printer.PrintSuccess("配置已更新", map[string]any{"key": key, "value": value})
+			return nil
+		}
+
 		fmt.Printf("✓ %s 已更新\n", key)
 		return nil
 	},
@@ -82,6 +96,10 @@ var configPathCmd = &cobra.Command{
 		configPath, err := config.Path()
 		if err != nil {
 			return err
+		}
+		if useJSON {
+			printer.PrintSuccess("配置文件路径", map[string]any{"configPath": configPath})
+			return nil
 		}
 		fmt.Println(configPath)
 		return nil

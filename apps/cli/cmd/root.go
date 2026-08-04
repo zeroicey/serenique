@@ -72,15 +72,21 @@ var rootCmd = &cobra.Command{
   - 上传和管理文件（上传、下载、关联到业务实体）
 
 使用 "serenique [command] --help" 查看各命令的详细用法。`,
-	// Errors are already printed by the command handlers (printer.PrintError)
-	// or are self-explanatory; do not dump usage text on top of them.
-	SilenceUsage: true,
+	// Errors are rendered exactly once by Execute() (via the printer, or a
+	// plain-text fallback for errors that occur before the printer exists), so
+	// cobra must not print its own "Error:" line on top.
+	SilenceUsage:  true,
+	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Honor --config/-c before loading config. This runs for every command
 		// (including init) so `serenique init --config ...` writes to the target.
 		if flagConfig != "" {
 			config.SetPath(flagConfig)
 		}
+
+		// The printer is set up before anything that can fail so every error
+		// path (including a config load failure below) renders consistently.
+		printer = output.NewPrinter(useJSON)
 
 		// init creates the config itself — skip loading for it.
 		if cmd.Name() == "init" {
@@ -107,11 +113,22 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute runs the root command.
+// Execute runs the root command and owns error rendering: the returned error is
+// printed exactly once (via the printer when available, so --json mode gets a
+// structured error object on stderr; plain-text otherwise for errors that
+// happen before PersistentPreRunE set the printer up, e.g. unknown flags or
+// invalid argument counts). Command handlers must not print errors themselves.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+	err := rootCmd.Execute()
+	if err == nil {
+		return
 	}
+	if printer != nil {
+		printer.PrintError(err.Error())
+	} else {
+		fmt.Fprintf(os.Stderr, "✗ 错误: %s\n", err.Error())
+	}
+	os.Exit(1)
 }
 
 func init() {

@@ -39,7 +39,7 @@ type Printer interface {
 	PrintKeyValue(data map[string]string)
 
 	// PrintSuccess prints a success message with optional data.
-	PrintSuccess(message string, data interface{})
+	PrintSuccess(message string, data any)
 
 	// PrintError prints an error message.
 	PrintError(message string)
@@ -128,7 +128,7 @@ func (p *TablePrinter) PrintKeyValue(data map[string]string) {
 	}
 }
 
-func (p *TablePrinter) PrintSuccess(message string, data interface{}) {
+func (p *TablePrinter) PrintSuccess(message string, data any) {
 	fmt.Fprintf(stdout, "✓ %s\n", message)
 	if data != nil {
 		b, _ := json.MarshalIndent(data, "", "  ")
@@ -196,7 +196,7 @@ func (p *JSONPrinter) PrintKeyValue(data map[string]string) {
 	p.print(data)
 }
 
-func (p *JSONPrinter) PrintSuccess(message string, data interface{}) {
+func (p *JSONPrinter) PrintSuccess(message string, data any) {
 	if data == nil {
 		p.print(map[string]string{"message": message})
 		return
@@ -204,7 +204,7 @@ func (p *JSONPrinter) PrintSuccess(message string, data interface{}) {
 	// If data is already a struct/map, wrap with message
 	type successOutput struct {
 		Message string      `json:"message"`
-		Data    interface{} `json:"data"`
+		Data    any `json:"data"`
 	}
 	p.print(successOutput{Message: message, Data: data})
 }
@@ -221,7 +221,7 @@ func (p *JSONPrinter) PrintMessage(message string) {
 	p.print(map[string]string{"message": message})
 }
 
-func (p *JSONPrinter) print(v interface{}) {
+func (p *JSONPrinter) print(v any) {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		fmt.Fprintf(stderr, `{"error": "JSON序列化失败: %s"}`, err.Error())

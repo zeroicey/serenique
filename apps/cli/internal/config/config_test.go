@@ -140,6 +140,33 @@ func TestLoadTightensPermissions(t *testing.T) {
 	}
 }
 
+func TestLoadSkipsChmodOnSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target.yaml")
+	if err := os.WriteFile(target, []byte("baseurl: http://x\ntoken: t\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "config.yaml")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+
+	SetPath(link)
+	defer SetPath("")
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+
+	// The symlink target must NOT have its permissions changed by Load's chmod.
+	fi, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o644 {
+		t.Fatalf("symlink target perms changed to %o, want 644", perm)
+	}
+}
+
 func TestResolvePrecedence(t *testing.T) {
 	t.Setenv("SERENIQUE_BASEURL", "http://env.test")
 	t.Setenv("SERENIQUE_TOKEN", "env-token")
