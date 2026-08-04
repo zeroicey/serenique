@@ -16,7 +16,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 class ResBuilder<T = never> {
   private _httpStatus: number;
-  private _data: T | undefined;
+  private _data: unknown;
   private _error: unknown;
 
   constructor(
