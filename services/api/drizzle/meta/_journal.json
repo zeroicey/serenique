@@ -15,6 +15,13 @@
       "when": 1785866500000,
       "tag": "0001_clean_diary_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1754300720000,
+      "tag": "0002_add_moment_updated_at",
+      "breakpoints": true
     }
   ]
 }
