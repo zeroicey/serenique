@@ -130,3 +130,19 @@ func TestTruncateRunesExact(t *testing.T) {
 		t.Fatalf("truncateRunes = %q, want 一二三四五...", got)
 	}
 }
+
+func TestShortIDToleratesShortAndLongInput(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", ""},
+		{"ab", "ab"},            // free-form ownerId shorter than 8 — must not panic
+		{"abcdefgh", "abcdefgh"}, // exactly 8 runes — unchanged
+		{"abcdefghi", "abcdefgh..."},
+		{"一二三四五六七八", "一二三四五六七八"}, // 8 runes — unchanged
+		{"一二三四五六七八九", "一二三四五六七八..."}, // multi-byte truncation must not split a rune
+	}
+	for _, tc := range cases {
+		if got := shortID(tc.in); got != tc.want {
+			t.Errorf("shortID(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

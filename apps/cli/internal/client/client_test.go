@@ -126,6 +126,27 @@ func TestDownloadFileWritesBody(t *testing.T) {
 	}
 }
 
+func TestDownloadFileSetsReadableMode(t *testing.T) {
+	dir := t.TempDir()
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("payload"))
+	})
+
+	out := filepath.Join(dir, "out.bin")
+	if err := c.DownloadFile(context.Background(), "b1", out, false, false); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Downloaded media blobs are not secrets: the file must be group/other
+	// readable (0644), not the 0600 os.CreateTemp default.
+	if perm := info.Mode().Perm(); perm != 0o644 {
+		t.Fatalf("file mode = %o, want 644", perm)
+	}
+}
+
 func TestDownloadFileRemovesPartialOnError(t *testing.T) {
 	dir := t.TempDir()
 	// Declare a larger Content-Length than is actually written so the client

@@ -43,6 +43,32 @@ func truncateRunes(s string, n int) string {
 	return string(r[:n]) + "..."
 }
 
+// shortID abbreviates a server-supplied identifier for table display, keeping
+// the first 8 runes and appending "...". Unlike the DB-generated UUIDs used for
+// ids/blobId/createdAt (which are always long enough to slice), free-form
+// fields like an attachment's ownerId may be arbitrarily short — the API's
+// CreateBlobAttachmentSchema only requires min(1). A naive s[:8] would panic
+// with "index out of range" on such values, so this helper tolerates short
+// input. Truncating by runes (not bytes) also avoids splitting a multi-byte
+// UTF-8 character.
+func shortID(s string) string {
+	r := []rune(s)
+	if len(r) <= 8 {
+		return s
+	}
+	return string(r[:8]) + "..."
+}
+
+// renderedError marks an error whose message the command already printed
+// inline (e.g. per-file failures in a batch upload). Execute() still exits
+// non-zero — the batch did fail — but does not render the message a second
+// time, preserving the "errors render exactly once" contract.
+type renderedError struct {
+	message string
+}
+
+func (e *renderedError) Error() string { return e.message }
+
 // printDeleteResult renders a destructive-action success. Table mode keeps the
 // "✓ " prefix; JSON mode emits the same {message, data} envelope as create/get
 // so AI/script consumers do not have to special-case deletes.

@@ -272,6 +272,15 @@ func (c *Client) DownloadFile(ctx context.Context, blobID string, outputPath str
 		discardTmp()
 		return fmt.Errorf("写入文件失败: %w", err)
 	}
+
+	// os.CreateTemp creates the file with 0600; downloaded media blobs are not
+	// secrets, so relax to 0644 so they remain readable (e.g. by a static file
+	// server) by other local users. The config layer intentionally stays 0600.
+	if err := tmp.Chmod(0o644); err != nil {
+		discardTmp()
+		return fmt.Errorf("设置文件权限失败: %w", err)
+	}
+
 	if err := tmp.Close(); err != nil {
 		os.Remove(tmpName)
 		return fmt.Errorf("关闭文件失败: %w", err)

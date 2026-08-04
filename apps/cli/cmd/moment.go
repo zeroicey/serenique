@@ -35,13 +35,17 @@ type MomentBlobEntry struct {
 	FileURL      string         `json:"fileUrl"`
 }
 
-// MomentAttachmentEntry matches the API's moment attachment record.
+// MomentAttachmentEntry matches the API's moment attachment record
+// (moment.types.ts MomentAttachmentEntry), which always carries metadata —
+// mirroring BlobAttachmentEntry in blob.go so attachment-level metadata created
+// via the API is not dropped from `moment get --json` output.
 type MomentAttachmentEntry struct {
 	ID          string           `json:"id"`
 	BlobID      string           `json:"blobId"`
 	Role        string           `json:"role"`
 	DisplayName *string          `json:"displayName"`
 	SortOrder   int              `json:"sortOrder"`
+	Metadata    map[string]any   `json:"metadata"`
 	CreatedAt   string           `json:"createdAt"`
 	UpdatedAt   string           `json:"updatedAt"`
 	Blob        *MomentBlobEntry `json:"blob,omitempty"`
@@ -65,6 +69,7 @@ var momentListCmd = &cobra.Command{
   serenique moment list
   serenique moment list --page 1 --page-size 20
   serenique moment list --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validatePageParams(momentListPage, momentListPageSize); err != nil {
 			return err

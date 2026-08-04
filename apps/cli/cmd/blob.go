@@ -191,8 +191,12 @@ var blobUploadCmd = &cobra.Command{
 		}
 
 		if useJSON {
-			// "succeeded"/"failed" read as counts, not booleans.
+			// "success" disambiguates a partially-failed batch: a consumer that
+			// parses stdout alone can tell the upload did not fully succeed even
+			// though the doc is still the regular {message, data} envelope. The
+			// non-zero exit code and the stderr error object remain authoritative.
 			printer.PrintSuccess("上传结果", map[string]any{
+				"success":   failCount == 0,
 				"succeeded": successCount,
 				"failed":    failCount,
 				"results":   results,
@@ -205,7 +209,10 @@ var blobUploadCmd = &cobra.Command{
 
 		fmt.Printf("\n上传完成: %d 成功, %d 失败\n", successCount, failCount)
 		if firstErr != nil {
-			return firstErr
+			// The per-file failures were already printed inline above; return a
+			// renderedError so Execute() does not print the message a second
+			// time — the exit code still signals the batch failed.
+			return &renderedError{message: firstErr.Error()}
 		}
 		return nil
 	},
@@ -495,7 +502,9 @@ var blobAttachmentsCmd = &cobra.Command{
 			rows[i] = map[string]string{
 				"ID":   a.ID[:8] + "...",
 				"所属类型": a.OwnerType,
-				"所属ID": a.OwnerID[:8] + "...",
+				// ownerId is a free-form business id (the API accepts any 1-128
+				// char string), not a UUID — never slice it with a fixed bound.
+				"所属ID": shortID(a.OwnerID),
 				"角色":   a.Role,
 				"显示名称": dn,
 			}

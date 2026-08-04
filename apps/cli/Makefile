@@ -26,7 +26,7 @@ clean:
 
 .PHONY: test
 test:
-	go test ./internal/...
+	go test ./...
 
 .PHONY: lint
 lint:

@@ -37,6 +37,7 @@ var diaryListCmd = &cobra.Command{
   serenique diary list
   serenique diary list --page 1 --page-size 10
   serenique diary list --json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validatePageParams(diaryListPage, diaryListPageSize); err != nil {
 			return err

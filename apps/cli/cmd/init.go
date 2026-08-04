@@ -73,7 +73,10 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		configPath, _ := config.Path()
+		configPath, err := config.Path()
+		if err != nil {
+			return err
+		}
 		if useJSON {
 			// Never echo the raw token to stdout: --json output is captured and
 			// logged by AI/script consumers. Mirror the masking used in table mode.

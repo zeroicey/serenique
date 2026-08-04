@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -325,4 +326,197 @@ func TestValidatePageParams(t *testing.T) {
 			t.Fatalf("params page=%d size=%d should be rejected", tc.page, tc.size)
 		}
 	}
+}
+
+// =============================================================================
+// Blob upload batch behavior
+// =============================================================================
+
+func TestBlobUploadPartialFailureJSONMarksSuccessFalse(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "a.jpg")
+	if err := os.WriteFile(f, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"success":false,"message":"服务器错误","error":{"code":"INTERNAL"}}`))
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		err := blobUploadCmd.RunE(blobUploadCmd, []string{f})
+		if err == nil {
+			t.Fatal("expected error for failed upload")
+		}
+		data, ok := rec.lastSuccess.data.(map[string]any)
+		if !ok {
+			t.Fatalf("data is %T, want map[string]any", rec.lastSuccess.data)
+		}
+		// A consumer parsing stdout alone must be able to tell the batch failed.
+		if data["success"] != false {
+			t.Fatalf("success = %v, want false", data["success"])
+		}
+		if data["failed"] != 1 {
+			t.Fatalf("failed = %v, want 1", data["failed"])
+		}
+	})
+}
+
+func TestBlobUploadAllSuccessJSONMarksSuccessTrue(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "a.jpg")
+	if err := os.WriteFile(f, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"b1","originalName":"a.jpg","mimeType":"image/jpeg","size":4,"checksum":"x","metadata":{},"width":null,"height":null,"duration":null,"createdAt":"2026-08-04T00:00:00Z"}}`))
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		if err := blobUploadCmd.RunE(blobUploadCmd, []string{f}); err != nil {
+			t.Fatal(err)
+		}
+		data, ok := rec.lastSuccess.data.(map[string]any)
+		if !ok {
+			t.Fatalf("data is %T, want map[string]any", rec.lastSuccess.data)
+		}
+		if data["success"] != true {
+			t.Fatalf("success = %v, want true", data["success"])
+		}
+		if data["succeeded"] != 1 {
+			t.Fatalf("succeeded = %v, want 1", data["succeeded"])
+		}
+	})
+}
+
+func TestBlobUploadPartialFailureTableReturnsRenderedError(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "a.jpg")
+	if err := os.WriteFile(f, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"success":false,"message":"服务器错误","error":{"code":"INTERNAL"}}`))
+	}, false, func(srv *httptest.Server) {
+		// Table mode prints per-file failures inline; the returned error must be
+		// a *renderedError so Execute() does not re-render the same message.
+		err := blobUploadCmd.RunE(blobUploadCmd, []string{f})
+		var rendered *renderedError
+		if !errors.As(err, &rendered) {
+			t.Fatalf("expected *renderedError for table-mode batch failure, got %T: %v", err, err)
+		}
+	})
+}
+
+// =============================================================================
+// Error rendering
+// =============================================================================
+
+func TestRenderExecutionErrorSuppressesRenderedError(t *testing.T) {
+	printer = nil
+	out := captureStderr(t, func() {
+		renderExecutionError(&renderedError{message: "已内联输出"}, false)
+	})
+	if out != "" {
+		t.Fatalf("rendered error should not be printed again, got %q", out)
+	}
+}
+
+func TestRenderExecutionErrorPlainTextFallback(t *testing.T) {
+	printer = nil
+	out := captureStderr(t, func() {
+		renderExecutionError(errors.New("boom"), false)
+	})
+	if !strings.Contains(out, "✗ 错误: boom") {
+		t.Fatalf("expected plain-text error on stderr, got %q", out)
+	}
+}
+
+func TestRenderExecutionErrorJSONFallback(t *testing.T) {
+	printer = nil
+	out := captureStderr(t, func() {
+		renderExecutionError(errors.New("boom"), true)
+	})
+	if !strings.Contains(out, `"error": "boom"`) {
+		t.Fatalf("expected JSON error object on stderr, got %q", out)
+	}
+}
+
+// =============================================================================
+// --json pre-scan
+// =============================================================================
+
+func TestFlagJSONRequestedFrom(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{"bare long", []string{"diary", "get", "--json"}, true},
+		{"bare short", []string{"diary", "get", "-j"}, true},
+		{"long equals true", []string{"diary", "get", "--json=true"}, true},
+		{"short equals true", []string{"diary", "get", "-j=true"}, true},
+		{"long numeric true", []string{"--json=1"}, true},
+		{"long equals false", []string{"diary", "get", "--json=false"}, false},
+		{"short equals false", []string{"diary", "get", "-j=false"}, false},
+		{"long numeric false", []string{"--json=0"}, false},
+		{"no flag", []string{"diary", "list"}, false},
+		{"unrelated flags", []string{"--baseurl", "http://x", "list"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := flagJSONRequestedFrom(tc.args); got != tc.want {
+				t.Errorf("flagJSONRequestedFrom(%v) = %v, want %v", tc.args, got, tc.want)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// Blob attachments — free-form ownerId must never panic the render
+// =============================================================================
+
+func TestBlobAttachmentsShortOwnerIDDoesNotPanic(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// ownerId is a free-form business id (min 1 char per the API schema) and
+		// may be far shorter than the 8 chars a UUID truncation would assume.
+		w.Write([]byte(`{"success":true,"message":"ok","data":[{"id":"11111111-1111-1111-1111-111111111111","blobId":"22222222-2222-2222-2222-222222222222","ownerType":"diary","ownerId":"ab","role":"attachment","displayName":null,"sortOrder":0,"metadata":{},"createdAt":"2026-08-04T00:00:00Z","updatedAt":"2026-08-04T00:00:00Z"}]}`))
+	}, false, func(srv *httptest.Server) {
+		if err := blobAttachmentsCmd.RunE(blobAttachmentsCmd, []string{"22222222-2222-2222-2222-222222222222"}); err != nil {
+			t.Fatalf("command failed: %v", err)
+		}
+	})
+}
+
+// =============================================================================
+// Moment attachment metadata round-trip
+// =============================================================================
+
+func TestMomentGetKeepsAttachmentMetadata(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"hi","createdAt":"x","updatedAt":"x","attachments":[{"id":"a1","blobId":"b1","role":"cover","sortOrder":0,"metadata":{"tag":"cover-photo"},"createdAt":"x","updatedAt":"x"}]}}`))
+	}, true, func(srv *httptest.Server) {
+		var result MomentEntry
+		if err := apiClient.Get(context.Background(), "/api/moments/m1", nil, &result); err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Attachments) != 1 {
+			t.Fatalf("attachments = %d, want 1", len(result.Attachments))
+		}
+		a := result.Attachments[0]
+		if a.Metadata == nil {
+			t.Fatal("attachment metadata was dropped during decode")
+		}
+		if a.Metadata["tag"] != "cover-photo" {
+			t.Fatalf("metadata = %+v, want tag=cover-photo", a.Metadata)
+		}
+	})
 }
