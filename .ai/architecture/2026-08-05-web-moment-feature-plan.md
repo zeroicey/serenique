@@ -18,7 +18,8 @@
 - 中文文案**直接内联**在页面/组件（不 import messages，`messages/` 目录已删除）。
 - shadcn sidebar 已确认可用：`bunx shadcn add sidebar --yes --overwrite`（会新增 `src/components/ui/sidebar.tsx`、`src/hooks/use-mobile.ts`，更新 `separator.tsx`/`tooltip.tsx`）。
 - 测试：Vitest + RTL；组件/页面渲染用 `@/test/helpers` 的 `renderWithProviders`；jsdom 需在 `test/setup.ts` 补 `IntersectionObserver` mock。
-- 验证命令：`cd apps/web && bun run typecheck && bun test && bun run lint && bun run build`；根 `bun run typecheck && bun test`。
+- 验证命令：`cd apps/web && bun run typecheck && bun run test && bun run lint && bun run build`；根 `bun run typecheck && bun run test`。
+- **坑点（2026-08-05 实测）**：web 包内不要用 `bun test` —— 那会跑 Bun 原生测试器（无 jsdom，`document` 未定义，react-router 报错）。web 的测试命令是 `bun run test`（= `vitest run`，读取 vite.config.ts 的 `test.environment: jsdom`）。根 `bun test` 只覆盖 MCP（bun:test），web 走根 `test` 脚本。
 
 ---
 
@@ -95,7 +96,7 @@ export function toDisplayError(error: unknown): Error {
 - [ ] **Step 5: 验证并提交**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun test
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun run test
 cd /Users/zeroicey/workspace/projects/serenique && git add -A apps/web/src .ai
 git commit -m "refactor(web): remove messages module, inline Chinese copy"
 ```
@@ -417,7 +418,7 @@ describe('AppSidebar', () => {
 - [ ] **Step 10: 验证并提交**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun test
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun run test
 cd /Users/zeroicey/workspace/projects/serenique && git add -A apps/web/src
 git commit -m "feat(web): app shell with sidebar, dynamic navbar, welcome page"
 ```
@@ -477,7 +478,7 @@ describe('uploadBlob', () => {
 - [ ] **Step 2: 运行确认失败**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun test src/features/blob/api.test.ts
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run test src/features/blob/api.test.ts
 ```
 
 Expected: FAIL（找不到 `uploadBlob` / `./api`）。
@@ -538,7 +539,7 @@ export { useUploadBlob } from './queries'
 - [ ] **Step 5: 验证并提交**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun test src/features/blob/api.test.ts && bun run typecheck
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run test src/features/blob/api.test.ts && bun run typecheck
 cd /Users/zeroicey/workspace/projects/serenique && git add -A apps/web/src/features/blob
 git commit -m "feat(web): blob feature upload api and hook"
 ```
@@ -665,7 +666,7 @@ function makeMoment(i: number) {
 - [ ] **Step 4: 运行确认失败**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun test src/features/moment/schemas.test.ts src/features/moment/queries.test.ts
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run test src/features/moment/schemas.test.ts src/features/moment/queries.test.ts
 ```
 
 Expected: FAIL（`./schemas` / `./api` / `./queries` 不存在或未导出）。
@@ -890,7 +891,7 @@ export type { MomentCreateFormValues } from './schemas'
 - [ ] **Step 9: 验证并提交**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun test src/features/moment/schemas.test.ts src/features/moment/queries.test.ts && bun run typecheck
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run test src/features/moment/schemas.test.ts src/features/moment/queries.test.ts && bun run typecheck
 cd /Users/zeroicey/workspace/projects/serenique && git add -A apps/web/src/types/media.ts apps/web/src/features/moment
 git commit -m "feat(web): moment feature api, queries, schemas"
 ```
@@ -1544,7 +1545,7 @@ describe('MediaPreviewDialog', () => {
 - [ ] **Step 10: 验证并提交**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun test && bun run typecheck
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run test && bun run typecheck
 cd /Users/zeroicey/workspace/projects/serenique && git add -A apps/web/src
 git commit -m "feat(web): moment list/create components and media preview"
 ```
@@ -1788,7 +1789,7 @@ children: [
 - [ ] **Step 6: 验证并提交**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun test
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun run test
 cd /Users/zeroicey/workspace/projects/serenique && git add -A apps/web/src
 git commit -m "feat(web): moment list and create pages, wire moment routes"
 ```
@@ -1803,8 +1804,8 @@ git commit -m "feat(web): moment list and create pages, wire moment routes"
 - [ ] **Step 1: 全量验证**
 
 ```bash
-cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun test && bun run lint && bun run build
-cd /Users/zeroicey/workspace/projects/serenique && bun run typecheck && bun test
+cd /Users/zeroicey/workspace/projects/serenique/apps/web && bun run typecheck && bun run test && bun run lint && bun run build
+cd /Users/zeroicey/workspace/projects/serenique && bun run typecheck && bun run test
 ```
 
 Expected: 全部通过。lint 若报未使用变量等，就地修复后重跑。
@@ -1841,4 +1842,4 @@ Task 6 (moment 页面 + 路由接线)  — 依赖 Task 5
 Task 7 (全量验证收尾)
 ```
 
-> 每个 Task 结束时均需 `bun run typecheck && bun test` 通过，各自可提交。推荐顺序：Task 1 → Task 2 → Task 3 → Task 4 → Task 5 → Task 6 → Task 7（壳层先行、feature 随后，每步保持绿态）。
+> 每个 Task 结束时均需 `bun run typecheck && bun run test` 通过，各自可提交。推荐顺序：Task 1 → Task 2 → Task 3 → Task 4 → Task 5 → Task 6 → Task 7（壳层先行、feature 随后，每步保持绿态）。

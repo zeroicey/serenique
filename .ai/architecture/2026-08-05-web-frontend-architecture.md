@@ -41,8 +41,7 @@ apps/web/src/
 ├── lib/                   # 纯工具（cn(), format-date, format-size…）
 ├── stores/                # zustand：仅 UI/会话状态（theme, 侧栏, session）
 ├── config/                # env.ts：读取 VITE_API_BASE_URL 等
-├── messages/              # 集中中文文案（index.ts 导出常量）
-├── types/                 # 跨 feature 共享类型（分页、附件引用…）
+├── types/                 # 跨 feature 共享类型（分页、附件引用、媒体文件…）
 ├── styles/globals.css     # tailwind v4 入口
 └── test/                  # vitest setup + helpers
 ```
@@ -56,7 +55,6 @@ apps/web/src/
 | `components/` + `lib/` + `hooks/` | 无业务语义的通用件 | 依赖 `features/*` |
 | `api/` | Ky 基础设施 | 具体端点（放各 feature 的 `api.ts`） |
 | `stores/` | 跨页面 UI/会话状态 | 服务端数据（一律走 TanStack Query） |
-| `messages/` | 全部用户可见中文文案 | 散落的字符串字面量 |
 
 ## Feature 骨架
 
@@ -78,7 +76,7 @@ apps/web/src/
 ## 硬约束
 
 - 服务端数据只走 TanStack Query，不进 Zustand。
-- 用户可见文案一律经 `messages/`，不散落字符串。
+- 用户可见文案为中文，**直接内联**在对应页面/组件中（2026-08-05 决策：删除 `messages/`，个人应用文案随组件走；后续如需 i18n 再抽层）。见 [[2026-08-05-web-moment-feature-design]] 决策⑧。
 - API 调用统一走 `api/client.ts`（token 注入位点在此，当前为空——API 暂无鉴权）。
 - 所有 feature 页面懒加载（`React.lazy` + `Suspense`）。
 - 错误处理：mutation 失败统一 Toast（sonner）；Query 错误在页面层兜底展示。
