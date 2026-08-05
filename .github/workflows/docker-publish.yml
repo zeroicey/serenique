@@ -46,8 +46,8 @@ jobs:
         with:
           images: zeroicey/serenique-${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable={{is_tag}}
-            type=raw,value=main,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+            type=raw,value=main,enable=${{ github.ref_type == 'branch' }}
             type=semver,pattern={{version}}
             type=semver,pattern=v{{version}}
 
