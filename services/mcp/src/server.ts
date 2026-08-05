@@ -3,6 +3,7 @@ import { registerBlobTools } from "./tools/blob.tools";
 import { registerDiaryTools } from "./tools/diary.tools";
 import { registerMomentTools } from "./tools/moment.tools";
 import { registerTaskTools } from "./tools/task.tools";
+import { registerEventTools } from "./tools/event.tools";
 
 export function createMcpServer() {
   const server = new McpServer({
@@ -14,6 +15,7 @@ export function createMcpServer() {
   registerMomentTools(server);
   registerBlobTools(server);
   registerTaskTools(server);
+  registerEventTools(server);
 
   return server;
 }
