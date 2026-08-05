@@ -1,5 +1,9 @@
 import '@testing-library/jest-dom/vitest'
-import { vi } from 'vitest'
+import { cleanup } from '@testing-library/react'
+import { afterEach, vi } from 'vitest'
+
+// vitest 未开启 globals，RTL 的自动 afterEach(cleanup) 不会注册；这里显式清理，避免用例间 DOM 残留。
+afterEach(cleanup)
 
 // jsdom 未实现 matchMedia，next-themes 依赖它。
 Object.defineProperty(window, 'matchMedia', {

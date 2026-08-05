@@ -2,6 +2,8 @@ import { lazy, Suspense, type ComponentType } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import AppLayout from '@/app/layout/app-layout'
 import { PageLoading } from '@/app/layout/page-loading'
+import { MomentNav } from '@/features/moment/components/moment-nav'
+import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
 
 // 懒加载 + Suspense 包装；handle.nav 注册该路由的动态导航内容。
 function lazyPage(loader: () => Promise<{ default: ComponentType }>) {
@@ -13,13 +15,22 @@ function lazyPage(loader: () => Promise<{ default: ComponentType }>) {
   )
 }
 
-// 欢迎页 / 404 属于壳层；Moment 路由在 Task 6 接线。
 const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
     children: [
       { index: true, element: lazyPage(() => import('@/app/pages/welcome-page')) },
+      {
+        path: 'moment',
+        element: lazyPage(() => import('@/features/moment/pages/moment-list-page')),
+        handle: { nav: <MomentNav /> },
+      },
+      {
+        path: 'moment/create',
+        element: lazyPage(() => import('@/features/moment/pages/moment-create-page')),
+        handle: { nav: <MomentCreateNav /> },
+      },
       { path: '*', element: lazyPage(() => import('@/app/pages/not-found-page')) },
     ],
   },
