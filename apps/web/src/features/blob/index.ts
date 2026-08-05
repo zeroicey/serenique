@@ -1,2 +1,3 @@
-// 文件 feature。提供上传/附件 hooks 供 diary/moment 等复用。
-export {}
+export { uploadBlob } from './api'
+export type { BlobEntry } from './api'
+export { useUploadBlob } from './queries'

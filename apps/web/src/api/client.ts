@@ -7,8 +7,11 @@ export const api = ky.create({
   timeout: 15_000,
 })
 
-// 组装请求路径：统一挂到 /api 下。base 为空时走 dev proxy / prod 反向代理。
+// 组装请求路径：统一挂到 /api 下。
+// base 为空时补当前 origin（dev 由 Vite proxy / prod 由反向代理转发 /api）。
+// 返回绝对 URL：ky 在非浏览器环境（vitest/undici）不接受相对路径，浏览器端也等价。
 export function apiUrl(path: string): string {
   const base = env.apiBaseUrl.replace(/\/+$/, '')
-  return `${base}/api/${path.replace(/^\/+/, '')}`
+  const origin = base || (typeof window !== 'undefined' ? window.location.origin : '')
+  return `${origin}/api/${path.replace(/^\/+/, '')}`
 }
