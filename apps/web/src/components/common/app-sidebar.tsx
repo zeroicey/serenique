@@ -1,8 +1,9 @@
-import { FileText } from 'lucide-react'
+import { BookOpen, FileText } from 'lucide-react'
 import { NavLink } from 'react-router'
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -10,8 +11,9 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
+import { ThemeToggle } from './theme-toggle'
 
-// 全局侧边栏：品牌区 + 模块导航。当前仅 Moment 一个模块，后续新增模块在此追加导航项。
+// 全局侧边栏：品牌区 + 模块导航 + 底部主题切换。新增模块在此追加导航项。
 export function AppSidebar() {
   return (
     <Sidebar>
@@ -31,8 +33,25 @@ export function AppSidebar() {
               )}
             </NavLink>
           </SidebarMenuItem>
+          <SidebarMenuItem>
+            <NavLink to="/diary" className="flex items-center gap-2">
+              {({ isActive }) => (
+                <SidebarMenuButton isActive={isActive}>
+                  <BookOpen />
+                  <span className="text-lg">日记</span>
+                </SidebarMenuButton>
+              )}
+            </NavLink>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu className="space-y-1 px-2">
+          <SidebarMenuItem>
+            <ThemeToggle />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
