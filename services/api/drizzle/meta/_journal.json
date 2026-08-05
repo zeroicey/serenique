@@ -50,6 +50,13 @@
       "when": 1785862531886,
       "tag": "0006_rich_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785901329838,
+      "tag": "0007_lowly_pet_avengers",
+      "breakpoints": true
     }
   ]
 }

@@ -86,6 +86,22 @@ export {
   TaskStatusSchema,
 } from "@/modules/task/task.types";
 
+// ---- Event module ----
+export { eventService } from "@/modules/event/event.service";
+export type {
+  EventEntry,
+  CreateEventInput,
+  UpdateEventInput,
+  ListEventInput,
+  GetEventInput,
+  DeleteEventInput,
+} from "@/modules/event/event.types";
+export {
+  CreateEventSchema,
+  UpdateEventSchema,
+  ListEventSchema,
+} from "@/modules/event/event.types";
+
 // ---- Shared utilities ----
 export { AppError, ErrorCode } from "@/shared/errors";
 export type { ErrorCode as ErrorCodeType } from "@/shared/errors";

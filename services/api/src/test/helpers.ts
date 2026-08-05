@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { events } from "@/modules/event/event.schema";
 import { diaries } from "@/modules/diary/diary.schema";
 import { moments } from "@/modules/moment/moment.schema";
 import { blobs } from "@/modules/blob/blob.schema";
@@ -117,6 +118,23 @@ export function fakeTaskGroupRow(
   return {
     id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f3001",
     title: "测试任务组",
+    createdAt: new Date("2026-08-05T12:00:00.000Z"),
+    updatedAt: new Date("2026-08-05T12:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export function fakeEventRow(
+  overrides: Partial<typeof events.$inferSelect> = {},
+): typeof events.$inferSelect {
+  return {
+    id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f4001",
+    title: "测试事件",
+    startAt: new Date("2026-08-05T09:00:00.000Z"),
+    endAt: new Date("2026-08-05T10:00:00.000Z"),
+    isAllDay: false,
+    location: null,
+    note: null,
     createdAt: new Date("2026-08-05T12:00:00.000Z"),
     updatedAt: new Date("2026-08-05T12:00:00.000Z"),
     ...overrides,
