@@ -68,6 +68,18 @@ export function registerDiaryTools(server: McpServer) {
   );
 
   server.registerTool(
+    "get_diary_by_date",
+    {
+      title: "Get Diary By Date",
+      description: "根据日期 (YYYY-MM-DD) 获取单篇日记的完整内容，无则报错。",
+      inputSchema: z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("日期 YYYY-MM-DD"),
+      }),
+    },
+    async (input) => runTool(() => diaryService.getByDate({ diaryDate: input.date })),
+  );
+
+  server.registerTool(
     "update_diary",
     {
       title: "Update Diary",

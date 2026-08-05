@@ -63,6 +63,7 @@ describe("createMcpApp", () => {
       "delete_task_group",
       "get_blob",
       "get_diary",
+      "get_diary_by_date",
       "get_event",
       "get_task",
       "get_task_group",
