@@ -183,6 +183,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET | `/health` | Health check |
 | GET | `/` | API info |
 | GET, POST | `/api/diaries` | Diary list / create |
+| GET | `/api/diaries/by-date/:date` | Diary by date (404 if none; registered before `:id`) |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
 | GET, POST | `/api/moments` | Moment list / create (create accepts optional `attachments[]`) |
 | GET, DELETE | `/api/moments/:id` | Moment detail / delete |
