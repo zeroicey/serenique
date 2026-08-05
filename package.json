@@ -1,10 +1,10 @@
 {
   "name": "serenique",
   "private": true,
-  "workspaces": ["services/*"],
+  "workspaces": ["services/*", "apps/web"],
   "scripts": {
-    "typecheck": "bunx tsc --noEmit -p services/api/tsconfig.json && bunx tsc --noEmit -p services/mcp/tsconfig.json",
-    "test": "bun run --cwd services/mcp test"
+    "typecheck": "bunx tsc --noEmit -p services/api/tsconfig.json && bunx tsc --noEmit -p services/mcp/tsconfig.json && bun run --cwd apps/web typecheck",
+    "test": "bun run --cwd services/mcp test && bun run --cwd apps/web test"
   },
   "devDependencies": {
     "@types/bun": "latest",
