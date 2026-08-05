@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -68,17 +70,28 @@ var (
 
 // diary get
 var diaryGetCmd = &cobra.Command{
-	Use:   "get <id>",
+	Use:   "get [<id>]",
 	Short: "查看日记详情",
-	Long: `根据 ID 查看日记的完整内容。
+	Long: `根据 ID 或日期查看日记的完整内容。二选一：传 <id> 按 ID 查询，或传 --date 按日期查询。
 
 示例:
-  serenique diary get a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
-	Args: cobra.ExactArgs(1),
+  serenique diary get a1b2c3d4-e5f6-7890-abcd-ef1234567890
+  serenique diary get --date 2026-08-05`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var result DiaryEntry
-		if err := apiClient.Get(commandContext(cmd), "/api/diaries/"+args[0], nil, &result); err != nil {
-			return err
+
+		if diaryGetDate != "" {
+			if err := apiClient.Get(commandContext(cmd), "/api/diaries/by-date/"+diaryGetDate, nil, &result); err != nil {
+				return err
+			}
+		} else {
+			if len(args) != 1 {
+				return fmt.Errorf("需要指定日记 ID 或使用 --date 按日期查询")
+			}
+			if err := apiClient.Get(commandContext(cmd), "/api/diaries/"+args[0], nil, &result); err != nil {
+				return err
+			}
 		}
 
 		if useJSON {
@@ -96,6 +109,8 @@ var diaryGetCmd = &cobra.Command{
 		return nil
 	},
 }
+
+var diaryGetDate string
 
 // diary update
 var diaryUpdateCmd = &cobra.Command{
@@ -164,6 +179,9 @@ func init() {
 	diaryCreateCmd.Flags().StringVarP(&diaryCreateContent, "content", "m", "", "日记内容 (必填)")
 	diaryCreateCmd.Flags().StringVarP(&diaryCreateDate, "date", "d", "", "日期 YYYY-MM-DD（默认今天）")
 	diaryCreateCmd.MarkFlagRequired("content")
+
+	// diary get flags
+	diaryGetCmd.Flags().StringVarP(&diaryGetDate, "date", "d", "", "按日期查询 YYYY-MM-DD（与 <id> 二选一）")
 
 	// diary update flags
 	diaryUpdateCmd.Flags().StringVarP(&diaryUpdateContent, "content", "m", "", "新内容 (必填)")
