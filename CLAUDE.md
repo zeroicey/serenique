@@ -225,6 +225,25 @@ Hard contracts from the 08-05 evaluation — do not regress these:
 
 Adding a new module (e.g. drive): `internal/client/drive.go` (typed methods) → `cmd/drive.go` (cobra commands) → register in `cmd/root.go`. Nothing else needs touching.
 
+## Release / 发布流程
+
+版本号来自 git tag（`vX.Y.Z`）——CLI 的 `--version` 由 tag 注入（`git describe --tags` / CI 里 `GITHUB_REF_NAME`），所以**打 tag 是发布的前提**。发布全走 GitHub Actions，流程两步：
+
+```sh
+# 1. 提交并推送 main → docker-publish 推 zeroicey/serenique-{api,mcp}:main
+git push origin main
+
+# 2. 打版本 tag 并推送 → 同时触发 docker-publish（版本 tag + latest）与 release-cli（GitHub Release）
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+- `.github/workflows/docker-publish.yml` — 多架构（linux/amd64+arm64）构建推送 Docker Hub。tag `v*` → `{version}` / `v{version}` / `latest`；main push → `main`；支持 `workflow_dispatch`。需要 GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（Docker Hub access token，**与 `gh` 的 GitHub 登录无关**）。
+- `.github/workflows/release-cli.yml` — tag `v*` 时云编译 5 平台（对齐 Makefile `build-all`）+ `checksums.txt` + `gh release create --generate-notes`。
+- Docker Hub 命名空间：`zeroicey`（`zeroicey/serenique-api`、`zeroicey/serenique-mcp`）。
+- 镜像以**非 root（UID 10001）**运行：全新命名卷自动继承镜像内属主；已存在的卷需一次性 chown 到 10001（`docker run --rm -v <vol>:/data alpine chown -R 10001:10001 /data`），否则容器写不进 `/data/blobs`。
+- 关键坑点（bun `--production` 隐式冻结 lockfile、`--filter` 与 `--frozen-lockfile` 不兼容、metadata-action `enable` 表达式写法）详见 `.ai/worklog/2026-08-05-release-pipeline.md`。
+
 ## Docker
 
 ```sh
