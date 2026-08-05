@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zeroicey/serenique-cli/internal/client"
 )
@@ -263,7 +264,19 @@ func TestEventHelpers(t *testing.T) {
 	if got := eventAllDayLabel(false); got != "按时段" {
 		t.Errorf("eventAllDayLabel(false) = %q, want 按时段", got)
 	}
-	if got := eventTimeLabel("2026-08-05T01:00:00.000Z"); got != "2026-08-05T01:00:00" {
-		t.Errorf("eventTimeLabel = %q, want seconds-trimmed", got)
+	// eventTimeLabel renders in the local timezone with the offset attached, so
+	// a server UTC value ("2026-08-05T01:00:00.000Z") is never mistaken for the
+	// local wall clock. The expected value is derived from the same conversion so
+	// the assertion is independent of the machine's timezone.
+	tm, _ := time.Parse(time.RFC3339Nano, "2026-08-05T01:00:00.000Z")
+	wantLocal := tm.Local().Format("2006-01-02T15:04:05Z07:00")
+	if got := eventTimeLabel("2026-08-05T01:00:00.000Z"); got != wantLocal {
+		t.Errorf("eventTimeLabel = %q, want %q (local)", got, wantLocal)
+	}
+	// And the result always carries an explicit offset (e.g. +08:00, -05:00,
+	// or Z), so the display can never look like a bare, zone-less timestamp.
+	got := eventTimeLabel("2026-08-05T01:00:00.000Z")
+	if !strings.HasSuffix(got, "Z") && !strings.Contains(got, "+") && !strings.Contains(got, "-") {
+		t.Errorf("eventTimeLabel = %q, want an explicit timezone offset", got)
 	}
 }

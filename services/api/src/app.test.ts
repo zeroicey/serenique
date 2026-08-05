@@ -68,4 +68,34 @@ describe("REST contract smoke", () => {
     const body = await res.json();
     expect(body.success).toBe(false);
   });
+
+  test("invalid UUID path params map to 400 VALIDATION, not 500", async () => {
+    // Handlers validate the :id/:attachmentId param as a UUID before touching
+    // the DB, so a malformed id must never surface as an unrelated 500 from a
+    // database query. Regression for the diary/blob handlers, which used to
+    // pass any non-empty string straight through to the service.
+    const app = await makeApp();
+    const badRequests: Array<{ path: string; method?: string }> = [
+      { path: "/api/diaries/not-a-uuid" },
+      { path: "/api/moments/not-a-uuid" },
+      { path: "/api/tasks/not-a-uuid" },
+      { path: "/api/task-groups/not-a-uuid" },
+      { path: "/api/events/not-a-uuid" },
+      { path: "/api/blobs/not-a-uuid" },
+      { path: "/api/blobs/not-a-uuid/file" },
+      { path: "/api/blob-attachments/not-a-uuid", method: "DELETE" },
+      {
+        path: "/api/moments/not-a-uuid/attachments/not-a-uuid",
+        method: "DELETE",
+      },
+    ];
+    for (const { path, method } of badRequests) {
+      const res = await app.request(path, { method: method ?? "GET" });
+      // 400 (VALIDATION), never the 500 a malformed id used to trigger once it
+      // reached the database layer.
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.success).toBe(false);
+    }
+  });
 });

@@ -5,19 +5,12 @@ import {
   CreateBlobAttachmentSchema,
   ListBlobSchema,
 } from "@/modules/blob/blob.types";
-import { handleError } from "@/shared/handler";
+import { handleError, uuidParam } from "@/shared/handler";
 import { Res } from "@/shared/response";
-import { AppError } from "@/shared/errors";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getId(c: Context): string {
-  const id = c.req.param("id");
-  if (!id) throw new AppError("VALIDATION", "缺少 id 参数", 400);
-  return id;
-}
 
 export function parseBlobRange(
   rangeHeader: string | undefined,
@@ -109,7 +102,7 @@ export const blobHandler = {
   /** GET /api/blobs/:id — blob metadata */
   async get(c: Context) {
     try {
-      const result = await blobService.get(getId(c));
+      const result = await blobService.get(uuidParam(c, "id"));
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "blob");
@@ -119,7 +112,7 @@ export const blobHandler = {
   /** GET /api/blobs/:id/file — download / inline preview */
   async getFile(c: Context) {
     try {
-      const id = getId(c);
+      const id = uuidParam(c, "id");
       const expires = c.req.query("expires");
       const signature = c.req.query("signature");
       if (expires || signature) {
@@ -168,7 +161,7 @@ export const blobHandler = {
       const raw = await c.req.json().catch(() => ({}));
       const body = CreateBlobAccessLinkSchema.parse(raw);
       const requestUrl = new URL(c.req.url);
-      const result = await blobService.createAccessLink(getId(c), {
+      const result = await blobService.createAccessLink(uuidParam(c, "id"), {
         ...body,
         baseUrl: requestUrl.origin,
       });
@@ -181,7 +174,7 @@ export const blobHandler = {
   /** DELETE /api/blobs/:id */
   async delete(c: Context) {
     try {
-      await blobService.delete(getId(c));
+      await blobService.delete(uuidParam(c, "id"));
       return Res.noContent("文件删除成功").build(c);
     } catch (e) {
       return handleError(e, c, "blob");
@@ -192,7 +185,7 @@ export const blobHandler = {
   async createAttachment(c: Context) {
     try {
       const body = CreateBlobAttachmentSchema.parse(await c.req.json());
-      const result = await blobService.createAttachment(getId(c), body);
+      const result = await blobService.createAttachment(uuidParam(c, "id"), body);
       return Res.created("关联成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "blob");
@@ -202,7 +195,7 @@ export const blobHandler = {
   /** GET /api/blobs/:id/attachments — list references for a blob */
   async listAttachments(c: Context) {
     try {
-      const result = await blobService.listAttachments(getId(c));
+      const result = await blobService.listAttachments(uuidParam(c, "id"));
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "blob");
@@ -212,7 +205,7 @@ export const blobHandler = {
   /** DELETE /api/blob-attachments/:id — remove a reference only */
   async deleteAttachment(c: Context) {
     try {
-      await blobService.deleteAttachment(getId(c));
+      await blobService.deleteAttachment(uuidParam(c, "id"));
       return Res.noContent("附件关联已删除").build(c);
     } catch (e) {
       return handleError(e, c, "blob");

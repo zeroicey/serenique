@@ -147,8 +147,8 @@ var eventGetCmd = &cobra.Command{
 			"全天":     eventAllDayLabel(result.IsAllDay),
 			"地点":     nullableStr(result.Location),
 			"备注":     nullableStr(result.Note),
-			"创建时间":  prefix(result.CreatedAt, 19),
-			"更新时间":  prefix(result.UpdatedAt, 19),
+			"创建时间":  eventTimeLabel(result.CreatedAt),
+			"更新时间":  eventTimeLabel(result.UpdatedAt),
 		})
 		return nil
 	},
@@ -255,11 +255,18 @@ func validateISO(s, label string) error {
 	return nil
 }
 
-// eventTimeLabel renders a server UTC ISO timestamp for table display, trimmed
-// to seconds ("2026-08-05T01:00:00"). The server returns UTC (suffix Z); the
-// raw offset is not echoed here — callers pass the value they want displayed.
+// eventTimeLabel renders a server UTC ISO timestamp in the local timezone,
+// e.g. "2026-08-05T09:00:00+08:00". The server always returns UTC (suffix Z);
+// a raw prefix would show the UTC wall clock (01:00:00) and mislead a user who
+// entered a local time (+08:00). Converting to the local timezone — and always
+// attaching the offset — keeps the displayed value meaningful and unambiguous.
 func eventTimeLabel(s string) string {
-	return prefix(s, 19)
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		// Defensive: never emit a mangled value for an unexpected format.
+		return prefix(s, 19)
+	}
+	return t.Local().Format("2006-01-02T15:04:05Z07:00")
 }
 
 // eventAllDayLabel renders the all-day flag for table display.

@@ -86,6 +86,9 @@ var blobUploadCmd = &cobra.Command{
 
 文件通过 SHA-256 去重 —— 相同内容的文件不会重复存储。
 
+JSON 模式（--json）下，批量结果位于 data.results[].blobId（每个文件一个条目，成功为 blobId，
+失败为 error），与单文件命令返回的 data.id 字段名不同，脚本解析时请注意。
+
 示例:
   serenique blob upload photo.jpg
   serenique blob upload ./images/*.jpg
@@ -434,6 +437,9 @@ var blobDetachCmd = &cobra.Command{
 	Use:   "detach <attachment-id>",
 	Short: "删除业务关联",
 	Long: `删除一条业务关联记录。此操作仅删除引用，不会删除物理文件。
+
+仅支持非 moment 类型的业务关联（如 diary 等）。闪念 (moment) 的附件请使用:
+  serenique moment detach <moment-id> <attachment-id>
 
 示例:
   serenique blob detach c3d4e5f6

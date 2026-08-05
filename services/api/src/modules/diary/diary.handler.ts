@@ -5,19 +5,12 @@ import {
   ListDiarySchema,
   UpdateDiaryBodySchema,
 } from "@/modules/diary/diary.types";
-import { handleError } from "@/shared/handler";
+import { handleError, uuidParam } from "@/shared/handler";
 import { Res } from "@/shared/response";
-import { AppError, ErrorCode } from "@/shared/errors";
 
 // ---------------------------------------------------------------------------
 // Diary handlers — parse request → call service → build response.
 // ---------------------------------------------------------------------------
-
-function getId(c: Context): string {
-  const id = c.req.param("id");
-  if (!id) throw new AppError(ErrorCode.VALIDATION, "Missing id parameter", 400);
-  return id;
-}
 
 export const diaryHandler = {
   async create(c: Context) {
@@ -42,7 +35,7 @@ export const diaryHandler = {
 
   async get(c: Context) {
     try {
-      const result = await diaryService.get({ id: getId(c) });
+      const result = await diaryService.get({ id: uuidParam(c, "id") });
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "diary");
@@ -51,7 +44,7 @@ export const diaryHandler = {
 
   async update(c: Context) {
     try {
-      const id = getId(c);
+      const id = uuidParam(c, "id");
       const body = UpdateDiaryBodySchema.parse(await c.req.json());
       const result = await diaryService.update({ id, ...body });
       return Res.ok("日记更新成功", result).build(c);
@@ -62,7 +55,7 @@ export const diaryHandler = {
 
   async delete(c: Context) {
     try {
-      await diaryService.delete({ id: getId(c) });
+      await diaryService.delete({ id: uuidParam(c, "id") });
       return Res.noContent("日记删除成功").build(c);
     } catch (e) {
       return handleError(e, c, "diary");

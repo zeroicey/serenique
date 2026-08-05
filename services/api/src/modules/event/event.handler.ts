@@ -1,26 +1,16 @@
 import type { Context } from "hono";
-import { z } from "zod";
 import { eventService } from "@/modules/event/event.service";
 import {
   CreateEventSchema,
   ListEventSchema,
   UpdateEventSchema,
 } from "@/modules/event/event.types";
-import { handleError } from "@/shared/handler";
+import { handleError, uuidParam } from "@/shared/handler";
 import { Res } from "@/shared/response";
-import { AppError } from "@/shared/errors";
 
 // ---------------------------------------------------------------------------
 // Event handlers — parse request → call service → build response.
 // ---------------------------------------------------------------------------
-
-const UuidParamSchema = z.string().uuid();
-
-function getId(c: Context): string {
-  const id = c.req.param("id");
-  if (!id) throw new AppError("VALIDATION", "缺少 id 参数", 400);
-  return UuidParamSchema.parse(id);
-}
 
 export const eventHandler = {
   async create(c: Context) {
@@ -45,7 +35,7 @@ export const eventHandler = {
 
   async get(c: Context) {
     try {
-      const result = await eventService.get({ id: getId(c) });
+      const result = await eventService.get({ id: uuidParam(c, "id") });
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "event");
@@ -55,7 +45,7 @@ export const eventHandler = {
   async update(c: Context) {
     try {
       const body = UpdateEventSchema.parse(await c.req.json());
-      const result = await eventService.update({ id: getId(c), ...body });
+      const result = await eventService.update({ id: uuidParam(c, "id"), ...body });
       return Res.ok("事件更新成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "event");
@@ -64,7 +54,7 @@ export const eventHandler = {
 
   async delete(c: Context) {
     try {
-      await eventService.delete({ id: getId(c) });
+      await eventService.delete({ id: uuidParam(c, "id") });
       return Res.noContent("事件删除成功").build(c);
     } catch (e) {
       return handleError(e, c, "event");

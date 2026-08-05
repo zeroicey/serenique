@@ -12,7 +12,8 @@ import { runTool } from "./helpers";
 // Event MCP tools — wrap event service operations for AI consumption.
 // Field contract follows the API source: title, startAt/endAt (ISO 8601 with a
 // timezone offset), isAllDay, location, note. List is a time-range query
-// (?from=&to=) returning a plain array — no pagination.
+// (?from=&to=) returning a plain array — no pagination; it is wrapped in
+// {items, total} at the MCP boundary to match every other list tool.
 // ---------------------------------------------------------------------------
 
 const EventIdSchema = z.object({
@@ -96,10 +97,17 @@ export function registerEventTools(server: McpServer) {
     {
       title: "List Events",
       description:
-        "按时间窗口查询事件：返回与 [from, to) 重叠（开始或结束落在窗口内）的事件，按开始时间升序排列。无分页，一次返回窗口内全部事件。",
+        "按时间窗口查询事件：返回与 [from, to) 重叠（开始或结束落在窗口内）的事件，按开始时间升序排列。无分页，一次返回窗口内全部事件。返回 {items, total}，与 list_diaries 等其他列表工具结构一致。",
       inputSchema: ListEventToolSchema,
     },
-    async (input) => runTool(() => eventService.list(input)),
+    async (input) =>
+      runTool(async () => {
+        // The HTTP/CLI contract for the event list is a bare array (no
+        // pagination), but every other list tool returns {items, total} —
+        // wrap here so AI/script consumers don't branch on the shape.
+        const items = await eventService.list(input);
+        return { items, total: items.length };
+      }),
   );
 
   server.registerTool(

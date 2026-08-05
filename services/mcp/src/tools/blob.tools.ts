@@ -31,8 +31,26 @@ const UploadBlobToolSchema = z.object({
     ),
 });
 
+/**
+ * Build the upload endpoint URL for user-facing guidance. Prefer the
+ * host-reachable public base URL when configured: in Docker
+ * SERENIQUE_API_BASE_URL is the compose-service hostname (http://api:3000),
+ * which an agent on the host cannot resolve. Fall back to the API base URL so
+ * single-host setups keep working unchanged. Pure — unit-testable without env.
+ */
+export function buildUploadEndpoint(
+  apiBaseUrl: string,
+  publicBaseUrl?: string,
+): string {
+  const base = (publicBaseUrl ?? apiBaseUrl).replace(/\/+$/, "");
+  return `${base}/api/blobs/upload`;
+}
+
 function uploadEndpoint() {
-  return `${env.SERENIQUE_API_BASE_URL.replace(/\/+$/, "")}/api/blobs/upload`;
+  return buildUploadEndpoint(
+    env.SERENIQUE_API_BASE_URL,
+    env.SERENIQUE_PUBLIC_API_BASE_URL,
+  );
 }
 
 function shellSingleQuote(value: string) {

@@ -33,7 +33,12 @@ services:
       NODE_ENV: production
       MCP_TRANSPORT: streamable-http
       PORT: 3001
+      # Internal reach (compose service hostname); the MCP uses the service
+      # layer directly, so this only feeds guidance fallbacks.
       SERENIQUE_API_BASE_URL: http://api:3000
+      # Host-reachable base URL for upload curl examples — the API port is
+      # published on localhost:3000, so host-side agents can reach it there.
+      SERENIQUE_PUBLIC_API_BASE_URL: ${SERENIQUE_PUBLIC_API_BASE_URL:-http://localhost:3000}
     volumes:
       - blob-data:/data/blobs
     extra_hosts:

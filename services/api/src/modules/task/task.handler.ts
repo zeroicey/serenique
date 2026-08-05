@@ -1,5 +1,4 @@
 import type { Context } from "hono";
-import { z } from "zod";
 import { taskService } from "@/modules/task/task.service";
 import {
   CreateTaskGroupSchema,
@@ -9,21 +8,12 @@ import {
   UpdateTaskGroupSchema,
   UpdateTaskSchema,
 } from "@/modules/task/task.types";
-import { handleError } from "@/shared/handler";
+import { handleError, uuidParam } from "@/shared/handler";
 import { Res } from "@/shared/response";
-import { AppError } from "@/shared/errors";
 
 // ---------------------------------------------------------------------------
 // Task handlers — parse request → call service → build response.
 // ---------------------------------------------------------------------------
-
-const UuidParamSchema = z.string().uuid();
-
-function getId(c: Context): string {
-  const id = c.req.param("id");
-  if (!id) throw new AppError("VALIDATION", "缺少 id 参数", 400);
-  return UuidParamSchema.parse(id);
-}
 
 export const taskHandler = {
   // ---- Task groups ----
@@ -50,7 +40,7 @@ export const taskHandler = {
 
   async getTaskGroup(c: Context) {
     try {
-      const result = await taskService.getTaskGroup({ id: getId(c) });
+      const result = await taskService.getTaskGroup({ id: uuidParam(c, "id") });
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "task");
@@ -60,7 +50,7 @@ export const taskHandler = {
   async updateTaskGroup(c: Context) {
     try {
       const body = UpdateTaskGroupSchema.parse(await c.req.json());
-      const result = await taskService.updateTaskGroup({ id: getId(c), ...body });
+      const result = await taskService.updateTaskGroup({ id: uuidParam(c, "id"), ...body });
       return Res.ok("任务组更新成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "task");
@@ -69,7 +59,7 @@ export const taskHandler = {
 
   async deleteTaskGroup(c: Context) {
     try {
-      await taskService.deleteTaskGroup({ id: getId(c) });
+      await taskService.deleteTaskGroup({ id: uuidParam(c, "id") });
       return Res.noContent("任务组删除成功").build(c);
     } catch (e) {
       return handleError(e, c, "task");
@@ -100,7 +90,7 @@ export const taskHandler = {
 
   async getTask(c: Context) {
     try {
-      const result = await taskService.getTask({ id: getId(c) });
+      const result = await taskService.getTask({ id: uuidParam(c, "id") });
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "task");
@@ -110,7 +100,7 @@ export const taskHandler = {
   async updateTask(c: Context) {
     try {
       const body = UpdateTaskSchema.parse(await c.req.json());
-      const result = await taskService.updateTask({ id: getId(c), ...body });
+      const result = await taskService.updateTask({ id: uuidParam(c, "id"), ...body });
       return Res.ok("任务更新成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "task");
@@ -119,7 +109,7 @@ export const taskHandler = {
 
   async deleteTask(c: Context) {
     try {
-      await taskService.deleteTask({ id: getId(c) });
+      await taskService.deleteTask({ id: uuidParam(c, "id") });
       return Res.noContent("任务删除成功").build(c);
     } catch (e) {
       return handleError(e, c, "task");
