@@ -67,6 +67,16 @@ go test -count=1 ./...  # Full test run (use -count=1 to bypass cache)
 
 Network note: pulling Go modules requires the China mirror `GOPROXY=https://goproxy.cn,direct` (`proxy.golang.org` is unreachable on this network).
 
+Docker build network note: the build container cannot reach `registry.npmjs.org` directly — `docker compose build` fails at `bun install` with `ConnectionRefused` on every tarball. Rebuild with the host proxy injected as build args (Docker's predefined proxy args, no Dockerfile change):
+
+```sh
+docker compose build --build-arg http_proxy=http://host.docker.internal:7897 \
+  --build-arg https_proxy=http://host.docker.internal:7897 \
+  --build-arg no_proxy=localhost,127.0.0.1 api mcp
+```
+
+`host.docker.internal:7897` is the host's local HTTP proxy (see the `http_proxy` env on this machine); adjust the port if it changes. `docker compose up -d` (without `--build`) does not need it — only rebuilds. The Dockerfile itself stays registry-agnostic so it builds on any network.
+
 Runtime environment for Docker Compose is loaded from the project root `.env`. Service-local `.env` files are not used. Keep secrets out of images; root `.dockerignore` excludes `.env` files from the build context.
 
 ## Architecture
