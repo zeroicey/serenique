@@ -19,7 +19,14 @@ import {
 // are idempotent. Rows created here are removed in afterAll by id.
 // ---------------------------------------------------------------------------
 
-const TEST_DATES = ["2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"];
+const TEST_DATES = [
+  "2020-01-01",
+  "2020-01-02",
+  "2020-01-03",
+  "2020-01-04",
+  "2020-01-05",
+  "2020-01-06",
+];
 
 setTestEnv();
 
@@ -118,5 +125,24 @@ describe.skipIf(!RUN_DB_TESTS)("diary service DB integration", () => {
       code: "NOT_FOUND",
       status: 404,
     });
+  });
+
+  test("getByDate returns the entry for an existing date", async () => {
+    const created = await service.create({
+      content: "按日期查",
+      diaryDate: "2020-01-05",
+    });
+    createdIds.push(created.id);
+
+    const got = await service.getByDate({ diaryDate: "2020-01-05" });
+    expect(got.id).toBe(created.id);
+    expect(got.diaryDate).toBe("2020-01-05");
+    expect(got.content).toBe("按日期查");
+  });
+
+  test("getByDate rejects with 404 for a missing date", async () => {
+    await expect(
+      service.getByDate({ diaryDate: "2020-01-06" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
   });
 });

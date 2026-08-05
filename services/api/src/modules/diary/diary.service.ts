@@ -6,6 +6,7 @@ import type {
   CreateDiaryInput,
   DiaryEntry,
   GetDiaryInput,
+  GetDiaryByDateInput,
   ListDiaryInput,
   UpdateDiaryInput,
   DeleteDiaryInput,
@@ -54,6 +55,15 @@ export const diaryService = {
 
   async get(input: GetDiaryInput): Promise<DiaryEntry> {
     const [row] = await db.select().from(diaries).where(eq(diaries.id, input.id));
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "日记不存在", 404);
+    return toDiaryEntry(row);
+  },
+
+  async getByDate(input: GetDiaryByDateInput): Promise<DiaryEntry> {
+    const [row] = await db
+      .select()
+      .from(diaries)
+      .where(eq(diaries.diaryDate, input.diaryDate));
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "日记不存在", 404);
     return toDiaryEntry(row);
   },

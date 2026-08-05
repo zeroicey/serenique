@@ -24,12 +24,17 @@ export const UpdateDiaryBodySchema = z.object({
   content: z.string().min(1),
 });
 
+export const GetDiaryByDateSchema = z.object({
+  date: z.string().regex(dateRegex),
+});
+
 export type CreateDiaryInput = z.infer<typeof CreateDiarySchema>;
 export type ListDiaryInput = z.infer<typeof ListDiarySchema>;
 export type UpdateDiaryBody = z.infer<typeof UpdateDiaryBodySchema>;
 
 // Service-layer types — id is always passed separately from the handler
 export type GetDiaryInput = { id: string };
+export type GetDiaryByDateInput = { diaryDate: string };
 export type UpdateDiaryInput = { id: string } & UpdateDiaryBody;
 export type DeleteDiaryInput = { id: string };
 

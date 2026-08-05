@@ -13,11 +13,13 @@ export type {
   CreateDiaryInput,
   ListDiaryInput,
   GetDiaryInput,
+  GetDiaryByDateInput,
   UpdateDiaryInput,
   DeleteDiaryInput,
 } from "@/modules/diary/diary.types";
 export {
   CreateDiarySchema,
+  GetDiaryByDateSchema,
   ListDiarySchema,
   UpdateDiaryBodySchema,
 } from "@/modules/diary/diary.types";

@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { diaryService } from "@/modules/diary/diary.service";
 import {
   CreateDiarySchema,
+  GetDiaryByDateSchema,
   ListDiarySchema,
   UpdateDiaryBodySchema,
 } from "@/modules/diary/diary.types";
@@ -36,6 +37,16 @@ export const diaryHandler = {
   async get(c: Context) {
     try {
       const result = await diaryService.get({ id: uuidParam(c, "id") });
+      return Res.ok("查询成功", result).build(c);
+    } catch (e) {
+      return handleError(e, c, "diary");
+    }
+  },
+
+  async getByDate(c: Context) {
+    try {
+      const { date } = GetDiaryByDateSchema.parse({ date: c.req.param("date") });
+      const result = await diaryService.getByDate({ diaryDate: date });
       return Res.ok("查询成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "diary");

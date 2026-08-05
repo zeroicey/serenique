@@ -65,6 +65,19 @@ describe("diary schemas", () => {
     expect(UpdateDiaryBodySchema.safeParse({ content: "改" }).success).toBe(true);
     expect(UpdateDiaryBodySchema.safeParse({ content: "" }).success).toBe(false);
   });
+
+  test("GetDiaryByDateSchema accepts YYYY-MM-DD and rejects other formats", async () => {
+    setTestEnv();
+    const { GetDiaryByDateSchema } = await import("./diary.types");
+
+    expect(GetDiaryByDateSchema.safeParse({ date: "2026-08-05" }).success).toBe(
+      true,
+    );
+    expect(GetDiaryByDateSchema.safeParse({ date: "2026/08/05" }).success).toBe(
+      false,
+    );
+    expect(GetDiaryByDateSchema.safeParse({ date: "abc" }).success).toBe(false);
+  });
 });
 
 describe("diary mappers", () => {
