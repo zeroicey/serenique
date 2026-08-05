@@ -1,0 +1,62 @@
+name: release-cli
+
+# Cross-compile the Go CLI on GitHub cloud and attach the binaries to a
+# GitHub Release. Triggered by version tags (v*). Mirrors apps/cli/Makefile's
+# build-all target (5 platforms) and injects version/commit/date via ldflags.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  VERSION: ${{ github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/cli/go.mod
+          cache-dependency-path: apps/cli/go.sum
+
+      - name: Test
+        working-directory: apps/cli
+        run: go test ./...
+
+      - name: Build binaries
+        working-directory: apps/cli
+        run: |
+          set -euo pipefail
+          COMMIT="$(echo "${GITHUB_SHA}" | cut -c1-7)"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          mkdir -p dist
+          for target in "linux amd64" "linux arm64" "darwin amd64" "darwin arm64" "windows amd64"; do
+            read -r os arch <<< "$target"
+            ext=""
+            [ "$os" = "windows" ] && ext=".exe"
+            out="dist/serenique-${os}-${arch}${ext}"
+            GOOS="${os}" GOARCH="${arch}" CGO_ENABLED=0 go build \
+              -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" \
+              -o "${out}" .
+          done
+          (cd dist && sha256sum *) > dist/checksums.txt
+          ls -lh dist
+
+      - name: Create GitHub Release
+        working-directory: apps/cli
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${VERSION}" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${VERSION}" \
+            --generate-notes
