@@ -17,6 +17,7 @@ class CommentSection extends ConsumerStatefulWidget {
 class _CommentSectionState extends ConsumerState<CommentSection> {
   final _controller = TextEditingController();
   bool _submitting = false;
+  bool _removing = false;
 
   @override
   void dispose() {
@@ -42,9 +43,20 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   }
 
   Future<void> _remove(String commentId) async {
-    await ref
-        .read(momentActionsProvider)
-        .deleteComment(widget.momentId, commentId);
+    if (_removing) return;
+    setState(() => _removing = true);
+    try {
+      await ref
+          .read(momentActionsProvider)
+          .deleteComment(widget.momentId, commentId);
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _removing = false);
+    }
   }
 
   @override
@@ -69,7 +81,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             trailing: IconButton(
               icon: const Icon(Icons.close, size: 18),
               tooltip: '删除评论',
-              onPressed: () => _remove(c.id),
+              onPressed: _removing ? null : () => _remove(c.id),
             ),
           ),
         Row(
