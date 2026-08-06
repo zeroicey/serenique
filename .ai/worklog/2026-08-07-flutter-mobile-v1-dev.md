@@ -29,3 +29,12 @@
 - **契约以 `services/api` 源码为准**：moment 用 `text`（不是 content）、event 用 `title/startAt/endAt/isAllDay/location/note`、diary 用 `content/diaryDate`；列表解包 `items`（事件列表除外，是裸数组）。
 - **首次真机安装**：手机「设置 → 通用 → VPN 与设备管理」信任开发者证书，否则报「未受信任的开发者」。
 - **Android 未装 SDK**：`flutter doctor` Android 项红不影响 iOS；要跑 Android 再装。
+
+## Post-v1 待办（终评 triage 结论，发布前/下轮迭代处理）
+
+- **ATS 收紧（发布前必做）**：`NSAllowsArbitraryLoads=true` 对 Release 也生效，dev-only 限定只是文档层。收紧为 `NSAllowsLocalNetworking`（覆盖局域网 IP/.local，但**不一定覆盖 Tailscale 100.x 段**）——先确认开发时手机走局域网 IP 还是 Tailscale 再定；或发布前改成域名白名单。
+- **Auth 接入（v0.3.0 对齐）**：后端 auth 落地后，登录页接真逻辑，密钥存 `flutter_secure_storage`（Keychain），`authTokenProvider` 从占位改为读取。
+- **测试补强（低成本）**：ApiClient 核心方法用 dio mock adapter 补单测；`DiaryActions.save` 的 update-vs-create 分支补一个 provider 级测试；`unwrapItems` 对 `{'items': 非List}` 硬化（一行）。
+- **体验打磨**：列表下拉刷新用 `skipLoadingOnRefresh: true`（避免整屏转圈）；时间戳用 `intl` `DateFormat` 格式化（现为原始 ISO）；评论删除加确认对话框（moment 删除有，评论没有）。
+- **功能补全**：moment 附件（`image_picker`，spec 明确顺延）、分页（`momentListProvider` 固定 page=1/pageSize=50，超 50 条需分页）、路由路径抽共享常量（`AppShell._items` 与 `router.dart` 重复）、task/event 模块。
+- **平台**：Android 需装 SDK 后才能跑；`localhost` 默认值对 Android 模拟器应为 `10.0.2.2`。
