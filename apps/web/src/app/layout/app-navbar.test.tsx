@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { renderWithProviders } from '@/test/helpers'
 import { AppNavbar } from './app-navbar'
 
 describe('AppNavbar', () => {
@@ -17,7 +18,7 @@ describe('AppNavbar', () => {
         handle: { nav: <div>测试导航</div> },
       },
     ])
-    render(<RouterProvider router={router} />)
+    renderWithProviders(<RouterProvider router={router} />)
     expect(screen.getByText('测试导航')).toBeInTheDocument()
   })
 })
