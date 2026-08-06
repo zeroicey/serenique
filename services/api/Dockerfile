@@ -14,10 +14,14 @@ RUN groupadd --gid 10001 serenique \
 
 WORKDIR /app
 
-# Workspace manifests first, for layer caching
+# Workspace manifests first, for layer caching. apps/web is a workspace member
+# (root package.json workspaces: ["services/*", "apps/web"]); its package.json
+# must be present for bun install to validate the workspace, even though this
+# image only builds/installs @serenique/api.
 COPY package.json bun.lock tsconfig.base.json ./
 COPY scripts/docker-entrypoint.sh scripts/
 COPY services/api/package.json services/api/
+COPY apps/web/package.json apps/web/
 
 # Production deps only — no dev tooling in the image.
 # Note: --frozen-lockfile is deliberately omitted here. With a --filter install

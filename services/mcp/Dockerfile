@@ -14,11 +14,15 @@ RUN groupadd --gid 10001 serenique \
 
 WORKDIR /app
 
-# Workspace manifests first, for layer caching
+# Workspace manifests first, for layer caching. apps/web is a workspace member
+# (root package.json workspaces: ["services/*", "apps/web"]); its package.json
+# must be present for `bun install --frozen-lockfile` to resolve the workspace,
+# even though the MCP image never runs web code.
 COPY package.json bun.lock tsconfig.base.json ./
 COPY scripts/docker-entrypoint.sh scripts/
 COPY services/api/package.json services/api/
 COPY services/mcp/package.json services/mcp/
+COPY apps/web/package.json apps/web/
 
 # Production deps only, pinned to bun.lock — no dev tooling in the image
 RUN bun install --frozen-lockfile --omit=dev
