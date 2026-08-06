@@ -41,23 +41,35 @@ describe.skipIf(!RUN_DB_TESTS)("auth middleware integration", () => {
     const setCookie = login.headers.get("set-cookie") ?? "";
     const cookie = setCookie.split(";")[0];
 
-    // 带 Cookie 建日记
-    const created = await app.request("/api/diaries", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        cookie,
-      },
-      body: JSON.stringify({ content: "auth-e2e", diaryDate: "2026-08-06" }),
-    });
-    expect(created.status).toBe(201);
-    const body = await created.json();
-    const id = body.data.id;
+    // 带 Cookie 建日记。diary 模块按 diaryDate 唯一，固定日期第二次跑会 409，
+    // 所以在 finally 里按 id 删除本轮创建的日记，保证对持久库可重复运行。
+    let id: string | undefined;
+    try {
+      const created = await app.request("/api/diaries", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({ content: "auth-e2e", diaryDate: "2026-08-06" }),
+      });
+      expect(created.status).toBe(201);
+      const body = await created.json();
+      id = body.data.id as string;
 
-    // 带 Cookie 读回
-    const got = await app.request(`/api/diaries/${id}`, { headers: { cookie } });
-    expect(got.status).toBe(200);
-    expect((await got.json()).data.content).toBe("auth-e2e");
+      // 带 Cookie 读回
+      const got = await app.request(`/api/diaries/${id}`, { headers: { cookie } });
+      expect(got.status).toBe(200);
+      expect((await got.json()).data.content).toBe("auth-e2e");
+    } finally {
+      // 幂等清理：删除本轮创建的日记（即使中间断言失败也执行）。
+      if (id) {
+        await app.request(`/api/diaries/${id}`, {
+          method: "DELETE",
+          headers: { cookie },
+        });
+      }
+    }
   });
 
   test("Bearer works for non-browser clients", async () => {
