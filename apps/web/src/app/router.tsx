@@ -8,6 +8,7 @@ import { DiaryNav } from '@/features/diary/components/diary-nav'
 import { DiaryCreateNav } from '@/features/diary/components/diary-create-nav'
 import { TaskNav } from '@/features/task/components/task-nav'
 import { EventNav } from '@/features/event/components/event-nav'
+import { AuthGuard } from '@/features/auth/components/auth-guard'
 
 // 懒加载 + Suspense 包装；handle.nav 注册该路由的动态导航内容。
 function lazyPage(loader: () => Promise<{ default: ComponentType }>) {
@@ -20,42 +21,48 @@ function lazyPage(loader: () => Promise<{ default: ComponentType }>) {
 }
 
 const router = createBrowserRouter([
+  { path: '/login', element: lazyPage(() => import('@/features/auth/pages/login-page')) },
   {
     path: '/',
-    element: <AppLayout />,
+    element: <AuthGuard />,
     children: [
-      { index: true, element: lazyPage(() => import('@/app/pages/welcome-page')) },
       {
-        path: 'moment',
-        element: lazyPage(() => import('@/features/moment/pages/moment-list-page')),
-        handle: { nav: <MomentNav /> },
+        element: <AppLayout />,
+        children: [
+          { index: true, element: lazyPage(() => import('@/app/pages/welcome-page')) },
+          {
+            path: 'moment',
+            element: lazyPage(() => import('@/features/moment/pages/moment-list-page')),
+            handle: { nav: <MomentNav /> },
+          },
+          {
+            path: 'moment/create',
+            element: lazyPage(() => import('@/features/moment/pages/moment-create-page')),
+            handle: { nav: <MomentCreateNav /> },
+          },
+          {
+            path: 'diary',
+            element: lazyPage(() => import('@/features/diary/pages/diary-list-page')),
+            handle: { nav: <DiaryNav /> },
+          },
+          {
+            path: 'diary/write',
+            element: lazyPage(() => import('@/features/diary/pages/diary-create-page')),
+            handle: { nav: <DiaryCreateNav /> },
+          },
+          {
+            path: 'task',
+            element: lazyPage(() => import('@/features/task/pages/task-page')),
+            handle: { nav: <TaskNav /> },
+          },
+          {
+            path: 'event',
+            element: lazyPage(() => import('@/features/event/pages/event-page')),
+            handle: { nav: <EventNav /> },
+          },
+          { path: '*', element: lazyPage(() => import('@/app/pages/not-found-page')) },
+        ],
       },
-      {
-        path: 'moment/create',
-        element: lazyPage(() => import('@/features/moment/pages/moment-create-page')),
-        handle: { nav: <MomentCreateNav /> },
-      },
-      {
-        path: 'diary',
-        element: lazyPage(() => import('@/features/diary/pages/diary-list-page')),
-        handle: { nav: <DiaryNav /> },
-      },
-      {
-        path: 'diary/write',
-        element: lazyPage(() => import('@/features/diary/pages/diary-create-page')),
-        handle: { nav: <DiaryCreateNav /> },
-      },
-      {
-        path: 'task',
-        element: lazyPage(() => import('@/features/task/pages/task-page')),
-        handle: { nav: <TaskNav /> },
-      },
-      {
-        path: 'event',
-        element: lazyPage(() => import('@/features/event/pages/event-page')),
-        handle: { nav: <EventNav /> },
-      },
-      { path: '*', element: lazyPage(() => import('@/app/pages/not-found-page')) },
     ],
   },
 ])

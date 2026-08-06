@@ -1,6 +1,7 @@
 import { MoreHorizontal } from 'lucide-react'
 import { useState } from 'react'
 import { MediaPreviewDialog } from '@/components/common/media-preview-dialog'
+import { useBlobAccessUrls } from '@/features/blob/access'
 import type { MomentAttachmentEntry } from '@/features/moment/api'
 import type { MediaFile } from '@/types/media'
 
@@ -15,6 +16,10 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
   const [expanded, setExpanded] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
+  // 拉取所有附件的签名访问链接（凭证在 query，跨站 <img> 不受第三方 Cookie 拦截）。
+  const blobIds = attachments.map((a) => a.blob.id)
+  const { data: accessUrls } = useBlobAccessUrls(blobIds)
+
   const sorted = [...attachments].sort((a, b) => a.sortOrder - b.sortOrder)
   const needsExpand = sorted.length > PREVIEW_COUNT + 1
   const display = needsExpand && !expanded ? sorted.slice(0, PREVIEW_COUNT) : sorted
@@ -23,7 +28,7 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
     id: a.id,
     name: a.displayName ?? a.blob.originalName,
     type: a.blob.mimeType,
-    url: a.blob.fileUrl,
+    url: accessUrls?.[a.blob.id] ?? a.blob.fileUrl,
   }))
 
   if (sorted.length === 0) return null
@@ -37,7 +42,10 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
             className="aspect-square cursor-pointer overflow-hidden rounded-lg bg-muted"
             onClick={() => setPreviewIndex(i)}
           >
-            <AttachmentTile attachment={a} />
+            <AttachmentTile
+              attachment={a}
+              src={accessUrls?.[a.blob.id] ?? a.blob.fileUrl}
+            />
           </div>
         ))}
         {needsExpand && !expanded && (
@@ -64,13 +72,19 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
   )
 }
 
-function AttachmentTile({ attachment }: { attachment: MomentAttachmentEntry }) {
+function AttachmentTile({
+  attachment,
+  src,
+}: {
+  attachment: MomentAttachmentEntry
+  src: string
+}) {
   const { blob } = attachment
   const isVideo = blob.mimeType.startsWith('video/')
   if (blob.mimeType.startsWith('image/')) {
     return (
       <img
-        src={blob.fileUrl}
+        src={src}
         alt={blob.originalName}
         loading="lazy"
         className="h-full w-full object-cover"

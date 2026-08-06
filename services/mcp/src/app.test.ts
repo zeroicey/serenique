@@ -21,6 +21,42 @@ function createAppFetch(app: {
 }
 
 describe("createMcpApp", () => {
+  test("requires a bearer token on /mcp when AUTH_TOKEN is set", async () => {
+    // Must be >=32 chars: the shared API env module (transitively imported via
+    // @serenique/api) validates AUTH_TOKEN with z.string().min(32) at import
+    // time, so a short value here would throw before createMcpApp even runs.
+    const token = "test-mcp-token-0123456789abcdef1";
+    setTestEnv();
+    process.env.AUTH_TOKEN = token;
+    try {
+      const { createMcpApp } = await import("./app");
+      const app = createMcpApp({ enableJsonResponse: true });
+
+      const noAuth = await app.request("/mcp", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+      });
+      expect(noAuth.status).toBe(401);
+
+      const withAuth = await app.request("/mcp", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
+      });
+      expect(withAuth.status).not.toBe(401);
+
+      // /health stays reachable even with auth enabled.
+      const health = await app.request("/health");
+      expect(health.status).toBe(200);
+    } finally {
+      delete process.env.AUTH_TOKEN;
+    }
+  });
+
   test("serves a health route", async () => {
     setTestEnv();
     const { createMcpApp } = await import("./app");
