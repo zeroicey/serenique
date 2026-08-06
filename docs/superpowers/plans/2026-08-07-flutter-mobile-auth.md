@@ -575,6 +575,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/app.dart';
 import 'package:serenique_mobile/features/auth/auth_providers.dart';
+import 'package:serenique_mobile/features/auth/login_page.dart';
 import 'helpers.dart';
 
 void main() {
@@ -584,7 +585,7 @@ void main() {
       child: const App(),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('登录'), findsWidgets);
+    expect(find.byType(LoginPage), findsOneWidget);
   });
 }
 ```
@@ -670,7 +671,7 @@ void main() {
       child: const MaterialApp(home: LoginPage()),
     ));
     await tester.enterText(find.byType(TextField), 'bad-token');
-    await tester.tap(find.text('登录'));
+    await tester.tap(find.widgetWithText(FilledButton, '登录'));
     await tester.pumpAndSettle();
     expect(find.text('密钥错误，请检查后重试'), findsOneWidget);
   });
