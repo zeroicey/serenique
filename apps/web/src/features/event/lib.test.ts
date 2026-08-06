@@ -1,9 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import type { EventEntry } from './api'
-import { dayWindow, eventTimeLabel, sortEvents, toLocalInputValue, toLocalISO } from './lib'
+import {
+  dayWindow,
+  eventTimeLabel,
+  shiftDate,
+  sortEvents,
+  toLocalInputValue,
+  toLocalISO,
+} from './lib'
 
 // 用 new Date(y, m-1, d, hh, mi) 构造本地时间，断言均基于本地时区。
 const HOUR_MS = 3_600_000
+
+describe('shiftDate', () => {
+  it('前后一天（含跨月/跨年）', () => {
+    expect(shiftDate('2026-08-06', 1)).toBe('2026-08-07')
+    expect(shiftDate('2026-08-31', 1)).toBe('2026-09-01')
+    expect(shiftDate('2026-01-01', -1)).toBe('2025-12-31')
+  })
+})
 
 describe('dayWindow', () => {
   it('返回本地当日 [00:00, 次日00:00) 窗口', () => {

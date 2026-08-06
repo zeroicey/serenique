@@ -3,6 +3,15 @@ import type { EventEntry } from './api'
 
 // 事件 feature 纯函数：时间窗口 / 时区转换 / 展示标签 / 排序。无 DB、无 IO，毫秒级单测。
 
+/** 日期（YYYY-MM-DD）± N 天（本地），返回 YYYY-MM-DD。正午构造避免夏令时边界抖动。 */
+export function shiftDate(date: string, delta: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const next = new Date(y, m - 1, d + delta, 12, 0, 0)
+  const mm = String(next.getMonth() + 1).padStart(2, '0')
+  const dd = String(next.getDate()).padStart(2, '0')
+  return `${next.getFullYear()}-${mm}-${dd}`
+}
+
 /** YYYY-MM-DD（本地）→ 当日窗口 [00:00, 次日00:00) 的 ISO（Z，后端 z.iso.datetime 接受）。 */
 export function dayWindow(date: string): { from: string; to: string } {
   const [y, m, d] = date.split('-').map(Number)
