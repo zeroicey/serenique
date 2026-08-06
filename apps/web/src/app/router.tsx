@@ -6,6 +6,7 @@ import { MomentNav } from '@/features/moment/components/moment-nav'
 import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
 import { DiaryNav } from '@/features/diary/components/diary-nav'
 import { DiaryCreateNav } from '@/features/diary/components/diary-create-nav'
+import { TaskNav } from '@/features/task/components/task-nav'
 
 // 懒加载 + Suspense 包装；handle.nav 注册该路由的动态导航内容。
 function lazyPage(loader: () => Promise<{ default: ComponentType }>) {
@@ -42,6 +43,11 @@ const router = createBrowserRouter([
         path: 'diary/write',
         element: lazyPage(() => import('@/features/diary/pages/diary-create-page')),
         handle: { nav: <DiaryCreateNav /> },
+      },
+      {
+        path: 'task',
+        element: lazyPage(() => import('@/features/task/pages/task-page')),
+        handle: { nav: <TaskNav /> },
       },
       { path: '*', element: lazyPage(() => import('@/app/pages/not-found-page')) },
     ],

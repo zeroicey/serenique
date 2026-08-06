@@ -1,4 +1,4 @@
-import { BookOpen, FileText } from 'lucide-react'
+import { BookOpen, FileText, ListTodo } from 'lucide-react'
 import { NavLink } from 'react-router'
 import {
   Sidebar,
@@ -39,6 +39,16 @@ export function AppSidebar() {
                 <SidebarMenuButton isActive={isActive}>
                   <BookOpen />
                   <span className="text-lg">日记</span>
+                </SidebarMenuButton>
+              )}
+            </NavLink>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <NavLink to="/task" className="flex items-center gap-2">
+              {({ isActive }) => (
+                <SidebarMenuButton isActive={isActive}>
+                  <ListTodo />
+                  <span className="text-lg">任务</span>
                 </SidebarMenuButton>
               )}
             </NavLink>
