@@ -1,0 +1,3 @@
+# Cloudflare Pages SPA 兜底：所有路径回退到 index.html，让客户端路由接管。
+# （顺带让 /api/* 之外的路径不会被 404；API 请求走的是 api.zeroicey.me 域名，不走这里。）
+/*    /index.html   200
