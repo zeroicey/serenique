@@ -1,9 +1,129 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/network/api_exception.dart';
+import '../../../shared/widgets/async_view.dart';
+import 'diary_providers.dart';
 
-class DiaryEditPage extends StatelessWidget {
+class DiaryEditPage extends ConsumerStatefulWidget {
   const DiaryEditPage({super.key, required this.date});
-  final String date;
+
+  final String date; // YYYY-MM-DD
+
   @override
-  Widget build(BuildContext context) =>
-      Scaffold(appBar: AppBar(title: Text(date)), body: const Center(child: Text('日记编辑（开发中）')));
+  ConsumerState<DiaryEditPage> createState() => _DiaryEditPageState();
+}
+
+class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
+  final _controller = TextEditingController();
+  bool _loaded = false;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final content = _controller.text.trim();
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('内容不能为空')));
+      return;
+    }
+    final existingId = ref.read(diaryByDateProvider(widget.date)).value?.id;
+    setState(() => _saving = true);
+    try {
+      await ref.read(diaryActionsProvider).save(
+            existingId: existingId,
+            date: widget.date,
+            content: content,
+          );
+      if (mounted) context.pop();
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    final existing = ref.read(diaryByDateProvider(widget.date)).value;
+    if (existing == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除这篇日记？'),
+        content: const Text('删除后不可恢复。'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await ref.read(diaryActionsProvider).delete(id: existing.id, date: widget.date);
+    if (mounted) context.pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = ref.watch(diaryByDateProvider(widget.date));
+    if (!_loaded && entry.hasValue) {
+      _loaded = true;
+      _controller.text = entry.value?.content ?? '';
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.date),
+        actions: [
+          if (entry.hasValue && entry.value != null)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: '删除日记',
+              onPressed: _delete,
+            ),
+        ],
+      ),
+      body: entry.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => AsyncErrorView(
+            error: err, onRetry: () => ref.invalidate(diaryByDateProvider(widget.date))),
+        data: (_) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: const InputDecoration(
+                      hintText: '写下今天的日记…', border: OutlineInputBorder()),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(
+                          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('保存'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

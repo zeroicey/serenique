@@ -40,9 +40,10 @@ class DiaryActions {
     return entry;
   }
 
-  Future<void> delete(String id) async {
+  Future<void> delete({required String id, required String date}) async {
     await _api.delete(id);
     _ref.invalidate(diaryListProvider);
+    _ref.invalidate(diaryByDateProvider(date));
   }
 }
 
