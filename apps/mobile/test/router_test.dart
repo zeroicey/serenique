@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/app.dart';
@@ -46,5 +47,23 @@ void main() {
 
     expect(find.text('已登录'), findsOneWidget);
     expect(find.text('退出登录'), findsOneWidget);
+  });
+
+  testWidgets('登录成功：从 /login 显式进 /moments', (tester) async {
+    final container = ProviderContainer(overrides: [
+      tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
+      verifyTokenProvider.overrideWithValue((token) async {}),
+      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginPage), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'secret');
+    await tester.tap(find.widgetWithText(FilledButton, '登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MomentListPage), findsOneWidget);
   });
 }

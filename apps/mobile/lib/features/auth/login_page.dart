@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/network/api_exception.dart';
 import 'auth_providers.dart';
 
@@ -33,8 +34,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (error != null && mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(error)));
+        return; // 失败就 return，别往下导航
       }
-      // 成功：redirect 已通过 routerRefresh 重算，自动进 /moments
+      // 登录成功：显式进主界面（redirect 只拦 /splash，不再负责 /login → /moments）
+      if (mounted) context.go('/moments');
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)

@@ -47,5 +47,5 @@ flutter run -d hpcell --dart-define=API_BASE_URL=http://<Mac局域网IP>:3000
 
 ```sh
 flutter analyze   # No issues found
-flutter test      # 34/34 PASS
+flutter test      # 36/36 PASS
 ```
