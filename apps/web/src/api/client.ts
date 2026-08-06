@@ -17,3 +17,10 @@ export function apiUrl(path: string): string {
   const origin = base || (typeof window !== 'undefined' ? window.location.origin : '')
   return `${origin}/api/${path.replace(/^\/+/, '')}`
 }
+
+// 把 API 相对路径（如 /api/blobs/x/file）解析为绝对 URL（供 <img src> 等场景）。
+export function resolveApiPath(path: string): string {
+  const base = env.apiBaseUrl.replace(/\/+$/, '')
+  const origin = base || (typeof window !== 'undefined' ? window.location.origin : '')
+  return `${origin}${path.startsWith('/') ? path : `/${path}`}`
+}
