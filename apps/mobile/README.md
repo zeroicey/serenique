@@ -1,17 +1,44 @@
 # serenique_mobile
 
-A new Flutter project.
+Serenique 的移动端 App（iOS + Android，v1 已完成 iOS 优先）。
 
-## Getting Started
+**技术栈**：Flutter (Material3) + dio + Riverpod 3 + go_router，消费 Serenique REST API。
 
-This project is a starting point for a Flutter application.
+## 模块
 
-A few resources to get you started if this is your first Flutter project:
+- 壳 + Drawer 导航（闪记 / 日记，登录占位）
+- 闪记（Moment）：列表 / 新建 / 详情 / 评论
+- 日记（Diary）：列表 / 按日期新建 / 编辑 / 删除
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## 环境与网络
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+本机 shell 默认**没有** `http_proxy`，Flutter 工具链联网操作（pub 解析、pod install、版本检查）会卡死/超时。**所有 Flutter 联网命令都需带代理**：
+
+```sh
+# 在 apps/mobile 下执行
+HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897 \
+http_proxy=http://127.0.0.1:7897 https_proxy=http://127.0.0.1:7897 \
+flutter pub get
+```
+
+## 运行
+
+iOS 真机（iPhone 已连接、签名已配置）运行，API 指向 Mac 局域网：
+
+```sh
+HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897 \
+http_proxy=http://127.0.0.1:7897 https_proxy=http://127.0.0.1:7897 \
+flutter run -d hpcell --dart-define=API_BASE_URL=http://<Mac局域网IP>:3000
+```
+
+- `API_BASE_URL` 通过 `--dart-define` 注入，默认 `http://localhost:3000`（模拟器/iOS 模拟器可用）。
+- 首次安装需在手机「设置 → 通用 → VPN 与设备管理 → Developer App」信任开发者证书。
+- **免费签名 7 天过期**：重跑 `flutter run` 前若报签名失效，重新安装一次即可。
+- iOS 开发期在 `Info.plist` 加了 ATS 明文 HTTP 例外（连 Mac 局域网 API），**发布前需收紧**。
+
+## 测试
+
+```sh
+flutter analyze   # No issues found
+flutter test      # 24/24 PASS
+```
