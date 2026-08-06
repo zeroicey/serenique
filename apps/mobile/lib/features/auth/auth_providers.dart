@@ -7,7 +7,7 @@ import 'token_storage.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => SecureTokenStorage());
 
-/// 登录时用输入的密钥调 /api/auth/me 校验。抛 ApiException；UNAUTHORIZED = 密钥错。
+/// 登录时用输入的密钥调 /api/auth/me 校验。抛 ApiException；401（任意 code）→ 密钥错。
 final verifyTokenProvider = Provider<Future<void> Function(String token)>((ref) {
   return (token) async {
     final client = ApiClient(baseUrl: AppConfig.apiBaseUrl, tokenReader: () => token);
@@ -34,7 +34,12 @@ class AuthController extends Notifier<AuthState> {
   }
 
   Future<void> _restore() async {
-    final token = await _storage.read();
+    String? token;
+    try {
+      token = await _storage.read();
+    } catch (_) {
+      token = null; // Keychain 读取失败视为未登录，避免闪屏卡死
+    }
     state = AuthState(initializing: false, token: token);
     _bump();
   }

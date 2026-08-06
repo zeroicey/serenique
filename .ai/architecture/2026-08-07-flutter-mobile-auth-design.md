@@ -7,7 +7,7 @@
 
 ## 1. 背景与目标
 
-后端认证已上线：所有 `/api/*` 路由（除 `/health`、`/`、`/api/auth/login|logout`、签名 blob 链接）要求 `Authorization: Bearer <AUTH_TOKEN>` 或 HttpOnly 会话 Cookie，401 统一 `{success:false, code:"UNAUTHORIZED", message:"未认证或登录已过期"}`。
+后端认证已上线：所有 `/api/*` 路由（除 `/health`、`/`、`/api/auth/login|logout`、签名 blob 链接）要求 `Authorization: Bearer <AUTH_TOKEN>` 或 HttpOnly 会话 Cookie，401 统一 `{success:false, message:"未认证或登录已过期"}`（后端 401 响应**无 `code` 字段**，客户端按 `statusCode == 401` 匹配）。
 
 移动端按 auth 设计采用 **Bearer 直连**（不走 Cookie，不调 `/api/auth/login`）：登录页录入共享密钥 → 存 Keychain → 后续每个请求带 Bearer。本任务把 v1 的认证占位（`authTokenProvider` 返回 null、登录占位页）替换为真实认证。
 
@@ -101,7 +101,7 @@ class AuthController extends Notifier<AuthState> {
 - `redirect`：
   - `initializing` → `/splash`（闪屏转圈，token 读 Keychain 很快）
   - 未认证 → `/login`
-  - 已认证且在 `/login`/`/splash` → `/moments`
+  - 已认证在 `/splash` → `/moments`；已认证在 `/login` 放行（作「设置→登出」入口，显示已登录态）
 - `initialLocation: '/splash'`。
 
 ## 7. 401 自动登出

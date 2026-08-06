@@ -40,7 +40,7 @@ flutter run -d hpcell --dart-define=API_BASE_URL=http://<Mac局域网IP>:3000
 
 - 启动走 `/splash`，`AuthController` 从安全存储恢复密钥；无密钥 → `/login` 登录页。
 - 登录页录入 `AUTH_TOKEN`（后端根 `.env` 的共享密钥）→ 先调 `GET /api/auth/me` 校验 → 通过后存 iOS Keychain / Android Keystore（`flutter_secure_storage`）→ 全局 `ApiClient` 给所有请求带 `Authorization: Bearer <AUTH_TOKEN>`。
-- 任何请求返回 401 自动登出（清存储 + 重定向到 `/login`）。
+- **已登录请求**返回 401 自动登出（清存储 + 重定向到 `/login`）；登录校验期的 401 是错误密钥提示（显示「密钥错误」），不是自动登出。
 - **dev 后端未配置 `AUTH_TOKEN` 时登录恒通过**（后端跳过认证，`/api/auth/me` 直接 200）。要在本地验证真实登录，需把本地 API 重启到 auth 代码并在根 `.env` 配 `AUTH_TOKEN`，或等公网部署强制认证。
 
 ## 测试

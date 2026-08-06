@@ -21,7 +21,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       if (auth.initializing) return loc == '/splash' ? null : '/splash';
       if (!auth.isAuthenticated) return loc == '/login' ? null : '/login';
-      if (loc == '/login' || loc == '/splash') return '/moments';
+      // 已认证只拦 /splash；/login 保留给「设置→登出」入口（已登录态显示密钥+退出登录）
+      if (auth.isAuthenticated && loc == '/splash') return '/moments';
       return null;
     },
     routes: [
