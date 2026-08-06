@@ -45,6 +45,7 @@ class MomentActions {
   Future<void> deleteComment(String momentId, String commentId) async {
     await _api.deleteComment(momentId, commentId);
     _ref.invalidate(momentDetailProvider(momentId));
+    _ref.invalidate(momentListProvider); // 列表也展示 commentCount，删除评论后需同步
   }
 }
 
