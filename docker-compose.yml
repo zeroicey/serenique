@@ -11,6 +11,10 @@ services:
       BLOB_MAX_SIZE: ${BLOB_MAX_SIZE:-104857600}
       # Required for `blob link` (signed access links). Must be >= 32 chars.
       BLOB_SIGNING_SECRET: ${BLOB_SIGNING_SECRET:-}
+      # 认证：生产 fail-closed（缺 AUTH_TOKEN 启动即拒）。
+      AUTH_TOKEN: ${AUTH_TOKEN:?Set AUTH_TOKEN in the project root .env}
+      SESSION_TTL: ${SESSION_TTL:-2592000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
       NODE_ENV: production
     volumes:
       - blob-data:/data/blobs
@@ -30,6 +34,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the project root .env}
       BLOB_ROOT: /data/blobs
       BLOB_MAX_SIZE: ${BLOB_MAX_SIZE:-104857600}
+      # 认证：生产 fail-closed（缺 AUTH_TOKEN 启动即拒）。
+      AUTH_TOKEN: ${AUTH_TOKEN:?Set AUTH_TOKEN in the project root .env}
       NODE_ENV: production
       MCP_TRANSPORT: streamable-http
       PORT: 3001

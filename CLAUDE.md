@@ -114,7 +114,7 @@ scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.d
 services/api/src/
 ├── index.ts          — Entry point: validates env, initialises blob root, creates app
 ├── app.ts            — App factory: wires middleware, routes, error handler, 404
-├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, PORT, NODE_ENV)
+├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, AUTH_TOKEN, SESSION_TTL, PORT, NODE_ENV)
 ├── exports.ts        — Public workspace exports for @serenique/api (service layer only, no Hono)
 ├── db/
 │   ├── connection.ts — Single Drizzle client + Postgres pool (shared across all modules)
@@ -201,6 +201,9 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 |--------|------|--------|
 | GET | `/health` | Health check |
 | GET | `/` | API info |
+| POST | `/api/auth/login` | 认证登录（密钥换 HttpOnly 会话 Cookie） |
+| POST | `/api/auth/logout` | 退出登录（清 Cookie） |
+| GET | `/api/auth/me` | 登录态查询 |
 | GET, POST | `/api/diaries` | Diary list / create |
 | GET | `/api/diaries/by-date/:date` | Diary by date (404 if none; registered before `:id`) |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
@@ -228,6 +231,16 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 Field-naming gotcha: diary uses `content`/`diaryDate`, but moment uses `text`. Don't confuse them — the CLI contract (and MCP) follow the API source: moment body is `{ "text": ... }`. Event uses `title`/`startAt`/`endAt`/`isAllDay`/`location`/`note`; its list is a time-window query returning a **bare array** (not `{ items, total }`).
 
 User-facing messages are in Chinese.
+
+### 认证（Auth）
+
+单一共享密钥认证：所有端共用根 `.env` 的高熵 `AUTH_TOKEN`（≥32 字符，建议 48+）。**生产缺失则 API 启动即拒绝**（fail closed）；dev 未配置时认证整体跳过（本地零摩擦）。
+
+- **CLI / 移动端 / 脚本**：请求头 `Authorization: Bearer <AUTH_TOKEN>`。
+- **Web（浏览器）**：`/login` 表单提交 `{ token }` → 换 **HttpOnly 签名 Cookie**（`serenique_session`，无状态 HMAC 签名，无会话表），请求带 `credentials:"include"`。
+- **中间件放行列表**：`/health`、`/`、`/api/auth/login`、`/api/auth/logout`、签名 blob 文件链接（`/api/blobs/:id/file?expires=&signature=`）。
+- **换密钥 = 全端失效**：改 `.env` 重启后，旧会话 Cookie 与旧 Bearer 全部失效，无会话表可清。
+- 会话 Cookie 有效期默认 30 天（`SESSION_TTL`，秒）。生产跨域（如 pages.dev → api.zeroicey.me）需 `CORS_ORIGIN` 显式设为 Web 域名——带凭证跨域不允许 `*`。
 
 ### services/mcp
 
