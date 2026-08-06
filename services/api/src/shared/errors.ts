@@ -20,6 +20,8 @@ export const ErrorCode = {
   FORBIDDEN: "FORBIDDEN",
   CONFLICT: "CONFLICT",
   INTERNAL: "INTERNAL",
+  UNAUTHORIZED: "UNAUTHORIZED",
+  RATE_LIMITED: "RATE_LIMITED",
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
