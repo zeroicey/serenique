@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
 import 'moment_providers.dart';
 import 'widgets/comment_section.dart';
@@ -25,8 +26,15 @@ class MomentDetailPage extends ConsumerWidget {
       ),
     );
     if (ok != true || !context.mounted) return;
-    await ref.read(momentActionsProvider).delete(momentId);
-    if (context.mounted) context.pop();
+    try {
+      await ref.read(momentActionsProvider).delete(momentId);
+      if (context.mounted) context.pop();
+    } on Exception catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+      }
+    }
   }
 
   @override
