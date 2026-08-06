@@ -19,7 +19,8 @@ export async function logout(): Promise<AuthStatus> {
 }
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
-  const res = await api.get(apiUrl('auth/me'))
+  // 401 即未登录，不能让 ky 默认抛错（throwHttpErrors:true）——AuthGuard 需要拿到响应。
+  const res = await api.get(apiUrl('auth/me'), { throwHttpErrors: false })
   const body = (await res.json()) as ApiEnvelope<AuthStatus>
   if (!body.success) {
     // 401 即未登录：AuthGuard 用它决定跳到登录页，不是错误。

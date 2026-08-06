@@ -42,12 +42,14 @@ describe('auth api', () => {
       }),
     )
     const result = await fetchAuthStatus()
+    expect(mockedGet).toHaveBeenCalledWith('/api/auth/me', { throwHttpErrors: false })
     expect(result.authenticated).toBe(false)
   })
 
   it('fetchAuthStatus returns authenticated on 200', async () => {
     mockedGet.mockResolvedValue(envelope({ authenticated: true }))
     const result = await fetchAuthStatus()
+    expect(mockedGet).toHaveBeenCalledWith('/api/auth/me', { throwHttpErrors: false })
     expect(result.authenticated).toBe(true)
   })
 })
