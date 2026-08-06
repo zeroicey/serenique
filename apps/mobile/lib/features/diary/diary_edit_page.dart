@@ -18,6 +18,7 @@ class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
   final _controller = TextEditingController();
   bool _loaded = false;
   bool _saving = false;
+  bool _deleting = false;
 
   @override
   void dispose() {
@@ -52,6 +53,7 @@ class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
   }
 
   Future<void> _delete() async {
+    if (_deleting) return;
     final existing = ref.read(diaryByDateProvider(widget.date)).value;
     if (existing == null) return;
     final ok = await showDialog<bool>(
@@ -68,8 +70,18 @@ class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
       ),
     );
     if (ok != true || !context.mounted) return;
-    await ref.read(diaryActionsProvider).delete(id: existing.id, date: widget.date);
-    if (mounted) context.pop();
+    setState(() => _deleting = true);
+    try {
+      await ref.read(diaryActionsProvider).delete(id: existing.id, date: widget.date);
+      if (mounted) context.pop();
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   @override
@@ -87,7 +99,7 @@ class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
             IconButton(
               icon: const Icon(Icons.delete_outline),
               tooltip: '删除日记',
-              onPressed: _delete,
+              onPressed: _deleting ? null : _delete,
             ),
         ],
       ),
