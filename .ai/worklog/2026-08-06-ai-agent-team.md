@@ -8,6 +8,7 @@
 - 团队章程 `.claude/agents/README.md`（队长工作流 + 派发规则 + 共同规则）
 - CLAUDE.md 新增「AI 智能体团队」章节
 - 决策记录 `.ai/decisions/2026-08-06-ai-agent-team.md`
+- Codex 侧不再复制一套 Agent；`AGENTS.md` 明确要求 Codex 主会话读取并复用 `.claude/agents/` 六个领域 Agent prompt 作为唯一来源
 
 ## 对下一次会话的提示
 
@@ -16,3 +17,4 @@
 - Agent 的 `model` 默认继承会话模型；如需固定改各自 frontmatter。
 - 新增 Agent 记得更新 CLAUDE.md 团队表与 `.claude/agents/README.md`。
 - 子代理 `tools` 字段不支持 `"*"` 通配（GitHub issue anthropics/claude-code#53865）；要全工具就省略该字段。
+- Codex 派发子代理时，先读 `.claude/agents/README.md` 和对应 agent 文件，把其中的技术栈、硬约束、项目记忆纪律带入 Codex 子代理任务；不要生成 `.codex/agents` 副本。

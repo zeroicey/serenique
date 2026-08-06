@@ -2,7 +2,7 @@
 
 日期: 2026-08-06
 
-适用范围: 全仓开发协作方式（队长 + 领域专家子代理）
+适用范围: 全仓开发协作方式（队长 + 领域专家子代理），同时适用于 Claude Code 与 Codex
 
 ## 背景
 
@@ -12,6 +12,8 @@
 
 采用「队长 + 领域专家 Agent」：主会话即队长，负责拆解/派发/验收；六个领域专家以 `.claude/agents/*.md` 子代理形式存在（api / mcp / cli / web / deploy / flutter），可并行派发。
 
+Codex 也复用这 6 份 `.claude/agents/*.md` 作为唯一领域 prompt 源，不再维护 `.codex/agents/` 副本。Codex 派发子代理前由主会话读取 `.claude/agents/README.md` 和相关 agent 文件，再把对应角色约束粘贴/改写进 Codex 子代理任务。
+
 - **权限**：所有 Agent 省略 `tools` 字段，继承全部工具，与队长一致——只是领域不同。
 - **技术栈**：每个 Agent 的 prompt 明确限定为该项目当前技术栈，避免通用性导致的误用。
 - **记忆**：每个 Agent 强制「动工前读 `.ai/`、完成后写 worklog」，保证记忆沉淀。
@@ -19,7 +21,7 @@
 
 **Why**：领域专家把各自技术栈的硬约束（如 CLI 的 stdout 纯净/退出码、API 的 Res/AppError、Web 的 Query 纪律）固化在 prompt 里，比每次重新交代更可靠；并行派发缩短跨端改动的墙钟时间。
 
-**How to apply**：队长在收到需求时，先拆解出受影响子系统，再并行派发对应 Agent；新 Agent 名必须注册进 CLAUDE.md 的团队表与 `.claude/agents/README.md`。Agent 的模型默认继承会话模型，可 per-agent 固定。
+**How to apply**：队长在收到需求时，先拆解出受影响子系统，再并行派发对应 Agent；新 Agent 名必须注册进 CLAUDE.md 的团队表与 `.claude/agents/README.md`。Codex 不新增平行副本，而是在 `AGENTS.md` 中提示自己读取并复用 `.claude/agents/`。Agent 的模型默认继承会话模型，可 per-agent 固定。
 
 ## 已否决选项（一句话）
 
