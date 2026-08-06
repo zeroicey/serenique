@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers.dart';
+import '../../features/auth/auth_providers.dart';
 import '../config.dart';
 import 'api_exception.dart';
 import 'unwrap.dart';
@@ -66,10 +66,16 @@ class ApiClient {
   }
 }
 
-// apiClientProvider 保持原样（仍读 authTokenProvider，Task 2 才改接线）；本任务不动它。
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     baseUrl: AppConfig.apiBaseUrl,
-    tokenReader: () => ref.read(authTokenProvider),
+    tokenReader: () => ref.read(authControllerProvider).token,
+    onUnauthorized: () async {
+      try {
+        await ref.read(authControllerProvider.notifier).logout();
+      } catch (_) {
+        // 存储异常不应掩盖原始的 401 ApiException
+      }
+    },
   );
 });
