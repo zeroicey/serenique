@@ -45,7 +45,9 @@ class AuthController extends Notifier<AuthState> {
     try {
       await ref.read(verifyTokenProvider)(trimmed);
     } on ApiException catch (e) {
-      if (e.code == 'UNAUTHORIZED') return '密钥错误，请检查后重试';
+      if (e.code == 'UNAUTHORIZED' || e.statusCode == 401) {
+        return '密钥错误，请检查后重试';
+      }
       rethrow;
     }
     await _storage.write(trimmed);

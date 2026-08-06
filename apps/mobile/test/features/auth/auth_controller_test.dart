@@ -37,7 +37,8 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(storage),
       verifyTokenProvider.overrideWithValue((token) async {
-        throw const ApiException('UNAUTHORIZED', '未认证或登录已过期');
+        // 后端 401 响应体无 code 字段：{ success:false, message:"未认证或登录已过期" }
+        throw const ApiException('API_ERROR', '未认证或登录已过期', statusCode: 401);
       }),
     ]);
     addTearDown(container.dispose);
