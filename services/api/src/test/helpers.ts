@@ -25,6 +25,9 @@ export const TEST_DATABASE_URL =
 /** Fallback signing secret for blob access-link tests (≥32 chars). */
 export const TEST_SIGNING_SECRET = "test-signing-secret-0123456789abcdef";
 
+/** Fallback auth credential for tests (≥32 chars). */
+export const TEST_AUTH_TOKEN = "test-auth-token-0123456789abcdef";
+
 /**
  * Set test env vars. Must be called at the top of a test file, before any
  * module import that parses `@/env`.
@@ -40,6 +43,7 @@ export function setTestEnv(
     BLOB_ROOT?: string;
     BLOB_MAX_SIZE?: string;
     BLOB_SIGNING_SECRET?: string;
+    AUTH_TOKEN?: string;
     NODE_ENV?: string;
   } = {},
 ): void {
@@ -53,6 +57,9 @@ export function setTestEnv(
   // first wins for the cached `@/env` module.
   process.env.BLOB_SIGNING_SECRET ??=
     opts.BLOB_SIGNING_SECRET ?? TEST_SIGNING_SECRET;
+  // Ensure AUTH_TOKEN is always written before `@/env` is first parsed, so auth
+  // tests never read an empty credential in a shared `bun test` process.
+  process.env.AUTH_TOKEN ??= opts.AUTH_TOKEN ?? TEST_AUTH_TOKEN;
   process.env.NODE_ENV ??= opts.NODE_ENV ?? "test";
 }
 
