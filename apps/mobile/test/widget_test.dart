@@ -1,18 +1,17 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/app.dart';
-import 'package:serenique_mobile/features/moment/moment_models.dart';
-import 'package:serenique_mobile/features/moment/moment_providers.dart';
+import 'package:serenique_mobile/features/auth/auth_providers.dart';
+import 'package:serenique_mobile/features/auth/login_page.dart';
+import 'helpers.dart';
 
 void main() {
-  testWidgets('App 冒烟测试：可构建', (tester) async {
+  testWidgets('App 冒烟测试：未登录落在登录页', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider.overrideWith((ref) async => const <Moment>[]),
-      ],
+      overrides: [tokenStorageProvider.overrideWithValue(FakeTokenStorage())],
       child: const App(),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Serenique'), findsOneWidget);
+    expect(find.byType(LoginPage), findsOneWidget);
   });
 }
