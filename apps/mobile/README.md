@@ -36,9 +36,16 @@ flutter run -d hpcell --dart-define=API_BASE_URL=http://<Mac局域网IP>:3000
 - **免费签名 7 天过期**：重跑 `flutter run` 前若报签名失效，重新安装一次即可。
 - iOS 开发期在 `Info.plist` 加了 ATS 明文 HTTP 例外（连 Mac 局域网 API），**发布前需收紧**。
 
+## 认证
+
+- 启动走 `/splash`，`AuthController` 从安全存储恢复密钥；无密钥 → `/login` 登录页。
+- 登录页录入 `AUTH_TOKEN`（后端根 `.env` 的共享密钥）→ 先调 `GET /api/auth/me` 校验 → 通过后存 iOS Keychain / Android Keystore（`flutter_secure_storage`）→ 全局 `ApiClient` 给所有请求带 `Authorization: Bearer <AUTH_TOKEN>`。
+- 任何请求返回 401 自动登出（清存储 + 重定向到 `/login`）。
+- **dev 后端未配置 `AUTH_TOKEN` 时登录恒通过**（后端跳过认证，`/api/auth/me` 直接 200）。要在本地验证真实登录，需把本地 API 重启到 auth 代码并在根 `.env` 配 `AUTH_TOKEN`，或等公网部署强制认证。
+
 ## 测试
 
 ```sh
 flutter analyze   # No issues found
-flutter test      # 24/24 PASS
+flutter test      # 34/34 PASS
 ```
