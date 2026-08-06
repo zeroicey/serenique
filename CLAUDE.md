@@ -114,7 +114,9 @@ services/api/src/
 └── modules/
     ├── blob/         — Generic binary storage layer (all MIME types, SHA-256 dedup)
     ├── diary/        — Diary entries (one per day, dated; fields: content, diaryDate)
-    └── moment/       — Flash notes (≤500 chars; field: text; media attachments via blob refs; nested self-comments in `comment.*`, ≤2000 chars)
+    ├── moment/       — Flash notes (≤500 chars; field: text; media attachments via blob refs; nested self-comments in `comment.*`, ≤2000 chars)
+    ├── task/         — Task groups (custom) + simple tasks (fields: groupId/title/status; completedAt synced by status)
+    └── event/        — Calendar events (fields: title/startAt/endAt/isAllDay/location/note; time-range list, bare array)
 ```
 
 ### Module structure
@@ -199,8 +201,14 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | DELETE | `/api/blobs/:id` | Blob delete (DB + disk) |
 | POST, GET | `/api/blobs/:id/attachments` | Create / list blob attachment references |
 | DELETE | `/api/blob-attachments/:id` | Delete an attachment reference only |
+| GET, POST | `/api/task-groups` | Task group list / create |
+| GET, PUT, DELETE | `/api/task-groups/:id` | Task group detail / rename / delete |
+| GET, POST | `/api/tasks` | Task list (`?groupId=&status=`) / create |
+| GET, PUT, DELETE | `/api/tasks/:id` | Task detail / update (status syncs `completedAt`) / delete |
+| GET, POST | `/api/events` | Event list (`?from=&to=` time window, **bare array**) / create |
+| GET, PUT, DELETE | `/api/events/:id` | Event detail / partial update / delete |
 
-Field-naming gotcha: diary uses `content`/`diaryDate`, but moment uses `text`. Don't confuse them — the CLI contract (and MCP) follow the API source: moment body is `{ "text": ... }`.
+Field-naming gotcha: diary uses `content`/`diaryDate`, but moment uses `text`. Don't confuse them — the CLI contract (and MCP) follow the API source: moment body is `{ "text": ... }`. Event uses `title`/`startAt`/`endAt`/`isAllDay`/`location`/`note`; its list is a time-window query returning a **bare array** (not `{ items, total }`).
 
 User-facing messages are in Chinese.
 
