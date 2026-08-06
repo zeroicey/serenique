@@ -6,6 +6,7 @@ import { momentRouter } from "@/modules/moment";
 import { blobRouter } from "@/modules/blob";
 import { taskRouter } from "@/modules/task";
 import { eventRouter } from "@/modules/event";
+import { authRouter } from "@/modules/auth";
 import { Res } from "@/shared/response";
 import { logger as pinoLogger } from "@/shared/logger";
 
@@ -15,6 +16,12 @@ import { logger as pinoLogger } from "@/shared/logger";
 // ---------------------------------------------------------------------------
 
 export function createApp(env: Env) {
+  // ---- 0. Fail-closed: 生产必须配置 AUTH_TOKEN，否则拒绝启动 --------------
+  //    createApp(env) 的 env 来自 @/env（index.ts 同一次解析），生产缺失即崩溃。
+  if (env.NODE_ENV === "production" && !env.AUTH_TOKEN) {
+    throw new Error("生产环境必须配置 AUTH_TOKEN 才能启动（认证 fail-closed）");
+  }
+
   const app = new Hono();
 
   // ---- 1. Global error handler --------------------------------------------
@@ -43,6 +50,9 @@ export function createApp(env: Env) {
   // ---- 4. API modules -----------------------------------------------------
   //    Each module is a self-contained Hono instance mounted under /api.
   //
+  // app.use("/api/*", authMiddleware); // Task 5 实现，先注释避免未定义引用
+  // Task 5: authMiddleware 在此挂载
+  app.route("/api", authRouter);
   app.route("/api", diaryRouter);
   app.route("/api", momentRouter);
   app.route("/api", blobRouter);
