@@ -49,6 +49,13 @@ export const authService = {
   // ---- Login throttle (in-memory, single-process) ----
   _throttle: new Map<string, ThrottleState>(),
 
+  /** 清理已过窗口的节流记录，防止 Map 无限增长。 */
+  _sweep(nowMs: number): void {
+    for (const [key, state] of this._throttle) {
+      if (nowMs >= state.resetAtMs) this._throttle.delete(key);
+    }
+  },
+
   /**
    * Attempt login. Returns "throttled" when ip is blocked, "ok" on success
    * (clears throttle), else "rejected" after recording a failure and sleeping
@@ -60,6 +67,7 @@ export const authService = {
     delayMs = 500,
     nowMs = Date.now(),
   ): Promise<LoginOutcome> {
+    this._sweep(nowMs);
     const state = this._throttle.get(ip);
     if (throttleShouldBlock(state, nowMs)) {
       return Promise.resolve("throttled");

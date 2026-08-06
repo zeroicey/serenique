@@ -41,6 +41,7 @@ export function createMcpApp(options: CreateMcpAppOptions = {}) {
         "Last-Event-ID",
         "mcp-protocol-version",
         "mcp-session-id",
+        "Authorization",
       ],
       exposeHeaders: ["mcp-protocol-version", "mcp-session-id"],
       maxAge: 86400,
