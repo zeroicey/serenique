@@ -15,25 +15,32 @@ void applyAuthHeader(RequestOptions options, String? Function() tokenReader) {
 
 /// 全局单例 HTTP 客户端：统一 baseUrl、统一解包、token 注入位、异常映射。
 class ApiClient {
-  ApiClient({required this.baseUrl, required String? Function() tokenReader})
+  ApiClient({
+    required this.baseUrl,
+    required String? Function() tokenReader,
+    this.onUnauthorized,
+    Dio? dio,
+  })
       // ignore: prefer_initializing_formals
-      : _tokenReader = tokenReader;
-
-  final String baseUrl;
-  final String? Function() _tokenReader;
-
-  late final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-    ),
-  )..interceptors.add(InterceptorsWrapper(
+      : _tokenReader = tokenReader {
+    _dio = dio ??
+        Dio(BaseOptions(
+          baseUrl: baseUrl,
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 10),
+        ));
+    _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
         applyAuthHeader(options, _tokenReader);
         handler.next(options);
       },
     ));
+  }
+
+  final String baseUrl;
+  final String? Function() _tokenReader;
+  final Future<void> Function()? onUnauthorized;
+  late final Dio _dio;
 
   Future<dynamic> getData(String path, {Map<String, dynamic>? query}) =>
       _guard(_dio.get(path, queryParameters: query));
@@ -51,11 +58,15 @@ class ApiClient {
       final res = await future;
       return unwrapResponse(res.data);
     } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        await onUnauthorized?.call();
+      }
       throw ApiException.fromDioException(e);
     }
   }
 }
 
+// apiClientProvider 保持原样（仍读 authTokenProvider，Task 2 才改接线）；本任务不动它。
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     baseUrl: AppConfig.apiBaseUrl,
