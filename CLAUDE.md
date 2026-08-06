@@ -27,6 +27,23 @@ Before starting work on a subsystem, read the project memory in `.ai/` (below).
 
 Read the latest relevant docs before changing a subsystem. The CLI's evaluation history and hardening contracts live in the 08-05 worklog/architecture/decisions files and are condensed into the CLI section below.
 
+## AI 智能体团队（多 Agent 协作）
+
+Serenique 采用「队长 + 领域专家 Agent」的协作模式：**主会话（Claude Code）就是队长**，负责拆解需求、派活、验收与集成；领域专家以 `.claude/agents/*.md` 子代理形式存在，按需派发、可并行。
+
+| Agent | 文件 | 领域 |
+|-------|------|------|
+| API Agent | `.claude/agents/api-agent.md` | `services/api`：REST、数据模型、服务层、测试、`exports.ts` |
+| MCP Agent | `.claude/agents/mcp-agent.md` | `services/mcp`：AI 工具暴露、streamable-http |
+| CLI Agent | `.claude/agents/cli-agent.md` | `apps/cli`：Go 命令行客户端 |
+| Web Agent | `.claude/agents/web-agent.md` | `apps/web`：React 浏览器端 |
+| Deploy Agent | `.claude/agents/deploy-agent.md` | Docker、GitHub Actions、发布、服务器 |
+| Flutter Agent | `.claude/agents/flutter-agent.md` | 移动端 Flutter（iOS/Android，规划中） |
+
+派发规则：一个需求往往同时涉及多个子系统（如「新增 drive 模块」会动 API + MCP + CLI + Web），队长先拆解出受影响子系统，再**并行派发**相关 Agent，各自在领域内开发；队长负责跨端契约对齐（以 `services/api` 源码为准：字段名、响应结构、`exports.ts` 导出面）与最终验收。
+
+所有 Agent 权限与队长一致（省略 `tools` 字段 = 继承全部工具），技术栈已限定为各端当前技术栈，且强制使用项目记忆（动工前读 `.ai/`、完成后写 worklog）。团队章程见 `.claude/agents/README.md`，决策记录见 `.ai/decisions/2026-08-06-ai-agent-team.md`。
+
 ## Commands
 
 Common commands from the repository root:
