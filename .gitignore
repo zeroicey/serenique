@@ -11,3 +11,6 @@ apps/cli/bin/
 
 # Vite build output
 apps/web/dist/
+
+# Superpowers scratch (SDD per-plan workspace)
+.superpowers/
