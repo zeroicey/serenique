@@ -6,7 +6,7 @@ import { momentRouter } from "@/modules/moment";
 import { blobRouter } from "@/modules/blob";
 import { taskRouter } from "@/modules/task";
 import { eventRouter } from "@/modules/event";
-import { authRouter } from "@/modules/auth";
+import { authMiddleware, authRouter } from "@/modules/auth";
 import { Res } from "@/shared/response";
 import { logger as pinoLogger } from "@/shared/logger";
 
@@ -50,8 +50,7 @@ export function createApp(env: Env) {
   // ---- 4. API modules -----------------------------------------------------
   //    Each module is a self-contained Hono instance mounted under /api.
   //
-  // app.use("/api/*", authMiddleware); // Task 5 实现，先注释避免未定义引用
-  // Task 5: authMiddleware 在此挂载
+  app.use("/api/*", authMiddleware);
   app.route("/api", authRouter);
   app.route("/api", diaryRouter);
   app.route("/api", momentRouter);

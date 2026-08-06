@@ -107,4 +107,30 @@ describe("REST contract smoke", () => {
       expect(body.success).toBe(false);
     }
   });
+
+  test("unauthenticated /api request → 401", async () => {
+    const app = await makeApp();
+    const res = await app.request("/api/moments");
+    expect(res.status).toBe(401);
+  });
+
+  test("login with wrong token → 401, login with correct token sets cookie", async () => {
+    const app = await makeApp();
+    const bad = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: "wrong-token" }),
+    });
+    expect(bad.status).toBe(401);
+
+    const ok = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: TEST_AUTH_TOKEN }),
+    });
+    expect(ok.status).toBe(200);
+    const setCookie = ok.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("serenique_session=");
+    expect(setCookie).toContain("HttpOnly");
+  });
 });
