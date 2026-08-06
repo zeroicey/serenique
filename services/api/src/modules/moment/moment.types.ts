@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { BlobEntry } from "@/modules/blob/blob.types";
+import type { MomentCommentEntry } from "@/modules/moment/comment.types";
 
 // ---------------------------------------------------------------------------
 // Moment module — request/response types
@@ -66,6 +67,8 @@ export type MomentEntry = {
   id: string;
   text: string;
   attachments: MomentAttachmentEntry[];
+  comments: MomentCommentEntry[];
+  commentCount: number;
   createdAt: string;
   updatedAt: string;
 };

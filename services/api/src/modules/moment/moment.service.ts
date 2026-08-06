@@ -3,6 +3,11 @@ import { db } from "@/db/connection";
 import { blobAttachments, blobs } from "@/modules/blob/blob.schema";
 import { moments } from "@/modules/moment/moment.schema";
 import {
+  listCommentCountsByMomentIds,
+  listCommentsByMomentIds,
+} from "@/modules/moment/comment.service";
+import { groupCommentsByMomentId } from "@/modules/moment/comment.mappers";
+import {
   assertAllowedMomentBlob,
   MOMENT_ATTACHMENT_OWNER_TYPE,
   normalizeSortOrder,
@@ -176,7 +181,7 @@ export const momentService = {
         );
       }
 
-      return toMomentEntry(row, sortAttachments(attachments));
+      return toMomentEntry(row, sortAttachments(attachments), [], 0);
     });
   },
 
@@ -194,15 +199,21 @@ export const momentService = {
       db.select({ count: sql<number>`count(*)::int` }).from(moments),
     ]);
 
-    const attachmentRows = await listAttachmentsByMomentIds(
-      db,
-      items.map((row) => row.id),
-    );
+    const momentIds = items.map((row) => row.id);
+    const [attachmentRows, commentCounts] = await Promise.all([
+      listAttachmentsByMomentIds(db, momentIds),
+      listCommentCountsByMomentIds(db, momentIds),
+    ]);
     const attachmentsByMomentId = groupAttachmentsByMomentId(attachmentRows);
 
     return {
       items: items.map((row) =>
-        toMomentEntry(row, attachmentsByMomentId.get(row.id) ?? []),
+        toMomentEntry(
+          row,
+          attachmentsByMomentId.get(row.id) ?? [],
+          [],
+          commentCounts.get(row.id) ?? 0,
+        ),
       ),
       total: count,
     };
@@ -212,10 +223,19 @@ export const momentService = {
     const [row] = await db.select().from(moments).where(eq(moments.id, input.id));
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "闪念不存在", 404);
 
-    const attachmentsByMomentId = groupAttachmentsByMomentId(
-      await listAttachmentsByMomentIds(db, [input.id]),
+    const [attachmentsByMomentId, commentsByMomentId] = await Promise.all([
+      groupAttachmentsByMomentId(
+        await listAttachmentsByMomentIds(db, [input.id]),
+      ),
+      groupCommentsByMomentId(await listCommentsByMomentIds(db, [input.id])),
+    ]);
+    const comments = commentsByMomentId.get(input.id) ?? [];
+    return toMomentEntry(
+      row,
+      attachmentsByMomentId.get(input.id) ?? [],
+      comments,
+      comments.length,
     );
-    return toMomentEntry(row, attachmentsByMomentId.get(input.id) ?? []);
   },
 
   async addAttachment(

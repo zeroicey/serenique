@@ -9,11 +9,13 @@ import (
 
 // Moment types matching the API response.
 type MomentEntry struct {
-	ID          string                  `json:"id"`
-	Text        string                  `json:"text"`
-	CreatedAt   string                  `json:"createdAt"`
-	UpdatedAt   string                  `json:"updatedAt"`
-	Attachments []MomentAttachmentEntry `json:"attachments"`
+	ID           string                  `json:"id"`
+	Text         string                  `json:"text"`
+	CreatedAt    string                  `json:"createdAt"`
+	UpdatedAt    string                  `json:"updatedAt"`
+	Attachments  []MomentAttachmentEntry `json:"attachments"`
+	Comments     []MomentCommentEntry    `json:"comments"`
+	CommentCount int                     `json:"commentCount"`
 }
 
 // MomentBlobEntry matches the API's nested blob object inside a moment
@@ -46,6 +48,17 @@ type MomentAttachmentEntry struct {
 	CreatedAt   string           `json:"createdAt"`
 	UpdatedAt   string           `json:"updatedAt"`
 	Blob        *MomentBlobEntry `json:"blob,omitempty"`
+}
+
+// MomentCommentEntry matches the API's moment comment object
+// (comment.types.ts MomentCommentEntry). Comments are a sub-resource nested under
+// /api/moments/:id/comments.
+type MomentCommentEntry struct {
+	ID        string `json:"id"`
+	MomentID  string `json:"momentId"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // momentCmd is the parent moment command.
@@ -158,6 +171,7 @@ var momentGetCmd = &cobra.Command{
 			"内容":   result.Text,
 			"创建时间": result.CreatedAt,
 			"更新时间": result.UpdatedAt,
+			"评论数":  strconv.Itoa(result.CommentCount),
 		})
 
 		if len(result.Attachments) > 0 {
@@ -176,6 +190,21 @@ var momentGetCmd = &cobra.Command{
 					"角色":    a.Role,
 					"显示名称":  dn,
 					"排序":    strconv.Itoa(a.SortOrder),
+				}
+			}
+			printer.PrintTable(headers, rows)
+		}
+
+		if len(result.Comments) > 0 {
+			fmt.Println()
+			printer.PrintMessage("评论:")
+			headers := []string{"ID", "内容", "创建时间"}
+			rows := make([]map[string]string, len(result.Comments))
+			for i, c := range result.Comments {
+				rows[i] = map[string]string{
+					"ID":   shortID(c.ID),
+					"内容":   truncateRunes(c.Content, 50),
+					"创建时间": prefix(c.CreatedAt, 19),
 				}
 			}
 			printer.PrintTable(headers, rows)
@@ -269,12 +298,13 @@ func init() {
   serenique moment list --json`,
 		path:     "/api/moments",
 		emptyMsg: "暂无闪念记录",
-		headers:  []string{"ID", "内容", "创建时间"},
+		headers:  []string{"ID", "内容", "创建时间", "评论"},
 		row: func(m MomentEntry) map[string]string {
 			return map[string]string{
 				"ID":   shortID(m.ID),
 				"内容":   truncateRunes(m.Text, 50),
 				"创建时间": prefix(m.CreatedAt, 19),
+				"评论":   strconv.Itoa(m.CommentCount),
 			}
 		},
 	}, &momentListPage, &momentListPageSize, &momentListAll)

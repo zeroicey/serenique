@@ -1,6 +1,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query'
@@ -9,10 +10,14 @@ import { uploadBlob } from '@/features/blob/api'
 import type { MediaFile } from '@/types/media'
 import {
   createMoment,
+  createMomentComment,
   deleteMoment,
+  deleteMomentComment,
   listMoments,
+  listMomentComments,
   removeMomentAttachment,
   type CreateMomentInput,
+  type MomentCommentEntry,
   type MomentEntry,
 } from './api'
 
@@ -90,6 +95,55 @@ export function useCreateMomentWithMedia(): UseMutationResult<
     },
     onError: (error) => {
       toast.error(error.message || '闪念发布失败')
+    },
+  })
+}
+
+// 评论 hooks：列表只读（惰性，按 momentId 缓存）；创建/删除成功后同步刷新该闪念的
+// 评论列表与整个 moments 列表（更新 commentCount）。
+
+export function useMomentComments(momentId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['moment-comments', momentId],
+    queryFn: () => listMomentComments(momentId),
+    enabled: enabled && momentId.length > 0,
+  })
+}
+
+export function useCreateMomentComment(): UseMutationResult<
+  MomentCommentEntry,
+  Error,
+  { momentId: string; content: string }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ momentId, content }) => createMomentComment(momentId, content),
+    onSuccess: (_data, variables) => {
+      toast.success('评论发布成功')
+      queryClient.invalidateQueries({ queryKey: ['moment-comments', variables.momentId] })
+      queryClient.invalidateQueries({ queryKey: ['moments'] })
+    },
+    onError: (error) => {
+      toast.error(error.message || '评论发布失败')
+    },
+  })
+}
+
+export function useDeleteMomentComment(): UseMutationResult<
+  void,
+  Error,
+  { momentId: string; commentId: string }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ momentId, commentId }) => deleteMomentComment(momentId, commentId),
+    onSuccess: (_data, variables) => {
+      toast.success('评论已删除')
+      queryClient.invalidateQueries({ queryKey: ['moment-comments', variables.momentId] })
+      queryClient.invalidateQueries({ queryKey: ['moments'] })
+    },
+    onError: (error) => {
+      toast.error(error.message || '评论删除失败')
     },
   })
 }

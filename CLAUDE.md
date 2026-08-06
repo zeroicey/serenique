@@ -114,7 +114,7 @@ services/api/src/
 └── modules/
     ├── blob/         — Generic binary storage layer (all MIME types, SHA-256 dedup)
     ├── diary/        — Diary entries (one per day, dated; fields: content, diaryDate)
-    └── moment/       — Flash notes (≤500 chars; field: text; media attachments via blob refs)
+    └── moment/       — Flash notes (≤500 chars; field: text; media attachments via blob refs; nested self-comments in `comment.*`, ≤2000 chars)
 ```
 
 ### Module structure
@@ -188,6 +188,8 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET, POST | `/api/moments` | Moment list / create (create accepts optional `attachments[]`) |
 | GET, DELETE | `/api/moments/:id` | Moment detail / delete |
 | POST, DELETE | `/api/moments/:id/attachments[/:attachmentId]` | Moment attachment create / delete |
+| GET, POST | `/api/moments/:id/comments` | Moment comment list / create (body `{ content }`, ≤2000) |
+| PUT, DELETE | `/api/moments/:id/comments/:commentId` | Moment comment update / delete |
 | POST | `/api/blobs/upload` | Blob upload (multipart, field: `file`) |
 | POST | `/api/blobs/cleanup-orphans` | Delete disk files not referenced by blob rows |
 | GET | `/api/blobs` | Blob list (`?mimeType=image/&page=&pageSize=`) |

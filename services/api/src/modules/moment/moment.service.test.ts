@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { setTestEnv, fakeBlobRow } from "@/test/helpers";
+import { setTestEnv, fakeBlobRow, fakeMomentRow } from "@/test/helpers";
 
 // ---------------------------------------------------------------------------
 // Moment unit tests — domain pure functions, mappers and Zod schemas. No DB.
@@ -132,6 +132,33 @@ describe("moment mappers", () => {
 
     expect(sorted.map((a) => a.id)).toEqual(["a", "b", "c"]);
     expect(attachments[0].id).toBe("c");
+  });
+
+  test("toMomentEntry defaults comments to [] and commentCount to comments.length", async () => {
+    setTestEnv();
+    const { toMomentEntry } = await import("./moment.mappers");
+
+    const empty = toMomentEntry(fakeMomentRow());
+    expect(empty.comments).toEqual([]);
+    expect(empty.commentCount).toBe(0);
+
+    const comments = [
+      {
+        id: "c1",
+        momentId: fakeMomentRow().id,
+        content: "备注",
+        createdAt: "2026-08-05T10:00:00.000Z",
+        updatedAt: "2026-08-05T10:00:00.000Z",
+      },
+    ];
+    const withComments = toMomentEntry(fakeMomentRow(), [], comments);
+    expect(withComments.comments).toHaveLength(1);
+    expect(withComments.commentCount).toBe(1);
+
+    // List path: comments not loaded, but commentCount may still be non-zero.
+    const listEntry = toMomentEntry(fakeMomentRow(), [], [], 3);
+    expect(listEntry.comments).toEqual([]);
+    expect(listEntry.commentCount).toBe(3);
   });
 
   test("groupAttachmentsByMomentId groups by ownerId and sorts each group", async () => {

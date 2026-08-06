@@ -1,41 +1,135 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
-import type { MomentEntry } from '@/features/moment/api'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MomentCommentEntry, MomentEntry } from '@/features/moment/api'
+import { useMomentComments } from '@/features/moment/queries'
 import { MomentItem } from './moment-item'
+
+const { createCommentMutate, deleteCommentMutate } = vi.hoisted(() => ({
+  createCommentMutate: vi.fn(),
+  deleteCommentMutate: vi.fn(),
+}))
 
 vi.mock('@/features/moment/queries', () => ({
   useDeleteMoment: () => ({ mutate: vi.fn() }),
+  useMomentComments: vi.fn(),
+  useCreateMomentComment: () => ({ mutate: createCommentMutate }),
+  useDeleteMomentComment: () => ({ mutate: deleteCommentMutate }),
 }))
+
+const mockedUseMomentComments = vi.mocked(useMomentComments)
 
 const longText = '长'.repeat(200)
 
-function makeMoment(text: string): MomentEntry {
+function makeMoment(overrides: Partial<MomentEntry> = {}): MomentEntry {
   return {
     id: 'm1',
-    text,
+    text: '今天很开心',
     attachments: [],
+    comments: [],
+    commentCount: 0,
+    createdAt: '2026-08-05T00:00:00.000Z',
+    updatedAt: '2026-08-05T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function makeComment(id: string, content: string): MomentCommentEntry {
+  return {
+    id,
+    momentId: 'm1',
+    content,
     createdAt: '2026-08-05T00:00:00.000Z',
     updatedAt: '2026-08-05T00:00:00.000Z',
   }
 }
 
+beforeEach(() => {
+  createCommentMutate.mockReset()
+  deleteCommentMutate.mockReset()
+  mockedUseMomentComments.mockReturnValue({ data: [] } as never)
+})
+
 describe('MomentItem', () => {
   it('超长文本默认截断，可展开/收起', async () => {
     const user = userEvent.setup()
-    render(<MomentItem moment={makeMoment(longText)} />)
+    render(<MomentItem moment={makeMoment({ text: longText })} />)
     expect(screen.getByText('展开')).toBeInTheDocument()
     await user.click(screen.getByText('展开'))
     expect(screen.getByText('收起')).toBeInTheDocument()
   })
 
   it('短文本不显示展开按钮', () => {
-    render(<MomentItem moment={makeMoment('短文本')} />)
+    render(<MomentItem moment={makeMoment({ text: '短文本' })} />)
     expect(screen.queryByText('展开')).not.toBeInTheDocument()
   })
 
   it('渲染字数', () => {
-    render(<MomentItem moment={makeMoment('今天很开心')} />)
+    render(<MomentItem moment={makeMoment({ text: '今天很开心' })} />)
     expect(screen.getByText('5 字')).toBeInTheDocument()
+  })
+
+  it('无评论时不显示评论区', () => {
+    render(<MomentItem moment={makeMoment()} />)
+    expect(screen.queryByText('条评论')).not.toBeInTheDocument()
+    expect(screen.queryByText('查看全部')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('写条评论…')).not.toBeInTheDocument()
+  })
+
+  it('有评论时展示内联评论与数量', () => {
+    mockedUseMomentComments.mockReturnValue({
+      data: [makeComment('c1', '第一条'), makeComment('c2', '第二条')],
+    } as never)
+    render(<MomentItem moment={makeMoment({ commentCount: 2 })} />)
+    expect(screen.getByText('第一条')).toBeInTheDocument()
+    expect(screen.getByText('第二条')).toBeInTheDocument()
+    expect(screen.getByText('2 条评论')).toBeInTheDocument()
+  })
+
+  it('评论数 >3 时显示查看全部入口，可打开对话框', async () => {
+    const user = userEvent.setup()
+    const comments = Array.from({ length: 5 }, (_, i) => makeComment(`c${i}`, `评论${i}`))
+    mockedUseMomentComments.mockReturnValue({ data: comments } as never)
+    render(<MomentItem moment={makeMoment({ commentCount: 5 })} />)
+
+    // 内联只展示前 3 条
+    expect(screen.getByText('评论0')).toBeInTheDocument()
+    expect(screen.queryByText('评论4')).not.toBeInTheDocument()
+    expect(screen.getByText('查看全部 5 条评论')).toBeInTheDocument()
+
+    await user.click(screen.getByText('查看全部 5 条评论'))
+    expect(screen.getByText('全部评论（5）')).toBeInTheDocument()
+    expect(screen.getByText('评论4')).toBeInTheDocument()
+  })
+
+  it('添加评论：输入后发送携带正确参数', async () => {
+    const user = userEvent.setup()
+    mockedUseMomentComments.mockReturnValue({
+      data: [makeComment('c1', '已有评论')],
+    } as never)
+    render(<MomentItem moment={makeMoment({ commentCount: 1 })} />)
+
+    await user.click(screen.getByText('1 条评论'))
+    const input = screen.getByPlaceholderText('写条评论…')
+    await user.type(input, '你好呀')
+    await user.click(screen.getByRole('button', { name: '发送' }))
+
+    expect(createCommentMutate).toHaveBeenCalledWith(
+      { momentId: 'm1', content: '你好呀' },
+      expect.any(Object),
+    )
+  })
+
+  it('删除评论：点击删除按钮携带正确参数', async () => {
+    const user = userEvent.setup()
+    mockedUseMomentComments.mockReturnValue({
+      data: [makeComment('c1', '要删的评论')],
+    } as never)
+    render(<MomentItem moment={makeMoment({ commentCount: 1 })} />)
+
+    const deleteButtons = screen.getAllByRole('button', { name: '删除评论' })
+    await user.click(deleteButtons[0])
+
+    expect(deleteCommentMutate).toHaveBeenCalledWith({ momentId: 'm1', commentId: 'c1' })
   })
 })

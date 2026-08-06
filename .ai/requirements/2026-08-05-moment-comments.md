@@ -1,7 +1,7 @@
 # Moment 评论需求文档
 
 - 日期：2026-08-05
-- 状态：**方案已确认，待实施**（API 先行；MCP / CLI 后续同步）
+- 状态：**已实施**（2026-08-06；API / MCP / CLI / 前端四端同步完成，见 `.ai/worklog/2026-08-06-moment-comments.md`）
 - 范围：`services/api` 新增 Moment 评论（`moment_comments` 表 + 嵌套接口）
 - 前置记录：`2026-08-05-service-layer-architecture.md`（分层架构约定）
 

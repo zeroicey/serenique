@@ -30,10 +30,21 @@ export interface MomentAttachmentEntry {
   blob: MomentBlobEntry
 }
 
+export interface MomentCommentEntry {
+  id: string
+  momentId: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface MomentEntry {
   id: string
   text: string
   attachments: MomentAttachmentEntry[]
+  // 列表接口 comments 恒为 []（只带数量）；详情接口内嵌完整评论。
+  comments: MomentCommentEntry[]
+  commentCount: number
   createdAt: string
   updatedAt: string
 }
@@ -77,6 +88,25 @@ export async function removeMomentAttachment(
   attachmentId: string,
 ): Promise<void> {
   const res = await api.delete(apiUrl(`moments/${momentId}/attachments/${attachmentId}`))
+  if (res.status === 204) return
+  await unwrap(res)
+}
+
+export async function listMomentComments(momentId: string): Promise<MomentCommentEntry[]> {
+  const res = await api.get(apiUrl(`moments/${momentId}/comments`))
+  return unwrap<MomentCommentEntry[]>(res)
+}
+
+export async function createMomentComment(
+  momentId: string,
+  content: string,
+): Promise<MomentCommentEntry> {
+  const res = await api.post(apiUrl(`moments/${momentId}/comments`), { json: { content } })
+  return unwrap<MomentCommentEntry>(res)
+}
+
+export async function deleteMomentComment(momentId: string, commentId: string): Promise<void> {
+  const res = await api.delete(apiUrl(`moments/${momentId}/comments/${commentId}`))
   if (res.status === 204) return
   await unwrap(res)
 }

@@ -1,5 +1,6 @@
 import type { blobs, blobAttachments } from "@/modules/blob/blob.schema";
 import type { moments } from "@/modules/moment/moment.schema";
+import type { MomentCommentEntry } from "@/modules/moment/comment.types";
 import type {
   MomentAttachmentEntry,
   MomentBlobEntry,
@@ -84,11 +85,15 @@ export function groupAttachmentsByMomentId(
 export function toMomentEntry(
   row: typeof moments.$inferSelect,
   attachments: MomentAttachmentEntry[] = [],
+  comments: MomentCommentEntry[] = [],
+  commentCount: number = comments.length,
 ): MomentEntry {
   return {
     id: row.id,
     text: row.text,
     attachments,
+    comments,
+    commentCount,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

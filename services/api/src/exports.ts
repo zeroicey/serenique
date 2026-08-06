@@ -26,6 +26,7 @@ export {
 
 // ---- Moment module ----
 export { momentService } from "@/modules/moment/moment.service";
+export { momentCommentService } from "@/modules/moment/comment.service";
 export type {
   AddMomentAttachmentInput,
   DeleteMomentAttachmentInput,
@@ -43,6 +44,18 @@ export {
   ListMomentSchema,
   MomentAttachmentInputSchema,
 } from "@/modules/moment/moment.types";
+export type {
+  MomentCommentEntry,
+  CreateMomentCommentInput,
+  UpdateMomentCommentInput,
+  ListMomentCommentsInput,
+  GetMomentCommentInput,
+  DeleteMomentCommentInput,
+} from "@/modules/moment/comment.types";
+export {
+  CreateMomentCommentSchema,
+  UpdateMomentCommentSchema,
+} from "@/modules/moment/comment.types";
 
 // ---- Blob module ----
 export { blobService } from "@/modules/blob/blob.service";

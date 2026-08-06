@@ -5,6 +5,7 @@
 
 export { diaries } from "@/modules/diary/diary.schema";
 export { moments } from "@/modules/moment/moment.schema";
+export { momentComments } from "@/modules/moment/comment.schema";
 export { blobs, blobAttachments } from "@/modules/blob/blob.schema";
 export { taskGroups, tasks } from "@/modules/task/task.schema";
 export { events } from "@/modules/event/event.schema";

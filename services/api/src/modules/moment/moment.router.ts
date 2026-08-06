@@ -8,6 +8,10 @@ import { momentHandler } from "@/modules/moment/moment.handler";
 export const momentRouter = new Hono()
   .get("/moments", momentHandler.list)
   .post("/moments", momentHandler.create)
+  .get("/moments/:id/comments", momentHandler.listComments)
+  .post("/moments/:id/comments", momentHandler.addComment)
+  .put("/moments/:id/comments/:commentId", momentHandler.updateComment)
+  .delete("/moments/:id/comments/:commentId", momentHandler.deleteComment)
   .post("/moments/:id/attachments", momentHandler.addAttachment)
   .delete(
     "/moments/:id/attachments/:attachmentId",
