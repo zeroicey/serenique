@@ -5,13 +5,13 @@ import { useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useCreateDiary, useDiaryByDate, useUpdateDiary } from '@/features/diary/queries'
 import { diaryFormSchema, type DiaryFormValues } from '@/features/diary/schemas'
-import { todayUTC } from '@/lib/date'
+import { todayLocal } from '@/lib/date'
 
 // 新建/编辑日记合一：?date= 驱动。有日记 → 编辑态（预填，PUT）；无 → 新建态（POST）。
 export default function DiaryCreatePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const today = todayUTC()
+  const today = todayLocal()
   const date = searchParams.get('date') || today
 
   const { data: existing, isPending: isLoadingDiary } = useDiaryByDate(date)

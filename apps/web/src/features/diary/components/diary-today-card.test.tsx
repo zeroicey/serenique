@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '@/test/helpers'
 import * as queries from '@/features/diary/queries'
+import { todayLocal } from '@/lib/date'
 import type { DiaryEntry } from '@/features/diary/api'
 import { DiaryTodayCard } from './diary-today-card'
 
@@ -22,6 +23,15 @@ beforeEach(() => {
 })
 
 describe('DiaryTodayCard', () => {
+  it('按本地日期查询今天（回归：凌晨时不把昨天日记当今天）', () => {
+    renderWithProviders(
+      <MemoryRouter>
+        <DiaryTodayCard />
+      </MemoryRouter>,
+    )
+    expect(queries.useDiaryByDate).toHaveBeenCalledWith(todayLocal())
+  })
+
   it('无今天 → 显示写今天的 CTA', () => {
     renderWithProviders(
       <MemoryRouter>

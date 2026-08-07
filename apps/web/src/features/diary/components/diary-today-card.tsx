@@ -1,14 +1,15 @@
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { todayUTC } from '@/lib/date'
+import { todayLocal } from '@/lib/date'
 import { useDiaryByDate } from '@/features/diary/queries'
 
 // 今天卡片：loading（skeleton）→ 有今天 → 全量展示 + 编辑；无 → CTA「写今天的日记」。
 // 当天日记不做展开/收起，有多少显示多少。
+// 「今天」用本地日期（对齐移动端），避免凌晨时 UTC 日期滞后一天导致把昨天日记当「今天」展示。
 export function DiaryTodayCard() {
   const navigate = useNavigate()
-  const today = todayUTC()
+  const today = todayLocal()
   const { isPending, data } = useDiaryByDate(today)
 
   if (isPending) {

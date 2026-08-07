@@ -12,16 +12,14 @@ interface MomentCommentsDialogProps {
   onOpenChange: (open: boolean) => void
   comments: MomentCommentEntry[] | undefined
   commentCount: number
-  onDelete?: (commentId: string) => void
 }
 
-// 查看全部评论对话框：复用评论列表，支持删除。
+// 查看全部评论对话框：复用评论列表（只读，删除入口方案待定）。
 export function MomentCommentsDialog({
   open,
   onOpenChange,
   comments,
   commentCount,
-  onDelete,
 }: MomentCommentsDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -31,7 +29,7 @@ export function MomentCommentsDialog({
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto pr-1">
           {comments && comments.length > 0 ? (
-            <MomentCommentList comments={comments} onDelete={onDelete} />
+            <MomentCommentList comments={comments} />
           ) : (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {comments ? '还没有评论' : '加载中…'}

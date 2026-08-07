@@ -6,16 +6,14 @@ import { useMomentComments } from '@/features/moment/queries'
 import { renderWithProviders } from '@/test/helpers'
 import { MomentItem } from './moment-item'
 
-const { createCommentMutate, deleteCommentMutate } = vi.hoisted(() => ({
+const { createCommentMutate } = vi.hoisted(() => ({
   createCommentMutate: vi.fn(),
-  deleteCommentMutate: vi.fn(),
 }))
 
 vi.mock('@/features/moment/queries', () => ({
   useDeleteMoment: () => ({ mutate: vi.fn() }),
   useMomentComments: vi.fn(),
   useCreateMomentComment: () => ({ mutate: createCommentMutate }),
-  useDeleteMomentComment: () => ({ mutate: deleteCommentMutate }),
 }))
 
 const mockedUseMomentComments = vi.mocked(useMomentComments)
@@ -47,25 +45,24 @@ function makeComment(id: string, content: string): MomentCommentEntry {
 
 beforeEach(() => {
   createCommentMutate.mockReset()
-  deleteCommentMutate.mockReset()
   mockedUseMomentComments.mockReturnValue({ data: [] } as never)
 })
 
 describe('MomentItem', () => {
-  it('超长文本默认截断，可展开/收起', async () => {
+  it('超长文本默认截断，正文下方可展开/收起', async () => {
     const user = userEvent.setup()
     renderWithProviders(<MomentItem moment={makeMoment({ text: longText })} />)
     expect(screen.getByText(longText.slice(0, 150) + '…')).toBeInTheDocument()
     expect(screen.queryByText(longText)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '展开' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '展开' }))
+    expect(screen.getByRole('button', { name: '全文' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '全文' }))
     expect(screen.getByText(longText)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '收起' })).toBeInTheDocument()
   })
 
-  it('短文本不显示展开按钮', () => {
+  it('短文本不显示全文按钮', () => {
     renderWithProviders(<MomentItem moment={makeMoment({ text: '短文本' })} />)
-    expect(screen.queryByRole('button', { name: '展开' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '全文' })).not.toBeInTheDocument()
   })
 
   it('渲染字数', () => {
@@ -124,16 +121,12 @@ describe('MomentItem', () => {
     )
   })
 
-  it('删除评论：点击删除按钮携带正确参数', async () => {
-    const user = userEvent.setup()
+  it('评论行不提供删除按钮（删除入口方案待定）', () => {
     mockedUseMomentComments.mockReturnValue({
-      data: [makeComment('c1', '要删的评论')],
+      data: [makeComment('c1', '评论内容')],
     } as never)
     renderWithProviders(<MomentItem moment={makeMoment({ commentCount: 1 })} />)
-
-    const deleteButtons = screen.getAllByRole('button', { name: '删除评论' })
-    await user.click(deleteButtons[0])
-
-    expect(deleteCommentMutate).toHaveBeenCalledWith({ momentId: 'm1', commentId: 'c1' })
+    expect(screen.getByText('评论内容')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '删除评论' })).not.toBeInTheDocument()
   })
 })

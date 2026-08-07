@@ -1,10 +1,9 @@
-import { ChevronDown, ChevronUp, Clock, MessageCircle, MoreHorizontal, Trash2 } from 'lucide-react'
+import { Clock, MessageCircle, MoreHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { formatDate } from '@/lib/format'
 import {
   useCreateMomentComment,
   useDeleteMoment,
-  useDeleteMomentComment,
   useMomentComments,
 } from '@/features/moment/queries'
 import type { MomentEntry } from '@/features/moment/api'
@@ -36,11 +35,10 @@ const TEXT_TRUNCATE = 150
 // 卡片内联展示前 N 条评论，其余进「查看全部」对话框。
 const INLINE_COMMENTS = 3
 
-// 单条闪念卡片：文字（超长截断）+ 附件网格 + 时间/字数 + 评论 + 删除。
+// 单条闪念卡片：文字（超长截断，全文/收起在正文下方）+ 附件网格 + 时间/字数 + 评论 + 删除。
 export function MomentItem({ moment }: MomentItemProps) {
   const { mutate: deleteMoment } = useDeleteMoment()
   const { mutate: createComment } = useCreateMomentComment()
-  const { mutate: deleteComment } = useDeleteMomentComment()
   const [textExpanded, setTextExpanded] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [commentOpen, setCommentOpen] = useState(false)
@@ -71,9 +69,19 @@ export function MomentItem({ moment }: MomentItemProps) {
   }
 
   return (
-    <div className="flex w-full max-w-[600px] flex-col gap-2">
+    <div className="flex w-full max-w-[600px] flex-col gap-2 px-3">
       <div className="text-base">
         <p className="whitespace-pre-wrap break-words">{text}</p>
+        {/* 全文/收起放正文下方（对齐移动端），时间行只留时间 + ⋮ 菜单。 */}
+        {showToggle && (
+          <button
+            type="button"
+            className="mt-1 cursor-pointer text-sm text-blue-600 hover:underline"
+            onClick={() => setTextExpanded((v) => !v)}
+          >
+            {textExpanded ? '收起' : '全文'}
+          </button>
+        )}
       </div>
 
       <MomentAttachmentGrid attachments={moment.attachments} />
@@ -92,16 +100,6 @@ export function MomentItem({ moment }: MomentItemProps) {
             >
               <MessageCircle size={14} />
               <span>{moment.commentCount} 条评论</span>
-            </button>
-          )}
-          {showToggle && (
-            <button
-              type="button"
-              className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
-              onClick={() => setTextExpanded((v) => !v)}
-              aria-label={textExpanded ? '收起' : '展开'}
-            >
-              {textExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             </button>
           )}
           <DropdownMenu>
@@ -135,10 +133,7 @@ export function MomentItem({ moment }: MomentItemProps) {
         <div className="mt-1 space-y-2 border-t pt-2">
           {moment.commentCount > 0 && (
             <>
-              <MomentCommentList
-                comments={inlineComments}
-                onDelete={(commentId) => deleteComment({ momentId: moment.id, commentId })}
-              />
+              <MomentCommentList comments={inlineComments} />
               {hasMoreComments && (
                 <button
                   className="cursor-pointer text-sm text-blue-600 hover:underline"
@@ -201,7 +196,6 @@ export function MomentItem({ moment }: MomentItemProps) {
         onOpenChange={setCommentsDialogOpen}
         comments={comments}
         commentCount={moment.commentCount}
-        onDelete={(commentId) => deleteComment({ momentId: moment.id, commentId })}
       />
     </div>
   )

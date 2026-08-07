@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Trash2 } from 'lucide-react'
-import { formatDateOnly, todayUTC } from '@/lib/date'
+import { useNavigate } from 'react-router'
+import { CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { formatDateOnly, todayLocal } from '@/lib/date'
 import { useDeleteDiary } from '@/features/diary/queries'
 import type { DiaryEntry } from '@/features/diary/api'
 import { Button } from '@/components/ui/button'
@@ -25,14 +26,16 @@ interface DiaryItemProps {
 
 const TEXT_TRUNCATE = 150
 
-// 单篇日记卡片：日期 + 内容截断（展开/收起图标）+ 字数 + 删除（确认对话框）。
+// 单篇日记卡片：日期 + 内容截断（展开/收起图标）+ 字数 + 编辑/删除（确认对话框）。
 // 当天日记全量展示、不出现展开按钮；其他日期超长才可收起。
+// 「今天」用本地日期（对齐移动端），「今天」卡片不再出现幽灵日期问题。
 export function DiaryItem({ diary }: DiaryItemProps) {
+  const navigate = useNavigate()
   const { mutate: deleteDiary } = useDeleteDiary()
   const [contentExpanded, setContentExpanded] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  const isToday = diary.diaryDate === todayUTC()
+  const isToday = diary.diaryDate === todayLocal()
   const showToggle = !isToday && diary.content.length > TEXT_TRUNCATE
   const content =
     showToggle && !contentExpanded ? diary.content.slice(0, TEXT_TRUNCATE) + '…' : diary.content
@@ -57,10 +60,20 @@ export function DiaryItem({ diary }: DiaryItemProps) {
       <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
         <span>{diary.content.length} 字</span>
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-accent">
+          <DropdownMenuTrigger
+            aria-label="更多"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
+          >
             <MoreHorizontal size={18} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => navigate(`/diary/write?date=${diary.diaryDate}`)}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              编辑
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer text-red-600 focus:text-red-600"
               onClick={() => setDeleteOpen(true)}

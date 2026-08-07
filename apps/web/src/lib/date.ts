@@ -1,6 +1,10 @@
-// 日期工具：UTC 口径与后端一致（避免时区导致「今天」被判为未来日）。
+// 日期工具。
 
-/** 今天（UTC，YYYY-MM-DD）。 */
+/**
+ * 今天（UTC，YYYY-MM-DD）。
+ * 注意：日记模块已改用本地日期 `todayLocal()`（凌晨时 UTC 日期比本地早一天，会把昨天日记当「今天」展示，
+ * 见 2026-08-08 worklog）。此函数目前无调用方，保留仅供后端对齐/测试参考。
+ */
 export function todayUTC(): string {
   return new Date().toISOString().slice(0, 10)
 }

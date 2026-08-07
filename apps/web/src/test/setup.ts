@@ -37,3 +37,26 @@ vi.stubGlobal('IntersectionObserver', IntersectionObserverMock)
 // jsdom 未实现 createObjectURL，新建页本地预览依赖它。
 URL.createObjectURL = vi.fn(() => 'blob:mock') as unknown as typeof URL.createObjectURL
 URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL
+
+// jsdom 未实现 ResizeObserver；Base UI / Floating UI（dropdown 等浮层定位）依赖它。
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverMock)
+
+// jsdom 无布局；Floating UI 定位 anchor 需要 getBoundingClientRect 返回矩形。
+Element.prototype.getBoundingClientRect = vi.fn(function (this: Element) {
+  return {
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: 100,
+    bottom: 100,
+    width: 100,
+    height: 100,
+    toJSON: () => ({}),
+  } as DOMRect
+})

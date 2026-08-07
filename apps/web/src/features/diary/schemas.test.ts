@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { todayUTC } from '@/lib/date'
+import { todayLocal } from '@/lib/date'
 import { diaryFormSchema } from './schemas'
 
 describe('diaryFormSchema', () => {
   it('空内容校验失败', () => {
-    const r = diaryFormSchema.safeParse({ content: '   ', diaryDate: todayUTC() })
+    const r = diaryFormSchema.safeParse({ content: '   ', diaryDate: todayLocal() })
     expect(r.success).toBe(false)
   })
 
@@ -18,8 +18,8 @@ describe('diaryFormSchema', () => {
     expect(r.success).toBe(false)
   })
 
-  it('合法输入通过', () => {
-    const r = diaryFormSchema.safeParse({ content: '今天很开心', diaryDate: todayUTC() })
+  it('本地今天可以通过（允许补写今天）', () => {
+    const r = diaryFormSchema.safeParse({ content: '今天很开心', diaryDate: todayLocal() })
     expect(r.success).toBe(true)
   })
 })
