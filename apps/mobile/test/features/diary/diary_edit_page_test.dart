@@ -6,7 +6,7 @@ import 'package:serenique_mobile/features/diary/diary_models.dart';
 import 'package:serenique_mobile/features/diary/diary_providers.dart';
 
 void main() {
-  testWidgets('编辑页：保存按钮在右上角，正文无边框', (tester) async {
+  testWidgets('编辑页：保存图标在右上角，正文无边框', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         diaryByDateProvider('2026-08-07').overrideWith((ref) async => null),
@@ -14,7 +14,7 @@ void main() {
       child: const MaterialApp(home: DiaryEditPage(date: '2026-08-07')),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('保存'), findsOneWidget);
+    expect(find.byIcon(Icons.check), findsOneWidget); // 保存按钮（图标）
     expect(find.text('写下今天的日记…'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
   });

@@ -28,5 +28,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('今天的闪记'), findsOneWidget);
     expect(find.text('第一条评论'), findsOneWidget);
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget); // 删除在右上角标题栏
+    expect(find.byType(FloatingActionButton), findsNothing); // 不在右下角 FAB
   });
 }

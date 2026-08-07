@@ -5,8 +5,8 @@ import '../moment_models.dart';
 import '../moment_providers.dart';
 import '../moment_time.dart';
 
-/// 朋友圈样式的闪记卡片：纯文本（可展开）+ 时间行（全文/收起 + ⋮菜单）+ 内嵌评论 + 内联评论输入。
-/// 评论、删除都直接在列表页操作，不需要点进详情。
+/// 朋友圈样式的闪记卡片：纯文本（「全文/收起」在正文下方）+ 时间行（⋮ 菜单）+ 内嵌评论 + 内联评论输入。
+/// 评论输入默认隐藏：点 ⋮ →「评论」才展开，发送成功后收起；删除也在 ⋮ 菜单里。
 class MomentCard extends ConsumerStatefulWidget {
   const MomentCard({super.key, required this.moment});
 
@@ -20,6 +20,7 @@ class _MomentCardState extends ConsumerState<MomentCard> {
   static const _collapseLines = 8;
 
   bool _expanded = false;
+  bool _showCommentInput = false;
   bool _submitting = false;
   bool _deleting = false;
   final _commentController = TextEditingController();
@@ -41,6 +42,8 @@ class _MomentCardState extends ConsumerState<MomentCard> {
     try {
       await ref.read(momentActionsProvider).addComment(_moment.id, content);
       _commentController.clear();
+      // 发送成功：隐藏输入框（评论已出现在列表里）。
+      setState(() => _showCommentInput = false);
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -88,7 +91,7 @@ class _MomentCardState extends ConsumerState<MomentCard> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 用 TextPainter 判断收起状态下是否真的会溢出，避免短文本也显示展开按钮。
+        // 用 TextPainter 判断收起状态下是否真的会溢出，避免短文本也显示「全文」。
         final style = theme.textTheme.bodyLarge!;
         final painter = TextPainter(
           text: TextSpan(text: moment.text, style: style),
@@ -106,8 +109,24 @@ class _MomentCardState extends ConsumerState<MomentCard> {
               maxLines: _expanded ? null : _collapseLines,
               overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
             ),
+            // 「全文/收起」直接放在正文下方。
+            if (overflows)
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _expanded ? '收起' : '全文',
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
             const SizedBox(height: 4),
-            // 时间行：时间靠左，全文/收起在右侧，⋮ 菜单在最右。
+            // 时间行：时间靠左，⋮ 菜单在最右。
             Row(
               children: [
                 Expanded(
@@ -117,24 +136,12 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                         ?.copyWith(color: theme.hintColor),
                   ),
                 ),
-                if (overflows)
-                  InkWell(
-                    onTap: () => setState(() => _expanded = !_expanded),
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Icon(
-                        _expanded ? Icons.expand_less : Icons.expand_more,
-                        size: 20,
-                        color: theme.hintColor,
-                      ),
-                    ),
-                  ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz),
                   tooltip: '更多',
                   onSelected: (value) {
                     if (value == 'comment') {
+                      setState(() => _showCommentInput = true);
                       _commentFocus.requestFocus();
                     } else if (value == 'delete') {
                       _delete();
@@ -151,39 +158,41 @@ class _MomentCardState extends ConsumerState<MomentCard> {
               const SizedBox(height: 10),
               _CommentBlock(comments: moment.comments),
             ],
-            const SizedBox(height: 8),
-            // 内联评论输入：列表页直接评论，不用点进详情。
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _commentController,
-                    focusNode: _commentFocus,
-                    maxLength: 2000,
-                    maxLines: 3,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      hintText: '写评论…',
-                      isDense: true,
-                      filled: true,
-                      fillColor:
-                          scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
+            // 评论输入默认隐藏，点 ⋮ →「评论」才展开。
+            if (_showCommentInput) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      focusNode: _commentFocus,
+                      maxLength: 2000,
+                      maxLines: 3,
+                      minLines: 1,
+                      decoration: InputDecoration(
+                        hintText: '写评论…',
+                        isDense: true,
+                        filled: true,
+                        fillColor:
+                            scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        counterText: '',
                       ),
-                      counterText: '',
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: _submitting ? null : _submitComment,
-                  icon: const Icon(Icons.send),
-                  tooltip: '发送',
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _submitting ? null : _submitComment,
+                    icon: const Icon(Icons.send),
+                    tooltip: '发送',
+                  ),
+                ],
+              ),
+            ],
           ],
         );
       },

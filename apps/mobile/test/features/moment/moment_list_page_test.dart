@@ -54,7 +54,7 @@ void main() {
     expect(find.textContaining('条评论'), findsNothing);
   });
 
-  testWidgets('长文本显示向下箭头并可展开收起', (tester) async {
+  testWidgets('长文本显示「全文」并可展开收起', (tester) async {
     tester.view.physicalSize = const Size(400, 2000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -72,12 +72,12 @@ void main() {
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.expand_more), findsOneWidget);
-    expect(find.byIcon(Icons.expand_less), findsNothing);
+    expect(find.text('全文'), findsOneWidget);
+    expect(find.text('收起'), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.expand_more));
+    await tester.tap(find.text('全文'));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.expand_less), findsOneWidget);
+    expect(find.text('收起'), findsOneWidget);
   });
 
   testWidgets('卡片 ⋮ 菜单包含评论与删除', (tester) async {
@@ -92,13 +92,18 @@ void main() {
     expect(find.text('删除'), findsOneWidget);
   });
 
-  testWidgets('每张卡片都有内联评论输入框', (tester) async {
+  testWidgets('评论输入默认隐藏，点 ⋮ →「评论」才显示', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [momentListProvider.overrideWith((ref) async => [sample])],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('写评论…'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing); // 默认不显示输入框
+
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('评论'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget); // 点「评论」后出现
   });
 }

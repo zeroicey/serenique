@@ -102,15 +102,16 @@ class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
               tooltip: '删除日记',
               onPressed: _deleting ? null : _delete,
             ),
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: _saving
+          IconButton(
+            icon: _saving
                 ? const SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('保存'),
+                : const Icon(Icons.check),
+            tooltip: '保存',
+            onPressed: _saving ? null : _save,
           ),
         ],
       ),

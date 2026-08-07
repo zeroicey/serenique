@@ -43,7 +43,18 @@ class MomentDetailPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final detail = ref.watch(momentDetailProvider(id));
     return Scaffold(
-      appBar: AppBar(title: const Text('闪记详情')),
+      appBar: AppBar(
+        title: const Text('闪记详情'),
+        actions: [
+          // 删除按钮放右上角标题栏（和日记右上角的删除/保存同位置），不用右下角 FAB。
+          if (detail.hasValue)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: '删除',
+              onPressed: () => _delete(context, ref, detail.value!.id),
+            ),
+        ],
+      ),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => AsyncErrorView(
@@ -59,17 +70,9 @@ class MomentDetailPage extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
             CommentSection(momentId: moment.id),
-            const SizedBox(height: 88),
           ],
         ),
       ),
-      floatingActionButton: detail.hasValue
-          ? FloatingActionButton(
-              tooltip: '删除',
-              onPressed: () => _delete(context, ref, detail.value!.id),
-              child: const Icon(Icons.delete_outline),
-            )
-          : null,
     );
   }
 }
