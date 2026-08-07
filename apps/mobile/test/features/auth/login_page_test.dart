@@ -22,17 +22,4 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('密钥错误，请检查后重试'), findsOneWidget);
   });
-
-  testWidgets('已登录显示密钥打码与退出按钮', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        tokenStorageProvider.overrideWithValue(FakeTokenStorage('0123456789abcdef')),
-      ],
-      child: const MaterialApp(home: LoginPage()),
-    ));
-    await tester.pumpAndSettle();
-    expect(find.text('已登录'), findsOneWidget);
-    expect(find.text('0123…cdef'), findsOneWidget);
-    expect(find.text('退出登录'), findsOneWidget);
-  });
 }

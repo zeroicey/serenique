@@ -15,7 +15,9 @@ final diaryByDateProvider = FutureProvider.family<DiaryEntry?, String>((ref, dat
   try {
     return await ref.watch(diaryApiProvider).getByDate(date);
   } on ApiException catch (e) {
-    if (e.code == 'NOT_FOUND') return null;
+    // 后端错误包目前无 code 字段（{ success, message }），dio 会映射成
+    // API_ERROR + statusCode 404；双匹配兼容「有 code」与「只有状态码」。
+    if (e.code == 'NOT_FOUND' || e.statusCode == 404) return null;
     rethrow;
   }
 });

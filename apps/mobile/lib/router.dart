@@ -9,6 +9,7 @@ import 'features/diary/diary_list_page.dart';
 import 'features/moment/moment_create_page.dart';
 import 'features/moment/moment_detail_page.dart';
 import 'features/moment/moment_list_page.dart';
+import 'features/settings/settings_page.dart';
 import 'providers.dart';
 
 /// 声明式路由。未认证 → /login；启动读 Keychain → /splash；认证通过进 /moments。
@@ -21,8 +22,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       if (auth.initializing) return loc == '/splash' ? null : '/splash';
       if (!auth.isAuthenticated) return loc == '/login' ? null : '/login';
-      // 已认证只拦 /splash；/login 保留给「设置→登出」入口（已登录态显示密钥+退出登录）
-      if (auth.isAuthenticated && loc == '/splash') return '/moments';
+      // 已认证：/splash 与 /login 都回主界面；设置页独立为 /settings
+      if (loc == '/splash' || loc == '/login') return '/moments';
       return null;
     },
     routes: [
@@ -32,6 +33,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/moments', builder: (context, state) => const MomentListPage()),
           GoRoute(path: '/diary', builder: (context, state) => const DiaryListPage()),
+          GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
         ],
       ),
       GoRoute(path: '/moments/create', builder: (context, state) => const MomentCreatePage()),

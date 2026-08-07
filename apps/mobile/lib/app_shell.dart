@@ -53,7 +53,7 @@ class AppShell extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('设置'),
-              onTap: () => context.go('/login'),
+              onTap: () => context.go('/settings'),
             ),
           ],
         ),

@@ -36,7 +36,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             .showSnackBar(SnackBar(content: Text(error)));
         return; // 失败就 return，别往下导航
       }
-      // 登录成功：显式进主界面（redirect 只拦 /splash，不再负责 /login → /moments）
+      // 登录成功：显式进主界面（redirect 也会把已认证的 /login 重定向走）
       if (mounted) context.go('/moments');
     } on Exception catch (e) {
       if (mounted) {
@@ -48,24 +48,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
-  Future<void> _logout() async {
-    await ref.read(authControllerProvider.notifier).logout();
-    // redirect 重算 → /login（已登录态变表单态）
-  }
-
-  String _mask(String token) {
-    if (token.length <= 8) return '*' * token.length;
-    return '${token.substring(0, 4)}…${token.substring(token.length - 4)}';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final auth = ref.watch(authControllerProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('登录')),
-      body: Center(
-        child: auth.isAuthenticated ? _loggedIn(auth.token!) : _loginForm(),
-      ),
+      body: Center(child: _loginForm()),
     );
   }
 
@@ -98,24 +85,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _loggedIn(String token) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.check_circle_outline, size: 48),
-          const SizedBox(height: 12),
-          const Text('已登录'),
-          const SizedBox(height: 4),
-          Text(_mask(token), style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 16),
-          OutlinedButton(onPressed: _logout, child: const Text('退出登录')),
-        ],
       ),
     );
   }
