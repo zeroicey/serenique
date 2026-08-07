@@ -1,4 +1,6 @@
 import type { Context, Next } from "hono";
+import { auditService } from "@/modules/audit/audit.service";
+import { clientIp } from "@/shared/ip";
 import { Res } from "@/shared/response";
 import { SESSION_COOKIE_NAME } from "./auth.domain";
 import { authService } from "./auth.service";
@@ -29,6 +31,7 @@ export async function authMiddleware(c: Context, next: Next) {
   if (header && header.startsWith("Bearer ")) {
     const token = header.slice("Bearer ".length).trim();
     if (token && authService.authenticate(token)) return next();
+    auditService.recordUnauthorized(clientIp(c));
     return Res.unauthorized("未认证或登录已过期").build(c);
   }
 
@@ -37,5 +40,6 @@ export async function authMiddleware(c: Context, next: Next) {
   const value = m?.[1];
   if (value && authService.verifySessionCookie(value)) return next();
 
+  auditService.recordUnauthorized(clientIp(c));
   return Res.unauthorized("未认证或登录已过期").build(c);
 }

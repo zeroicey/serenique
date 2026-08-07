@@ -1,4 +1,5 @@
 import { db } from "@/db/connection";
+import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { diaries } from "@/modules/diary/diary.schema";
 import { isFutureDate, todayStr } from "@/modules/diary/diary.domain";
 import { toDiaryEntry } from "@/modules/diary/diary.mappers";
@@ -83,8 +84,14 @@ export const diaryService = {
     const [row] = await db
       .delete(diaries)
       .where(eq(diaries.id, input.id))
-      .returning({ id: diaries.id });
+      .returning({ id: diaries.id, diaryDate: diaries.diaryDate });
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "日记不存在", 404);
-    return row;
+    fireAuditRecord({
+      event: "diary.delete",
+      message: "日记已删除",
+      level: "warn",
+      detail: { id: row.id, diaryDate: row.diaryDate },
+    });
+    return { id: row.id };
   },
 };

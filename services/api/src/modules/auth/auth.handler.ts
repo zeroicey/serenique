@@ -1,6 +1,8 @@
 import type { Context } from "hono";
 import { env } from "@/env";
+import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { handleError } from "@/shared/handler";
+import { clientIp } from "@/shared/ip";
 import { Res } from "@/shared/response";
 import {
   buildSessionCookie,
@@ -9,26 +11,37 @@ import {
 import { authService } from "./auth.service";
 import { LoginSchema } from "./auth.types";
 
-/** 尽量取真实客户端 IP（先 Cloudflare，再转发链，最后兜底）。 */
-function clientIp(c: Context): string {
-  return (
-    c.req.header("cf-connecting-ip") ??
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown"
-  );
-}
-
 export const authHandler = {
   async login(c: Context) {
+    const ip = clientIp(c);
     try {
       const body = LoginSchema.parse(await c.req.json());
-      const result = await authService.login(clientIp(c), body.token);
+      const result = await authService.login(ip, body.token);
       if (result === "throttled") {
+        fireAuditRecord({
+          event: "auth.login_failed",
+          message: "登录失败：尝试过于频繁，请稍后再试",
+          level: "warn",
+          ip,
+        });
         return Res.error("尝试过于频繁，请稍后再试").status(429).build(c);
       }
       if (result === "rejected") {
+        fireAuditRecord({
+          event: "auth.login_failed",
+          message: "登录失败：密钥不正确",
+          level: "warn",
+          ip,
+        });
         return Res.error("认证失败，密钥不正确").status(401).build(c);
       }
+      // 登录成功
+      fireAuditRecord({
+        event: "auth.login",
+        message: "登录成功",
+        level: "info",
+        ip,
+      });
       // Auth 未启用（dev、未配置 AUTH_TOKEN）时返回 200 已认证但不发会话 cookie：
       // createSessionCookie() 在 env.AUTH_TOKEN === undefined 时会因 createHmac
       // 抛错 → 500。启用 auth 时走下方正常发 cookie 流程。
@@ -51,6 +64,12 @@ export const authHandler = {
     const crossSite = env.NODE_ENV === "production";
     const secure = env.NODE_ENV !== "development";
     c.header("Set-Cookie", clearSessionCookie(crossSite, secure));
+    fireAuditRecord({
+      event: "auth.logout",
+      message: "退出登录",
+      level: "info",
+      ip: clientIp(c),
+    });
     return Res.ok("已退出登录", { authenticated: false }).build(c);
   },
 

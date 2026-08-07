@@ -1,5 +1,6 @@
 import { eq, like, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
+import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { blobs, blobAttachments } from "@/modules/blob/blob.schema";
 import { toBlobAttachmentEntry, toPublicBlobEntry } from "@/modules/blob/blob.mappers";
 import {
@@ -129,6 +130,12 @@ export const blobService = {
     }
 
     logger.info({ id, mimeType, size: file.size }, "文件上传成功");
+    fireAuditRecord({
+      event: "blob.upload",
+      message: "文件上传成功",
+      level: "info",
+      detail: { id, fileName: file.name, mimeType, size: file.size },
+    });
     return toPublicBlobEntry(row);
   },
 
@@ -323,6 +330,13 @@ export const blobService = {
     }
 
     await db.delete(blobs).where(eq(blobs.id, id));
+
+    fireAuditRecord({
+      event: "blob.delete",
+      message: "文件已删除",
+      level: "warn",
+      detail: { id, fileName: row.originalName, mimeType: row.mimeType },
+    });
 
     try {
       await deleteFileFromStorage(env.BLOB_ROOT, row.storagePath);

@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, lt } from "drizzle-orm";
 import { db } from "@/db/connection";
+import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { events } from "@/modules/event/event.schema";
 import {
   assertValidEventRange,
@@ -103,8 +104,14 @@ export const eventService = {
     const [row] = await db
       .delete(events)
       .where(eq(events.id, input.id))
-      .returning({ id: events.id });
+      .returning({ id: events.id, title: events.title });
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "事件不存在", 404);
-    return row;
+    fireAuditRecord({
+      event: "event.delete",
+      message: "事件已删除",
+      level: "warn",
+      detail: { id: row.id, title: row.title },
+    });
+    return { id: row.id };
   },
 };

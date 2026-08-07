@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
+import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { blobAttachments, blobs } from "@/modules/blob/blob.schema";
 import { moments } from "@/modules/moment/moment.schema";
 import { listCommentsByMomentIds } from "@/modules/moment/comment.service";
@@ -294,6 +295,13 @@ export const momentService = {
           ),
         );
       await tx.delete(moments).where(eq(moments.id, input.id));
+
+      fireAuditRecord({
+        event: "moment.delete",
+        message: "闪念已删除",
+        level: "warn",
+        detail: { id: input.id },
+      });
       return { id: input.id };
     });
   },

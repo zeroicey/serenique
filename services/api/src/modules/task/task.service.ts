@@ -1,4 +1,5 @@
 import { db } from "@/db/connection";
+import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { taskGroups, tasks } from "@/modules/task/task.schema";
 import { nextCompletedAt, resolveTaskUpdate } from "@/modules/task/task.domain";
 import { toTaskEntry, toTaskGroupEntry } from "@/modules/task/task.mappers";
@@ -94,9 +95,15 @@ export const taskService = {
     const [row] = await db
       .delete(taskGroups)
       .where(eq(taskGroups.id, input.id))
-      .returning({ id: taskGroups.id });
+      .returning({ id: taskGroups.id, title: taskGroups.title });
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "任务组不存在", 404);
-    return row;
+    fireAuditRecord({
+      event: "task_group.delete",
+      message: "任务组已删除（含组内任务）",
+      level: "warn",
+      detail: { id: row.id, title: row.title },
+    });
+    return { id: row.id };
   },
 
   // ---- Tasks ----
@@ -200,8 +207,14 @@ export const taskService = {
     const [row] = await db
       .delete(tasks)
       .where(eq(tasks.id, input.id))
-      .returning({ id: tasks.id });
+      .returning({ id: tasks.id, title: tasks.title });
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "任务不存在", 404);
-    return row;
+    fireAuditRecord({
+      event: "task.delete",
+      message: "任务已删除",
+      level: "warn",
+      detail: { id: row.id, title: row.title },
+    });
+    return { id: row.id };
   },
 };
