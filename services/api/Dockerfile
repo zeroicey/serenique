@@ -1,5 +1,11 @@
 FROM oven/bun:1
 
+# ---- Timezone (UTC+8) ----------------------------------------------------------
+# 日记「今天」等按服务器本地日期判定（见 .ai/worklog/2026-08-08-api-diary-today-local.md），
+# 需 tzdata + TZ 让容器本地时区 = 用户时区（UTC+8）。
+ENV TZ=Asia/Shanghai
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
+
 # ---- Non-root runtime user --------------------------------------------------
 # Fixed UID/GID (10001) so the /data/blobs volume can be chowned to match once.
 # A fresh named volume inherits the image's ownership; a host bind mount must
