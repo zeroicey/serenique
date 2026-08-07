@@ -16,6 +16,13 @@ class MomentApi {
         .toList();
   }
 
+  /// 轻量取总数：只拉一页 pageSize=1，读响应里的 total。
+  Future<int> count() async {
+    final data =
+        await _client.getData('/api/moments', query: {'page': 1, 'pageSize': 1});
+    return (data as Map<String, dynamic>)['total'] as int;
+  }
+
   Future<Moment> get(String id) async {
     final data = await _client.getData('/api/moments/$id');
     return Moment.fromJson(data as Map<String, dynamic>);

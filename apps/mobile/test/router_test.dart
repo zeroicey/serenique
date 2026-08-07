@@ -8,6 +8,7 @@ import 'package:serenique_mobile/features/moment/moment_list_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
 import 'package:serenique_mobile/features/settings/settings_page.dart';
+import 'package:serenique_mobile/providers.dart';
 import 'package:serenique_mobile/router.dart';
 import 'helpers.dart';
 
@@ -26,6 +27,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -37,6 +39,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -55,6 +58,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -75,6 +79,7 @@ void main() {
       tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
       verifyTokenProvider.overrideWithValue((token) async {}),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));

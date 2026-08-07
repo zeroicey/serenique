@@ -23,6 +23,9 @@ class _FakeDiaryApi implements DiaryApi {
       const [];
 
   @override
+  Future<int> count() async => 0;
+
+  @override
   Future<DiaryEntry> create({String? diaryDate, required String content}) {
     throw UnimplementedError();
   }

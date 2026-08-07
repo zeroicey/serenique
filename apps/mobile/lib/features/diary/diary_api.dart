@@ -16,6 +16,13 @@ class DiaryApi {
         .toList();
   }
 
+  /// 轻量取总数：只拉一页 pageSize=1，读响应里的 total。
+  Future<int> count() async {
+    final data =
+        await _client.getData('/api/diaries', query: {'page': 1, 'pageSize': 1});
+    return (data as Map<String, dynamic>)['total'] as int;
+  }
+
   /// 按日期取（YYYY-MM-DD）。当天没有 → 后端 404 → ApiException(NOT_FOUND)。
   Future<DiaryEntry> getByDate(String date) async {
     final data = await _client.getData('/api/diaries/by-date/$date');

@@ -1,0 +1,8 @@
+<svg width="180" height="50" viewBox="0 0 180 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .text { font-family: 'Segoe UI', sans-serif; font-weight: 500; letter-spacing: 1px; }
+  </style>
+  <path d="M20 25c0-7 5-13 12-13s12 6 12 13-5 13-12 13c-3 0-6-2-8-4" stroke="#8BA6A9" stroke-width="2.2" stroke-linecap="round" fill="none"></path>
+  <path d="M22 28c2-3 5-5 10-5 5 0 8 2 10 5" stroke="#8BA6A9" stroke-width="2.0" stroke-linecap="round" fill="none"></path>
+  <text x="50" y="30" font-size="20" fill="#8BA6A9" class="text">Serenique</text>
+</svg>
