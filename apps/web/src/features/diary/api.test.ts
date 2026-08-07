@@ -21,6 +21,8 @@ describe('getDiaryByDate', () => {
   it('404 → null（当天无日记）', async () => {
     mockedGet.mockResolvedValueOnce(envelope(404, { success: false, message: '日记不存在' }))
     await expect(getDiaryByDate('2026-08-05')).resolves.toBeNull()
+    // 必须显式关掉 ky 默认 throwHttpErrors，否则真实 404 在 res.status 守卫前就 reject。
+    expect(mockedGet).toHaveBeenCalledWith('/api/diaries/by-date/2026-08-05', { throwHttpErrors: false })
   })
 
   it('命中 → 返回日记', async () => {

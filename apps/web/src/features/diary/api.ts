@@ -1,6 +1,5 @@
 import { api, apiUrl } from '@/api/client'
 import { unwrap } from '@/api/unwrap'
-import { ApiError } from '@/api/errors'
 import type { Paged } from '@/types/api'
 
 // 日记 API 契约（手动定义，对齐 services/api 现状）。
@@ -36,14 +35,12 @@ export async function listDiaries(params?: ListDiariesParams): Promise<Paged<Dia
 }
 
 export async function getDiaryByDate(date: string): Promise<DiaryEntry | null> {
-  const res = await api.get(apiUrl(`diaries/by-date/${date}`))
-  try {
-    return await unwrap<DiaryEntry>(res)
-  } catch (error) {
-    // 404 = 当天无日记（「无今天」态靠这个区分），其余错误上抛。
-    if (error instanceof ApiError && error.status === 404) return null
-    throw error
-  }
+  // ky 默认 throwHttpErrors:true 会在 404 上直接 reject（早于任何 res.status 守卫），
+  // 从而触发 TanStack Query 的 retry 风暴。这里对齐 auth 的 fetchAuthStatus：
+  // throwHttpErrors:false 拿到响应体，把 404 映射为 null（当天无日记），其余错误照常上抛。
+  const res = await api.get(apiUrl(`diaries/by-date/${date}`), { throwHttpErrors: false })
+  if (res.status === 404) return null
+  return unwrap<DiaryEntry>(res)
 }
 
 export async function createDiary(input: CreateDiaryInput): Promise<DiaryEntry> {
