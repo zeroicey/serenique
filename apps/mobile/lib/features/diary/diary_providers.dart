@@ -7,7 +7,12 @@ import 'diary_models.dart';
 final diaryApiProvider = Provider<DiaryApi>((ref) => DiaryApi(ref.watch(apiClientProvider)));
 
 final diaryListProvider = FutureProvider<List<DiaryEntry>>((ref) async {
-  return ref.watch(diaryApiProvider).list();
+  final list = await ref.watch(diaryApiProvider).list();
+  // 后端已按 diaryDate 倒序；这里再防御性排一次，保证最新日期（标题）在最上面，
+  // 即使连着旧后端也能正确显示。
+  final sorted = [...list]
+    ..sort((a, b) => b.diaryDate.compareTo(a.diaryDate));
+  return sorted;
 });
 
 /// 按日期取；当天没有日记 → null（编辑页据此决定新建/编辑）。

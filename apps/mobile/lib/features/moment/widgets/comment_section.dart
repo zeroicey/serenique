@@ -4,7 +4,8 @@ import '../../../core/network/api_exception.dart';
 import '../moment_models.dart';
 import '../moment_providers.dart';
 
-/// 评论区：列表 + 新增 + 删除。评论数据来自 momentDetailProvider（评论内嵌在详情里）。
+/// 评论区：新增 + 删除。评论数据来自 momentDetailProvider（评论内嵌在详情里）。
+/// 评论区与列表一致：直接平铺展示全部评论，不显示条数、不缩字号。
 class CommentSection extends ConsumerStatefulWidget {
   const CommentSection({super.key, required this.momentId});
 
@@ -63,27 +64,43 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   Widget build(BuildContext context) {
     final detail = ref.watch(momentDetailProvider(widget.momentId));
     final comments = detail.hasValue ? detail.value!.comments : <MomentComment>[];
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('评论', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        if (comments.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('暂无评论'),
-          ),
-        for (final c in comments)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(c.content),
-            subtitle: Text(c.createdAt, style: Theme.of(context).textTheme.bodySmall),
-            trailing: IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              tooltip: '删除评论',
-              onPressed: _removing ? null : () => _remove(c.id),
+        if (comments.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final c in comments)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Text(c.content),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: '删除评论',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _removing ? null : () => _remove(c.id),
+                      ),
+                    ],
+                  ),
+              ],
             ),
           ),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -92,8 +109,17 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                 maxLength: 2000,
                 maxLines: 3,
                 minLines: 1,
-                decoration: const InputDecoration(
-                    hintText: '写评论…', border: OutlineInputBorder(), counterText: ''),
+                decoration: InputDecoration(
+                  hintText: '写评论…',
+                  isDense: true,
+                  filled: true,
+                  fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                  counterText: '',
+                ),
               ),
             ),
             const SizedBox(width: 8),

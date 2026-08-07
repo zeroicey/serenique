@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
 import 'moment_providers.dart';
+import 'moment_time.dart';
 import 'widgets/comment_section.dart';
 
 class MomentDetailPage extends ConsumerWidget {
@@ -39,6 +40,7 @@ class MomentDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final detail = ref.watch(momentDetailProvider(id));
     return Scaffold(
       appBar: AppBar(title: const Text('闪记详情')),
@@ -49,10 +51,13 @@ class MomentDetailPage extends ConsumerWidget {
         data: (moment) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text(moment.text, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(moment.createdAt, style: Theme.of(context).textTheme.bodySmall),
-            const Divider(height: 32),
+            Text(moment.text, style: theme.textTheme.bodyLarge),
+            const SizedBox(height: 6),
+            Text(
+              formatMomentTime(moment.createdAt),
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+            ),
+            const SizedBox(height: 20),
             CommentSection(momentId: moment.id),
             const SizedBox(height: 88),
           ],

@@ -5,6 +5,7 @@ import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
 import 'diary_providers.dart';
 
+/// 日记编辑页 —— 微信发布纯文本的样式：返回键在左上，保存按钮在右上，正文无边框。
 class DiaryEditPage extends ConsumerStatefulWidget {
   const DiaryEditPage({super.key, required this.date});
 
@@ -101,6 +102,16 @@ class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
               tooltip: '删除日记',
               onPressed: _deleting ? null : _delete,
             ),
+          TextButton(
+            onPressed: _saving ? null : _save,
+            child: _saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('保存'),
+          ),
         ],
       ),
       body: entry.when(
@@ -109,30 +120,15 @@ class _DiaryEditPageState extends ConsumerState<DiaryEditPage> {
             error: err, onRetry: () => ref.invalidate(diaryByDateProvider(widget.date))),
         data: (_) => Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  decoration: const InputDecoration(
-                      hintText: '写下今天的日记…', border: OutlineInputBorder()),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(
-                          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('保存'),
-                ),
-              ),
-            ],
+          child: TextField(
+            controller: _controller,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            decoration: const InputDecoration(
+              hintText: '写下今天的日记…',
+              border: InputBorder.none,
+            ),
           ),
         ),
       ),

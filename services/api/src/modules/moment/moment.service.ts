@@ -2,10 +2,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { blobAttachments, blobs } from "@/modules/blob/blob.schema";
 import { moments } from "@/modules/moment/moment.schema";
-import {
-  listCommentCountsByMomentIds,
-  listCommentsByMomentIds,
-} from "@/modules/moment/comment.service";
+import { listCommentsByMomentIds } from "@/modules/moment/comment.service";
 import { groupCommentsByMomentId } from "@/modules/moment/comment.mappers";
 import {
   assertAllowedMomentBlob,
@@ -200,19 +197,19 @@ export const momentService = {
     ]);
 
     const momentIds = items.map((row) => row.id);
-    const [attachmentRows, commentCounts] = await Promise.all([
+    const [attachmentRows, commentRows] = await Promise.all([
       listAttachmentsByMomentIds(db, momentIds),
-      listCommentCountsByMomentIds(db, momentIds),
+      listCommentsByMomentIds(db, momentIds),
     ]);
     const attachmentsByMomentId = groupAttachmentsByMomentId(attachmentRows);
+    const commentsByMomentId = groupCommentsByMomentId(commentRows);
 
     return {
       items: items.map((row) =>
         toMomentEntry(
           row,
           attachmentsByMomentId.get(row.id) ?? [],
-          [],
-          commentCounts.get(row.id) ?? 0,
+          commentsByMomentId.get(row.id) ?? [],
         ),
       ),
       total: count,

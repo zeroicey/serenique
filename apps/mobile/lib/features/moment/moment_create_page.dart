@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import 'moment_providers.dart';
 
+/// 新建闪记 —— 微信发布纯文本朋友圈的样式：返回键在左上，发表按钮在右上，正文无边框。
 class MomentCreatePage extends ConsumerStatefulWidget {
   const MomentCreatePage({super.key});
 
@@ -45,27 +46,35 @@ class _MomentCreatePageState extends ConsumerState<MomentCreatePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('新建闪记')),
+      appBar: AppBar(
+        title: const Text('新建闪记'),
+        actions: [
+          TextButton(
+            onPressed: _submitting ? null : _submit,
+            child: _submitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('发表'),
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _controller,
-              maxLength: 500,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                  hintText: '记录此刻的想法…', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: _submitting ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(
-                      width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('保存'),
-            ),
-          ],
+        child: TextField(
+          controller: _controller,
+          maxLength: 500,
+          maxLines: null,
+          expands: true,
+          textAlignVertical: TextAlignVertical.top,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: '记录此刻的想法…',
+            border: InputBorder.none,
+            counterText: '',
+          ),
         ),
       ),
     );

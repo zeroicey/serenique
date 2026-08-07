@@ -12,7 +12,7 @@ import type {
   DeleteDiaryInput,
 } from "@/modules/diary/diary.types";
 import { AppError, ErrorCode } from "@/shared/errors";
-import { eq, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Diary service — business orchestration over `db`.
@@ -47,7 +47,7 @@ export const diaryService = {
   async list(input: ListDiaryInput): Promise<{ items: DiaryEntry[]; total: number }> {
     const offset = (input.page - 1) * input.pageSize;
     const [items, [{ count }]] = await Promise.all([
-      db.select().from(diaries).orderBy(diaries.createdAt).limit(input.pageSize).offset(offset),
+      db.select().from(diaries).orderBy(desc(diaries.diaryDate)).limit(input.pageSize).offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(diaries),
     ]);
     return { items: items.map(toDiaryEntry), total: count };
