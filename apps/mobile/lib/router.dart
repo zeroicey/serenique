@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'app_shell.dart';
@@ -9,6 +10,7 @@ import 'features/diary/diary_list_page.dart';
 import 'features/moment/moment_create_page.dart';
 import 'features/moment/moment_detail_page.dart';
 import 'features/moment/moment_list_page.dart';
+import 'features/placeholder/placeholder_page.dart';
 import 'features/settings/settings_page.dart';
 import 'providers.dart';
 
@@ -33,6 +35,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/moments', builder: (context, state) => const MomentListPage()),
           GoRoute(path: '/diary', builder: (context, state) => const DiaryListPage()),
+          GoRoute(path: '/task', builder: (context, state) => const PlaceholderPage(title: '任务', icon: Icons.check_circle_outline)),
+          GoRoute(path: '/event', builder: (context, state) => const PlaceholderPage(title: '日历', icon: Icons.calendar_today_outlined)),
+          GoRoute(path: '/ai', builder: (context, state) => const PlaceholderPage(title: '宁序', icon: Icons.auto_awesome)),
           GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
         ],
       ),

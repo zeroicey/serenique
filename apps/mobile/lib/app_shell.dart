@@ -13,8 +13,11 @@ class AppShell extends ConsumerWidget {
   final Widget child;
 
   static const _items = <({IconData icon, String label, String path})>[
+    (icon: Icons.auto_awesome, label: '宁序', path: '/ai'),
     (icon: Icons.bolt, label: '闪记', path: '/moments'),
     (icon: Icons.book_outlined, label: '日记', path: '/diary'),
+    (icon: Icons.check_circle_outline, label: '任务', path: '/task'),
+    (icon: Icons.calendar_today_outlined, label: '日历', path: '/event'),
   ];
 
   @override
@@ -22,11 +25,18 @@ class AppShell extends ConsumerWidget {
     final location = GoRouterState.of(context).uri.path;
     final counts = ref.watch(countsProvider);
 
+    // 右侧 badge：闪记/日记走真实计数，任务/日历先写死占位（后续接 taskApi/eventApi）。
     String? badgeFor(String path) => switch (path) {
           '/moments' => counts.hasValue ? '${counts.value!.moments}' : null,
           '/diary' => counts.hasValue ? '${counts.value!.diaries}' : null,
+          '/task' => '3',
+          '/event' => '2',
           _ => null,
         };
+
+    // 抽屉选中态：模块子路由（如 /diary/2026-08-08）也选中对应模块。
+    bool isActive(String path) =>
+        location == path || location.startsWith('$path/');
 
     return Scaffold(
       appBar: AppBar(
@@ -40,7 +50,7 @@ class AppShell extends ConsumerWidget {
             },
           ),
         ),
-        title: const Text('Serenique'),
+        title: Text(moduleTitle(location)),
         // 添加按钮放右上角（不用右下角 FAB，避免挡住评论发送）。
         actions: [
           if (location == '/moments')
@@ -81,7 +91,7 @@ class AppShell extends ConsumerWidget {
                         _NavItem(
                           icon: item.icon,
                           label: item.label,
-                          selected: location == item.path,
+                          selected: isActive(item.path),
                           badge: badgeFor(item.path),
                           onTap: () {
                             Scaffold.of(drawerContext).closeDrawer();
@@ -111,6 +121,17 @@ class AppShell extends ConsumerWidget {
       body: child,
     );
   }
+}
+
+/// 顶部 AppBar 标题 = 当前所在模块名。
+String moduleTitle(String path) {
+  if (path.startsWith('/settings')) return '设置';
+  if (path.startsWith('/moments')) return '闪记';
+  if (path.startsWith('/diary')) return '日记';
+  if (path.startsWith('/task')) return '任务';
+  if (path.startsWith('/event')) return '日历';
+  if (path.startsWith('/ai')) return '宁序';
+  return 'Serenique';
 }
 
 /// 侧栏条目：统一用 ListTile（图标与文字间距一致），支持选中态高亮与右侧计数 badge。

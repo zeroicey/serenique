@@ -26,7 +26,8 @@ void main() {
 
   testWidgets('Drawer 打开并显示模块', (tester) async {
     await tester.pumpWidget(ProviderScope(overrides: [countsProvider.overrideWith((ref) async => (moments: 3, diaries: 5))], child: MaterialApp.router(routerConfig: shellRouter())));
-    expect(find.text('闪记'), findsOneWidget);
+    // 顶部标题动态显示当前模块名
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('闪记')), findsOneWidget);
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, '闪记'), findsOneWidget);
@@ -39,7 +40,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ListTile, '日记'));
     await tester.pumpAndSettle();
-    expect(find.text('日记'), findsOneWidget);
+    // 顶部标题随路由变为「日记」
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('日记')), findsOneWidget);
   });
 
   testWidgets('AppBar 按路由显示添加按钮', (tester) async {
