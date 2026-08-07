@@ -11,8 +11,7 @@ import { AuditLogList } from '../components/audit-log-list'
 
 const PAGE_SIZE = 20
 
-const LEVEL_OPTIONS: { value: AuditLevel | undefined; label: string }[] = [
-  { value: undefined, label: '全部' },
+const LEVEL_OPTIONS: { value: AuditLevel; label: string }[] = [
   { value: 'info', label: '信息' },
   { value: 'warn', label: '警告' },
   { value: 'error', label: '错误' },
@@ -22,7 +21,7 @@ const LEVEL_OPTIONS: { value: AuditLevel | undefined; label: string }[] = [
 // 后端接口未上线时（404）优雅降级为「功能尚未上线」提示，其余错误给重试。
 export default function AuditPage() {
   const [level, setLevel] = useState<AuditLevel | undefined>(undefined)
-  const [unreadOnly, setUnreadOnly] = useState(false)
+  const [unreadOnly, setUnreadOnly] = useState(true)
   const [page, setPage] = useState(1)
 
   const { data, isPending, isError, error, isPlaceholderData, refetch } = useAuditLogs({
@@ -75,25 +74,26 @@ export default function AuditPage() {
   return (
     <div className="flex h-full w-full flex-col items-center">
       <div className="flex w-full max-w-[640px] flex-col gap-2 px-2">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <Label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm">
+            <Checkbox
+              checked={unreadOnly}
+              onCheckedChange={(checked) => changeFilter(() => setUnreadOnly(checked === true))}
+            />
+            未读
+          </Label>
           {LEVEL_OPTIONS.map((opt) => (
             <Button
               key={opt.label}
               size="sm"
               variant={level === opt.value ? 'default' : 'outline'}
-              className={cn(level === opt.value && 'font-medium')}
-              onClick={() => changeFilter(() => setLevel(opt.value))}
+              className={cn(level === opt.value && 'font-medium', 'whitespace-nowrap')}
+              // 级别单选：点已选项取消（回到全部级别）。
+              onClick={() => changeFilter(() => setLevel(level === opt.value ? undefined : opt.value))}
             >
               {opt.label}
             </Button>
           ))}
-          <Label className="ml-auto flex cursor-pointer items-center gap-1.5 text-sm">
-            <Checkbox
-              checked={unreadOnly}
-              onCheckedChange={(checked) => changeFilter(() => setUnreadOnly(checked === true))}
-            />
-            仅看未读
-          </Label>
         </div>
 
         <AuditLogList logs={logs} />

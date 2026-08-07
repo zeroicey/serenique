@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'core/network/api_exception.dart';
+import 'features/audit/audit_providers.dart';
 import 'providers.dart';
 
 /// 主壳：AppBar + Drawer 侧栏，包住各模块页面。
@@ -23,18 +25,38 @@ class AppShell extends ConsumerWidget {
     (icon: Icons.receipt_long_outlined, label: '日志', path: '/audit'),
   ];
 
+  /// 日志页顶部「全部已读」：成功后刷新列表/未读数并提示。
+  Future<void> _markAllRead(BuildContext context, WidgetRef ref) async {
+    try {
+      final result = await ref.read(auditActionsProvider).markAllRead();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已将 ${result.updatedCount} 条日志标记为已读')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(humanizeError(e))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).uri.path;
     final counts = ref.watch(countsProvider);
+    final auditUnread = ref.watch(auditUnreadCountProvider);
 
-    // 右侧 badge：闪记/日记走真实计数，任务/日历/习惯先写死占位（后续接对应 API）。
+    // 右侧 badge：闪记/日记走真实计数，任务/日历/习惯先写死占位，日志走未读数。
     String? badgeFor(String path) => switch (path) {
           '/moments' => counts.hasValue ? '${counts.value!.moments}' : null,
           '/diary' => counts.hasValue ? '${counts.value!.diaries}' : null,
           '/task' => '3',
           '/event' => '2',
           '/habit' => '5',
+          '/audit' => auditUnread.hasValue && auditUnread.value! > 0
+              ? '${auditUnread.value}'
+              : null,
           _ => null,
         };
 
@@ -70,6 +92,15 @@ class AppShell extends ConsumerWidget {
               onPressed: () => context.push(
                 '/diary/${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
               ),
+            ),
+          // 日志页：全部已读放顶部导航栏右侧（无未读时禁用）。
+          if (location.startsWith('/audit'))
+            TextButton.icon(
+              onPressed: (auditUnread.value ?? 0) > 0
+                  ? () => _markAllRead(context, ref)
+                  : null,
+              icon: const Icon(Icons.done_all, size: 18),
+              label: const Text('全部已读'),
             ),
         ],
       ),

@@ -19,7 +19,6 @@ class AuditPage extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          const _AuditToolbar(),
           const _AuditFilterBar(),
           const Divider(height: 1),
           Expanded(
@@ -80,78 +79,12 @@ String _auditErrorMessage(Object error) {
   return humanizeError(error);
 }
 
-/// 顶部工具条：未读计数 + 全部置已读按钮。
-class _AuditToolbar extends ConsumerWidget {
-  const _AuditToolbar();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final unread = ref.watch(auditUnreadCountProvider);
-    final unreadCount = unread.value;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-      child: Row(
-        children: [
-          if (unreadCount == null)
-            const SizedBox.shrink()
-          else if (unreadCount > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '未读 $unreadCount',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: scheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            )
-          else
-            Text(
-              '没有未读日志',
-              style: TextStyle(fontSize: 13, color: scheme.outline),
-            ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: (unreadCount ?? 0) > 0
-                ? () => _markAllRead(context, ref)
-                : null,
-            icon: const Icon(Icons.done_all, size: 18),
-            label: const Text('全部已读'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-Future<void> _markAllRead(BuildContext context, WidgetRef ref) async {
-  try {
-    final result = await ref.read(auditActionsProvider).markAllRead();
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已将 ${result.updatedCount} 条日志标记为已读')),
-    );
-  } catch (e) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(humanizeError(e))),
-    );
-  }
-}
-
-/// 筛选条：级别（全部/信息/警告/错误）+ 只看未读。
+/// 筛选条（单行）：未读切换 + 级别单选（信息/警告/错误，无「全部」，点已选项取消）。
+/// 布局用横向滚动兜底，保证一行显示完。
 class _AuditFilterBar extends ConsumerWidget {
   const _AuditFilterBar();
 
-  static const _levels = <({String? value, String label})>[
-    (value: null, label: '全部'),
+  static const _levels = <({String value, String label})>[
     (value: 'info', label: '信息'),
     (value: 'warn', label: '警告'),
     (value: 'error', label: '错误'),
@@ -163,22 +96,26 @@ class _AuditFilterBar extends ConsumerWidget {
     final notifier = ref.read(auditFilterProvider.notifier);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        children: [
-          for (final level in _levels)
-            ChoiceChip(
-              label: Text(level.label),
-              selected: filter.level == level.value,
-              onSelected: (_) => notifier.setLevel(level.value),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            FilterChip(
+              label: const Text('未读'),
+              selected: filter.unreadOnly,
+              onSelected: notifier.setUnreadOnly,
             ),
-          FilterChip(
-            label: const Text('只看未读'),
-            selected: filter.unreadOnly,
-            onSelected: notifier.setUnreadOnly,
-          ),
-        ],
+            for (final level in _levels)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: ChoiceChip(
+                  label: Text(level.label),
+                  selected: filter.level == level.value,
+                  onSelected: (_) => notifier.toggleLevel(level.value),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

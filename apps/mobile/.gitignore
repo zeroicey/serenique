@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter DevTools 本地配置（自动生成）
+devtools_options.yaml

@@ -8,12 +8,12 @@ final auditApiProvider =
 
 /// 日志页筛选条件。
 class AuditFilter {
-  const AuditFilter({this.level, this.unreadOnly = false});
+  const AuditFilter({this.level, this.unreadOnly = true});
 
-  /// 级别过滤；null = 全部。
+  /// 级别过滤；null = 全部级别（信息/警告/错误单选，取消选中回到 null）。
   final String? level;
 
-  /// 只看未读。
+  /// 只看未读（默认勾选；取消勾选即代表「所有」）。
   final bool unreadOnly;
 }
 
@@ -21,8 +21,11 @@ class AuditFilterNotifier extends Notifier<AuditFilter> {
   @override
   AuditFilter build() => const AuditFilter();
 
-  void setLevel(String? level) =>
-      state = AuditFilter(level: level, unreadOnly: state.unreadOnly);
+  /// 级别单选：点同一项取消（回到 null = 全部级别）。
+  void toggleLevel(String level) =>
+      state = AuditFilter(
+          level: state.level == level ? null : level,
+          unreadOnly: state.unreadOnly);
 
   void setUnreadOnly(bool unreadOnly) =>
       state = AuditFilter(level: state.level, unreadOnly: unreadOnly);

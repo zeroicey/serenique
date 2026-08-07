@@ -57,11 +57,11 @@ describe('AuditPage', () => {
   it('渲染筛选条与日志列表', () => {
     renderPage({ data: { items: [makeLog('a', { message: '文件已删除', level: 'warn' })], total: 1 } })
     // 级别筛选是按钮（避免与日志卡上的级别角标文本撞车，用 role 查）。
-    for (const label of ['全部', '信息', '警告', '错误']) {
+    for (const label of ['信息', '警告', '错误']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
-    // 未读筛选：label 关联的 checkbox。
-    expect(screen.getByRole('checkbox', { name: '仅看未读' })).toBeInTheDocument()
+    // 未读筛选：label 关联的 checkbox（默认勾选）。
+    expect(screen.getByRole('checkbox', { name: '未读' })).toBeChecked()
     expect(screen.getByText('文件已删除')).toBeInTheDocument()
   })
 
@@ -73,7 +73,7 @@ describe('AuditPage', () => {
       page: 1,
       pageSize: 20,
       level: 'warn',
-      unreadOnly: false,
+      unreadOnly: true,
     })
   })
 

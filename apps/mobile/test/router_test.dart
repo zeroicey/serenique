@@ -31,6 +31,7 @@ void main() {
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -43,6 +44,7 @@ void main() {
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -62,6 +64,7 @@ void main() {
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -95,7 +98,7 @@ void main() {
 
     // 空态文案证明是真实日志页（占位页只会显示「功能开发中」）
     expect(find.byType(AuditPage), findsOneWidget);
-    expect(find.text('暂无日志'), findsOneWidget);
+    expect(find.text('没有未读日志'), findsOneWidget);
     expect(find.text('全部已读'), findsOneWidget);
   });
 
@@ -105,6 +108,7 @@ void main() {
       verifyTokenProvider.overrideWithValue((token) async {}),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
