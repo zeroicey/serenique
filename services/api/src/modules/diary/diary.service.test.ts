@@ -21,7 +21,49 @@ describe("diary domain", () => {
 
     expect(todayStr()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
+
+  test("todayStr uses the local date, not UTC, at the UTC+8 early-morning boundary", async () => {
+    setTestEnv();
+    const { todayStr } = await import("./diary.domain");
+
+    // 2026-08-07T23:30:00Z = 2026-08-08 07:30 in UTC+8 (the team's TZ).
+    // UTC is still 08-07 here; local "today" must be 08-08.
+    const now = new Date("2026-08-07T23:30:00Z");
+    expect(now.toISOString().slice(0, 10)).toBe("2026-08-07");
+
+    // TZ-agnostic oracle: the local calendar date, computed from the timezone
+    // offset without local getters — catches a regression back to UTC on any
+    // machine, not just UTC+8.
+    expect(todayStr(now)).toBe(localDateOf(now));
+
+    // Pin the concrete UTC+8 expectation when the test env is actually UTC+8,
+    // so a UTC regression fails loudly in the team's timezone.
+    if (now.getTimezoneOffset() === -480) {
+      expect(todayStr(now)).toBe("2026-08-08");
+    }
+  });
+
+  test("isFutureDate accepts the local today and rejects only strictly-after dates", async () => {
+    setTestEnv();
+    const { isFutureDate, todayStr } = await import("./diary.domain");
+
+    // Boundary instant: local today is 08-08 (UTC+8) / 08-07 (UTC-*).
+    const now = new Date("2026-08-07T23:30:00Z");
+    const today = todayStr(now);
+
+    expect(isFutureDate(today, today)).toBe(false); // 本地今天可写
+    expect(isFutureDate("2026-08-07", today)).toBe(false); // 昨天可写
+    expect(isFutureDate("2026-08-09", today)).toBe(true); // 后天拒绝
+  });
 });
+
+/** Local calendar date (YYYY-MM-DD) of an instant, computed independently via
+ * the timezone offset (no local getters) — an oracle that differs from the UTC
+ * date whenever local timezone is ahead of / behind UTC across midnight. */
+function localDateOf(now: Date): string {
+  const shifted = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 10);
+}
 
 describe("diary schemas", () => {
   test("CreateDiarySchema requires content and accepts an optional diaryDate", async () => {

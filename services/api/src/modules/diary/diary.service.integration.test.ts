@@ -56,9 +56,11 @@ describe.skipIf(!RUN_DB_TESTS)("diary service DB integration", () => {
   });
 
   test("create with a future date rejects with 400", async () => {
-    const future = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    // Pinned far-future date: always strictly after local "today" in any TZ
+    // and at any time of day (a UTC-tomorrow string would equal local today
+    // during the UTC+8 00:00–08:00 window, see 2026-08-08 worklog).
     await expect(
-      service.create({ content: "未来日记", diaryDate: future }),
+      service.create({ content: "未来日记", diaryDate: "2099-01-01" }),
     ).rejects.toMatchObject({ code: "VALIDATION", status: 400 });
   });
 
