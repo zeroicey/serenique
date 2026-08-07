@@ -16,8 +16,11 @@ class AppShell extends ConsumerWidget {
     (icon: Icons.auto_awesome, label: '宁序', path: '/ai'),
     (icon: Icons.bolt, label: '闪记', path: '/moments'),
     (icon: Icons.book_outlined, label: '日记', path: '/diary'),
+    (icon: Icons.repeat, label: '习惯', path: '/habit'),
     (icon: Icons.check_circle_outline, label: '任务', path: '/task'),
     (icon: Icons.calendar_today_outlined, label: '日历', path: '/event'),
+    (icon: Icons.photo_library_outlined, label: '素材库', path: '/files'),
+    (icon: Icons.receipt_long_outlined, label: '日志', path: '/audit'),
   ];
 
   @override
@@ -25,12 +28,13 @@ class AppShell extends ConsumerWidget {
     final location = GoRouterState.of(context).uri.path;
     final counts = ref.watch(countsProvider);
 
-    // 右侧 badge：闪记/日记走真实计数，任务/日历先写死占位（后续接 taskApi/eventApi）。
+    // 右侧 badge：闪记/日记走真实计数，任务/日历/习惯先写死占位（后续接对应 API）。
     String? badgeFor(String path) => switch (path) {
           '/moments' => counts.hasValue ? '${counts.value!.moments}' : null,
           '/diary' => counts.hasValue ? '${counts.value!.diaries}' : null,
           '/task' => '3',
           '/event' => '2',
+          '/habit' => '5',
           _ => null,
         };
 
@@ -87,19 +91,26 @@ class AppShell extends ConsumerWidget {
                 Expanded(
                   child: Column(
                     children: [
-                      for (final item in _items)
-                        _NavItem(
-                          icon: item.icon,
-                          label: item.label,
-                          selected: isActive(item.path),
-                          badge: badgeFor(item.path),
-                          onTap: () {
-                            Scaffold.of(drawerContext).closeDrawer();
-                            context.go(item.path);
-                          },
+                      // 模块列表可滚动（模块多了不溢出），设置仍固定在底部。
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              for (final item in _items)
+                                _NavItem(
+                                  icon: item.icon,
+                                  label: item.label,
+                                  selected: isActive(item.path),
+                                  badge: badgeFor(item.path),
+                                  onTap: () {
+                                    Scaffold.of(drawerContext).closeDrawer();
+                                    context.go(item.path);
+                                  },
+                                ),
+                            ],
+                          ),
                         ),
-                      // 设置固定在底部，上方加分隔符，图标与上方条目对齐。
-                      const Spacer(),
+                      ),
                       const Divider(),
                       _NavItem(
                         icon: Icons.settings_outlined,
@@ -128,8 +139,11 @@ String moduleTitle(String path) {
   if (path.startsWith('/settings')) return '设置';
   if (path.startsWith('/moments')) return '闪记';
   if (path.startsWith('/diary')) return '日记';
+  if (path.startsWith('/habit')) return '习惯';
   if (path.startsWith('/task')) return '任务';
   if (path.startsWith('/event')) return '日历';
+  if (path.startsWith('/files')) return '素材库';
+  if (path.startsWith('/audit')) return '日志';
   if (path.startsWith('/ai')) return '宁序';
   return 'Serenique';
 }
