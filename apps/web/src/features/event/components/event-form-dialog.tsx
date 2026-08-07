@@ -19,7 +19,7 @@ import { eventFormSchema, type EventFormValues } from '@/features/event/schemas'
 import { toLocalInputValue, toLocalISO } from '@/features/event/lib'
 import { useEventUIStore } from '@/stores/event-ui'
 
-// 新建 / 编辑日程合一弹窗。状态驱动自 event-ui store（顶栏「新建日程」与页面编辑入口共用）。
+// 新建 / 编辑日历合一弹窗。状态驱动自 event-ui store（顶栏「新建日历」与页面编辑入口共用）。
 // 全天事件只填日期：勾选后隐藏起止时间，用一个 date 输入同时驱动 startAt/endAt（00:00 – 23:59）。
 export function EventFormDialog() {
   const { createOpen, editingEvent, viewedDate, close } = useEventUIStore()
@@ -108,9 +108,9 @@ export function EventFormDialog() {
     <Dialog open={createOpen} onOpenChange={(open) => !open && close()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editingEvent ? '编辑日程' : '新建日程'}</DialogTitle>
+          <DialogTitle>{editingEvent ? '编辑日历' : '新建日历'}</DialogTitle>
           <DialogDescription>
-            {editingEvent ? '修改日程信息。' : '添加一个日程事件。'}
+            {editingEvent ? '修改日历信息。' : '添加一个日历事件。'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
@@ -118,7 +118,7 @@ export function EventFormDialog() {
             <Label htmlFor="event-title">标题</Label>
             <Input
               id="event-title"
-              placeholder="日程标题"
+              placeholder="日历标题"
               autoFocus
               aria-invalid={!!errors.title}
               {...register('title')}

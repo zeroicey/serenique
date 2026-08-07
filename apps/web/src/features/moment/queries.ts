@@ -90,16 +90,16 @@ export function useCreateMomentWithMedia(): UseMutationResult<
       })
     },
     onSuccess: () => {
-      toast.success('闪念发布成功')
+      toast.success('闪记发布成功')
       queryClient.invalidateQueries({ queryKey: ['moments'] })
     },
     onError: (error) => {
-      toast.error(error.message || '闪念发布失败')
+      toast.error(error.message || '闪记发布失败')
     },
   })
 }
 
-// 评论 hooks：列表只读（惰性，按 momentId 缓存）；创建/删除成功后同步刷新该闪念的
+// 评论 hooks：列表只读（惰性，按 momentId 缓存）；创建/删除成功后同步刷新该闪记的
 // 评论列表与整个 moments 列表（更新 commentCount）。
 
 export function useMomentComments(momentId: string, enabled = true) {

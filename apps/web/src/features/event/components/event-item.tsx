@@ -27,7 +27,7 @@ interface EventItemProps {
   event: EventEntry
 }
 
-// 单条日程卡片：时间（全天徽标 / 时段 HH:mm – HH:mm）+ 标题 + 地点 + 备注截断 + 编辑/删除。
+// 单条日历卡片：时间（全天徽标 / 时段 HH:mm – HH:mm）+ 标题 + 地点 + 备注截断 + 编辑/删除。
 export function EventItem({ event }: EventItemProps) {
   const { mutate: deleteEvent } = useDeleteEvent()
   const { openEdit } = useEventUIStore()
@@ -54,7 +54,7 @@ export function EventItem({ event }: EventItemProps) {
             <span className="break-words text-sm font-medium">{event.title}</span>
             <DropdownMenu>
               <DropdownMenuTrigger
-                aria-label="日程操作"
+                aria-label="日历操作"
                 className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
               >
                 <MoreHorizontal size={18} />
@@ -101,7 +101,7 @@ export function EventItem({ event }: EventItemProps) {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>删除日程</DialogTitle>
+            <DialogTitle>删除日历</DialogTitle>
             <DialogDescription>确定删除「{event.title}」吗？删除后不可恢复。</DialogDescription>
           </DialogHeader>
           <DialogFooter>

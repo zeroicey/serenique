@@ -35,11 +35,11 @@ export function useCreateEvent(): UseMutationResult<EventEntry, Error, CreateEve
   return useMutation({
     mutationFn: createEvent,
     onSuccess: () => {
-      toast.success('日程已创建')
+      toast.success('日历已创建')
       queryClient.invalidateQueries({ queryKey: ['events'] })
     },
     onError: (error) => {
-      toast.error(error.message || '日程创建失败')
+      toast.error(error.message || '日历创建失败')
     },
   })
 }
@@ -53,11 +53,11 @@ export function useUpdateEvent(): UseMutationResult<
   return useMutation({
     mutationFn: ({ id, ...input }) => updateEvent(id, input),
     onSuccess: () => {
-      toast.success('日程已更新')
+      toast.success('日历已更新')
       queryClient.invalidateQueries({ queryKey: ['events'] })
     },
     onError: (error) => {
-      toast.error(error.message || '日程更新失败')
+      toast.error(error.message || '日历更新失败')
     },
   })
 }
@@ -67,11 +67,11 @@ export function useDeleteEvent(): UseMutationResult<void, Error, string> {
   return useMutation({
     mutationFn: deleteEvent,
     onSuccess: () => {
-      toast.success('日程已删除')
+      toast.success('日历已删除')
       queryClient.invalidateQueries({ queryKey: ['events'] })
     },
     onError: (error) => {
-      toast.error(error.message || '日程删除失败')
+      toast.error(error.message || '日历删除失败')
     },
   })
 }

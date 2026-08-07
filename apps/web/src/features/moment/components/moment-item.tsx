@@ -35,7 +35,7 @@ const TEXT_TRUNCATE = 150
 // 卡片内联展示前 N 条评论，其余进「查看全部」对话框。
 const INLINE_COMMENTS = 3
 
-// 单条闪念卡片：文字（超长截断，全文/收起在正文下方）+ 附件网格 + 时间/字数 + 评论 + 删除。
+// 单条闪记卡片：文字（超长截断，全文/收起在正文下方）+ 附件网格 + 时间/字数 + 评论 + 删除。
 export function MomentItem({ moment }: MomentItemProps) {
   const { mutate: deleteMoment } = useDeleteMoment()
   const { mutate: createComment } = useCreateMomentComment()
@@ -171,8 +171,8 @@ export function MomentItem({ moment }: MomentItemProps) {
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>删除闪念</DialogTitle>
-            <DialogDescription>确定删除这条闪念吗？删除后不可恢复。</DialogDescription>
+            <DialogTitle>删除闪记</DialogTitle>
+            <DialogDescription>确定删除这条闪记吗？删除后不可恢复。</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>

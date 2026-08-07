@@ -4,7 +4,7 @@ import { useMoments } from '@/features/moment/queries'
 import { Button } from '@/components/ui/button'
 import { MomentItem } from './moment-item'
 
-// 闪念列表：居中列、滚动自动加载、加载/空/错误态。
+// 闪记列表：居中列、滚动自动加载、加载/空/错误态。
 export function MomentList() {
   const { isPending, isError, refetch, data, hasNextPage, isFetchingNextPage, fetchNextPage } =
     useMoments()
@@ -36,7 +36,7 @@ export function MomentList() {
   if (isError) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
-        <p className="text-muted-foreground">加载闪念失败</p>
+        <p className="text-muted-foreground">加载闪记失败</p>
         <Button variant="outline" onClick={() => refetch()}>
           重试
         </Button>
@@ -51,8 +51,8 @@ export function MomentList() {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
         <p className="text-4xl">🌱</p>
-        <h3 className="text-lg font-medium">还没有闪念</h3>
-        <p className="max-w-sm text-muted-foreground">点击右上角「新建闪念」，记录此刻的心情。</p>
+        <h3 className="text-lg font-medium">还没有闪记</h3>
+        <p className="max-w-sm text-muted-foreground">点击右上角「新建闪记」，记录此刻的心情。</p>
       </div>
     )
   }

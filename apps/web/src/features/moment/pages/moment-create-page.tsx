@@ -9,7 +9,7 @@ import { MomentCreateAttachmentGrid } from '@/features/moment/components/moment-
 import { useMomentDraftStore } from '@/stores/moment-draft'
 import type { MediaFile } from '@/types/media'
 
-// 新建闪念：textarea 自动增高 + 附件选择 + 草稿保存。
+// 新建闪记：textarea 自动增高 + 附件选择 + 草稿保存。
 export default function MomentCreatePage() {
   const navigate = useNavigate()
   const { draftText, setDraftText, clearDraft } = useMomentDraftStore()

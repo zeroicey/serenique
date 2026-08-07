@@ -64,7 +64,7 @@ describe('EventItem', () => {
     const user = userEvent.setup()
     const event = makeEvent()
     render(<EventItem event={event} />)
-    await user.click(screen.getByLabelText('日程操作'))
+    await user.click(screen.getByLabelText('日历操作'))
     // base-ui 菜单项在 portal 中异步渲染，用 findByText 等待。
     await user.click(await screen.findByText('编辑'))
     expect(openEdit).toHaveBeenCalledWith(event)
@@ -73,7 +73,7 @@ describe('EventItem', () => {
   it('点「删除」确认后调用 deleteEvent(id)', async () => {
     const user = userEvent.setup()
     render(<EventItem event={makeEvent()} />)
-    await user.click(screen.getByLabelText('日程操作'))
+    await user.click(screen.getByLabelText('日历操作'))
     await user.click(await screen.findByText('删除'))
     await user.click(screen.getByRole('button', { name: '删除' }))
     expect(deleteEvent).toHaveBeenCalledWith('ev1')

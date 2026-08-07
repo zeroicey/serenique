@@ -7,10 +7,10 @@ export function MomentNav() {
   const navigate = useNavigate()
   return (
     <div className="flex w-full items-center justify-between">
-      <span className="text-xl">闪念</span>
+      <span className="text-xl">闪记</span>
       <Button onClick={() => navigate('/moment/create')}>
         <Plus />
-        新建闪念
+        新建闪记
       </Button>
     </div>
   )

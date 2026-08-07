@@ -21,7 +21,7 @@ export function EventList() {
   if (isError) {
     return (
       <div className="flex w-full flex-col items-center justify-center gap-3 py-12">
-        <p className="text-muted-foreground">加载日程失败</p>
+        <p className="text-muted-foreground">加载日历失败</p>
         <Button variant="outline" onClick={() => refetch()}>
           重试
         </Button>
@@ -35,8 +35,8 @@ export function EventList() {
     return (
       <div className="flex w-full flex-col items-center justify-center gap-2 py-12 text-center">
         <p className="text-4xl">📅</p>
-        <h3 className="text-lg font-medium">{isToday ? '今天没有日程' : '这一天没有日程'}</h3>
-        <p className="max-w-sm text-muted-foreground">点击右上角「新建日程」，安排你的一天。</p>
+        <h3 className="text-lg font-medium">{isToday ? '今天没有日历' : '这一天没有日历'}</h3>
+        <p className="max-w-sm text-muted-foreground">点击右上角「新建日历」，安排你的一天。</p>
       </div>
     )
   }

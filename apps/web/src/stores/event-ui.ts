@@ -3,7 +3,7 @@ import { todayLocal } from '@/lib/date'
 import type { EventEntry } from '@/features/event/api'
 
 // 事件 feature 的 UI 会话状态（仅 UI 态；服务端数据不走 zustand，见前端架构硬约束）。
-// viewedDate 供顶栏「新建日程」与页面共用：新建弹窗默认值取当前查看日期。
+// viewedDate 供顶栏「新建日历」与页面共用：新建弹窗默认值取当前查看日期。
 
 interface EventUIState {
   /** 当前查看日期（YYYY-MM-DD，本地时区）；新建弹窗默认日期来源。 */
