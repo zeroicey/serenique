@@ -29,3 +29,10 @@ v0.3.2 发布后的又一轮改动：Flutter Moment 卡片改为列表页直接�
 - **Cloudflare 自定义域名偶发旧 bundle**：部署后直接 curl 自定义域名可能命中 edge 缓存旧 HTML（`cf-cache-status: DYNAMIC`、`max-age=0, must-revalidate`），带 query 参数缓存破坏即可拿到新 bundle；无需额外操作。
 - **手机连 USB 后 `flutter devices` 显示为 `hpcell (mobile)`（不再是 wireless）**；UDID 不变 `00008130-000144D21451001C`。release 无 VM service，`flutter screenshot`/`devicectl` 均无法截屏，只能让用户肉眼看。
 - 本批无后端（api/mcp）改动，未打新 tag；Flutter 直装手机、Web 直部署。
+
+## 追加（用户实测反馈修复，提交 a55de78）
+- **评论输入框**：原来每张卡片都常驻输入框，用户不接受。改为**默认隐藏**，点 ⋮ →「评论」才展开并聚焦，发送成功后才收起。
+- **展开/缩放**：时间行的 chevron 图标不好按，**退回文字「全文/收起」放在正文下方**（时间行只留时间 + ⋮ 菜单）。
+- **闪记详情**：删除按钮从右下角 FAB 移到**右上角标题栏**（与日记右上角删除/保存同位置）。
+- **日记编辑**：「保存」文字按钮改为**勾选图标**（`Icons.check`）。
+- 验证：`flutter analyze` 无问题、`flutter test` 53/53 绿；重建 production release 装到手机。
