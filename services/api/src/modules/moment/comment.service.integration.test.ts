@@ -138,10 +138,12 @@ describe.skipIf(!RUN_DB_TESTS)("moment comment service DB integration", () => {
     expect(ours).toHaveLength(2);
     const gotWith = ours.find((m) => m.id === withComments)!;
     const gotNone = ours.find((m) => m.id === noComments)!;
-    // List embeds commentCount but not the comment bodies.
+    // List embeds both the commentCount and the comment bodies (batch-loaded).
     expect(gotWith.commentCount).toBe(1);
-    expect(gotWith.comments).toEqual([]);
+    expect(gotWith.comments).toHaveLength(1);
+    expect(gotWith.comments[0].content).toBe("只有一条");
     expect(gotNone.commentCount).toBe(0);
+    expect(gotNone.comments).toEqual([]);
   });
 
   test("delete moment cascades its comments via the FK", async () => {
