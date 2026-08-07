@@ -117,6 +117,22 @@ export {
   ListEventSchema,
 } from "@/modules/event/event.types";
 
+// ---- Audit module ----
+export { auditService } from "@/modules/audit/audit.service";
+export type {
+  AuditLogEntry,
+  AuditEvent,
+  RecordAuditInput,
+  ListAuditInput,
+  MarkReadInput,
+} from "@/modules/audit/audit.types";
+export {
+  AUDIT_EVENTS,
+  RecordAuditSchema,
+  ListAuditSchema,
+  MarkReadSchema,
+} from "@/modules/audit/audit.types";
+
 // ---- Shared utilities ----
 export { AppError, ErrorCode } from "@/shared/errors";
 export type { ErrorCode as ErrorCodeType } from "@/shared/errors";

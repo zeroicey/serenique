@@ -10,6 +10,9 @@ const envSchema = z.object({
   // 用 optional 而非 default：Env 类型不要求必填，避免 createApp(env) 调用方
   // 必须显式传值（app.test.ts / 集成测试均未传）。
   SESSION_TTL: z.coerce.number().int().positive().optional(),
+  // 审计日志自动清理阈值（可选）：保留天数 / 最大条数，缺省 90 天 / 5000 条。
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().positive().optional(),
+  AUDIT_MAX_ROWS: z.coerce.number().int().positive().optional(),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z
     .enum(["development", "production", "test"])

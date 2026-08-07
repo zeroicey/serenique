@@ -64,6 +64,13 @@
       "when": 1785992254001,
       "tag": "0008_bitter_living_mummy",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786131862124,
+      "tag": "0009_add_audit_logs",
+      "breakpoints": true
     }
   ]
 }
