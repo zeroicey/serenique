@@ -18,7 +18,7 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="flex flex-col items-center gap-3 py-4">
-        <span className="text-xl font-semibold">Serenique</span>
+        <img src="/logo_header.svg" alt="Serenique" width={180} height={50} />
         <Separator className="w-full" />
       </SidebarHeader>
       <SidebarContent>
