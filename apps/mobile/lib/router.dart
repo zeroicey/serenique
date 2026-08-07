@@ -5,6 +5,7 @@ import 'app_shell.dart';
 import 'features/auth/auth_providers.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/splash_page.dart';
+import 'features/audit/audit_page.dart';
 import 'features/diary/diary_edit_page.dart';
 import 'features/diary/diary_list_page.dart';
 import 'features/moment/moment_create_page.dart';
@@ -39,7 +40,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/event', builder: (context, state) => const PlaceholderPage(title: '日历', icon: Icons.calendar_today_outlined)),
           GoRoute(path: '/habit', builder: (context, state) => const PlaceholderPage(title: '习惯', icon: Icons.repeat)),
           GoRoute(path: '/files', builder: (context, state) => const PlaceholderPage(title: '素材库', icon: Icons.photo_library_outlined)),
-          GoRoute(path: '/audit', builder: (context, state) => const PlaceholderPage(title: '日志', icon: Icons.receipt_long_outlined)),
+          GoRoute(path: '/audit', builder: (context, state) => const AuditPage()),
           GoRoute(path: '/ai', builder: (context, state) => const PlaceholderPage(title: '宁序', icon: Icons.auto_awesome)),
           GoRoute(path: '/settings', builder: (context, state) => const SettingsPage()),
         ],

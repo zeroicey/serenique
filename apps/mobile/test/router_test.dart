@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/app.dart';
+import 'package:serenique_mobile/features/audit/audit_models.dart';
+import 'package:serenique_mobile/features/audit/audit_page.dart';
+import 'package:serenique_mobile/features/audit/audit_providers.dart';
 import 'package:serenique_mobile/features/auth/auth_providers.dart';
 import 'package:serenique_mobile/features/auth/login_page.dart';
 import 'package:serenique_mobile/features/moment/moment_list_page.dart';
@@ -72,6 +75,28 @@ void main() {
     expect(find.byType(SettingsPage), findsOneWidget);
     expect(find.text('已登录'), findsOneWidget);
     expect(find.text('退出登录'), findsOneWidget);
+  });
+
+  testWidgets('已登录：/audit 渲染真实日志页（非占位）', (tester) async {
+    final container = ProviderContainer(overrides: [
+      tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
+      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      auditListProvider.overrideWith(
+          (ref) async => const AuditLogPage(items: [], total: 0)),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
+    await tester.pumpAndSettle();
+
+    container.read(appRouterProvider).go('/audit');
+    await tester.pumpAndSettle();
+
+    // 空态文案证明是真实日志页（占位页只会显示「功能开发中」）
+    expect(find.byType(AuditPage), findsOneWidget);
+    expect(find.text('暂无日志'), findsOneWidget);
+    expect(find.text('全部已读'), findsOneWidget);
   });
 
   testWidgets('登录成功：从 /login 显式进 /moments', (tester) async {
