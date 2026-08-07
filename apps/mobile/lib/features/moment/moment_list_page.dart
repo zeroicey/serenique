@@ -14,11 +14,6 @@ class MomentListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final moments = ref.watch(momentListProvider);
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/moments/create'),
-        tooltip: '新建闪记',
-        child: const Icon(Icons.add),
-      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(momentListProvider.future),
         child: moments.when(
@@ -40,7 +35,7 @@ class MomentListPage extends ConsumerWidget {
                   onTap: () => context.push('/moments/${m.id}'),
                   child: Padding(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: MomentCard(moment: m),
                   ),
                 );

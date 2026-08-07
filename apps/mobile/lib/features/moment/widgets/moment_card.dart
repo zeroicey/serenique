@@ -155,7 +155,7 @@ class _MomentCardState extends ConsumerState<MomentCard> {
               ],
             ),
             if (moment.comments.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 6),
               _CommentBlock(comments: moment.comments),
             ],
             // 评论输入默认隐藏，点 ⋮ →「评论」才展开。

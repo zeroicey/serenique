@@ -12,11 +12,6 @@ class DiaryListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final entries = ref.watch(diaryListProvider);
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/diary/${DateFormat('yyyy-MM-dd').format(DateTime.now())}'),
-        tooltip: '写今天',
-        child: const Icon(Icons.edit_outlined),
-      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(diaryListProvider.future),
         child: entries.when(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 /// 主壳：AppBar + Drawer 侧栏，包住各模块页面。
 /// 模块多、底部 tab 放不下，用滑出侧栏；加模块 = 在 [_items] 加一项。
@@ -28,6 +29,23 @@ class AppShell extends StatelessWidget {
           ),
         ),
         title: const Text('Serenique'),
+        // 添加按钮放右上角（不用右下角 FAB，避免挡住评论发送）。
+        actions: [
+          if (location == '/moments')
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: '新建闪记',
+              onPressed: () => context.push('/moments/create'),
+            ),
+          if (location == '/diary')
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: '写今天',
+              onPressed: () => context.push(
+                '/diary/${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
+              ),
+            ),
+        ],
       ),
       drawer: Builder(
         builder: (drawerContext) => NavigationDrawer(
