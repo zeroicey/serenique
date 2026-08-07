@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [api, mcp]
+        image: [api] # MCP 已停更（见 .ai/decisions/2026-08-08-mcp-sunset.md），发布只构建 api
     steps:
       - name: Checkout
         uses: actions/checkout@v4
