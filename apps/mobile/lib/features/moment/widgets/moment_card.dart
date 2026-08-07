@@ -4,6 +4,7 @@ import '../../../core/network/api_exception.dart';
 import '../moment_models.dart';
 import '../moment_providers.dart';
 import '../moment_time.dart';
+import 'comment_row.dart';
 
 /// 朋友圈样式的闪记卡片：纯文本（「全文/收起」在正文下方）+ 时间行（⋮ 菜单）+ 内嵌评论 + 内联评论输入。
 /// 评论输入默认隐藏：点 ⋮ →「评论」才展开，发送成功后收起；删除也在 ⋮ 菜单里。
@@ -136,26 +137,31 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                         ?.copyWith(color: theme.hintColor),
                   ),
                 ),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz),
-                  tooltip: '更多',
-                  onSelected: (value) {
-                    if (value == 'comment') {
-                      setState(() => _showCommentInput = true);
-                      _commentFocus.requestFocus();
-                    } else if (value == 'delete') {
-                      _delete();
-                    }
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'comment', child: Text('评论')),
-                    PopupMenuItem(value: 'delete', child: Text('删除')),
-                  ],
+                Theme(
+                  data: Theme.of(context).copyWith(
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_horiz),
+                    iconSize: 18,
+                    padding: EdgeInsets.zero,
+                    tooltip: '更多',
+                    onSelected: (value) {
+                      if (value == 'comment') {
+                        setState(() => _showCommentInput = true);
+                        _commentFocus.requestFocus();
+                      } else if (value == 'delete') {
+                        _delete();
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'comment', child: Text('评论')),
+                      PopupMenuItem(value: 'delete', child: Text('删除')),
+                    ],
+                  ),
                 ),
               ],
             ),
             if (moment.comments.isNotEmpty) ...[
-              const SizedBox(height: 6),
               _CommentBlock(comments: moment.comments),
             ],
             // 评论输入默认隐藏，点 ⋮ →「评论」才展开。
@@ -193,6 +199,8 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                 ],
               ),
             ],
+            // 有评论时：评论块与下方分割符之间留稍大的呼吸空间；无评论则紧贴时间行。
+            if (moment.comments.isNotEmpty) const SizedBox(height: 8),
           ],
         );
       },
@@ -219,11 +227,7 @@ class _CommentBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final c in comments)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Text(c.content),
-            ),
+          for (final c in comments) CommentRow(comment: c),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../moment_models.dart';
 import '../moment_providers.dart';
+import 'comment_row.dart';
 
 /// 评论区：新增 + 删除。评论数据来自 momentDetailProvider（评论内嵌在详情里）。
 /// 评论区与列表一致：直接平铺展示全部评论，不显示条数、不缩字号。
@@ -60,6 +61,39 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     }
   }
 
+  /// 长按评论 → 底部弹层（微信风格）：删除 / 取消。
+  Future<void> _showDeleteSheet(MomentComment comment) async {
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '删除这条评论？',
+                  style: Theme.of(ctx).textTheme.titleSmall,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('删除', style: TextStyle(color: Colors.red)),
+              onTap: () => Navigator.pop(ctx, true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && mounted) {
+      await _remove(comment.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail = ref.watch(momentDetailProvider(widget.momentId));
@@ -80,27 +114,14 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final c in comments)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Text(c.content),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        tooltip: '删除评论',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: _removing ? null : () => _remove(c.id),
-                      ),
-                    ],
+                  CommentRow(
+                    comment: c,
+                    onLongPress: () => _showDeleteSheet(c),
                   ),
               ],
             ),
           ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(

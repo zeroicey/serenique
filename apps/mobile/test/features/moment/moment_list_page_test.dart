@@ -50,7 +50,8 @@ void main() {
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('内联评论'), findsOneWidget);
+    // 评论文字嵌在 Text.rich（WidgetSpan 头像）里，toPlainText 开头含 U+FFFC，用包含匹配。
+    expect(find.textContaining('内联评论', findRichText: true), findsOneWidget);
     expect(find.textContaining('条评论'), findsNothing);
   });
 

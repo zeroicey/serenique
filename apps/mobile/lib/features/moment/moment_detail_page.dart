@@ -68,7 +68,7 @@ class MomentDetailPage extends ConsumerWidget {
               formatMomentTime(moment.createdAt),
               style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             CommentSection(momentId: moment.id),
           ],
         ),

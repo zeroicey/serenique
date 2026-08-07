@@ -34,8 +34,7 @@ class MomentListPage extends ConsumerWidget {
                 return InkWell(
                   onTap: () => context.push('/moments/${m.id}'),
                   child: Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                     child: MomentCard(moment: m),
                   ),
                 );
