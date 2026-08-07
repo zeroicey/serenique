@@ -55,14 +55,17 @@ describe('MomentItem', () => {
   it('超长文本默认截断，可展开/收起', async () => {
     const user = userEvent.setup()
     renderWithProviders(<MomentItem moment={makeMoment({ text: longText })} />)
-    expect(screen.getByText('展开')).toBeInTheDocument()
-    await user.click(screen.getByText('展开'))
-    expect(screen.getByText('收起')).toBeInTheDocument()
+    expect(screen.getByText(longText.slice(0, 150) + '…')).toBeInTheDocument()
+    expect(screen.queryByText(longText)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '展开' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '展开' }))
+    expect(screen.getByText(longText)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '收起' })).toBeInTheDocument()
   })
 
   it('短文本不显示展开按钮', () => {
     renderWithProviders(<MomentItem moment={makeMoment({ text: '短文本' })} />)
-    expect(screen.queryByText('展开')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '展开' })).not.toBeInTheDocument()
   })
 
   it('渲染字数', () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { CalendarDays, MoreHorizontal, Trash2 } from 'lucide-react'
-import { formatDateOnly } from '@/lib/date'
+import { CalendarDays, ChevronDown, ChevronUp, MoreHorizontal, Trash2 } from 'lucide-react'
+import { formatDateOnly, todayUTC } from '@/lib/date'
 import { useDeleteDiary } from '@/features/diary/queries'
 import type { DiaryEntry } from '@/features/diary/api'
 import { Button } from '@/components/ui/button'
@@ -25,13 +25,15 @@ interface DiaryItemProps {
 
 const TEXT_TRUNCATE = 150
 
-// 单篇日记卡片：日期 + 内容截断（展开/收起）+ 字数 + 删除（确认对话框）。
+// 单篇日记卡片：日期 + 内容截断（展开/收起图标）+ 字数 + 删除（确认对话框）。
+// 当天日记全量展示、不出现展开按钮；其他日期超长才可收起。
 export function DiaryItem({ diary }: DiaryItemProps) {
   const { mutate: deleteDiary } = useDeleteDiary()
   const [contentExpanded, setContentExpanded] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  const showToggle = diary.content.length > TEXT_TRUNCATE
+  const isToday = diary.diaryDate === todayUTC()
+  const showToggle = !isToday && diary.content.length > TEXT_TRUNCATE
   const content =
     showToggle && !contentExpanded ? diary.content.slice(0, TEXT_TRUNCATE) + '…' : diary.content
 
@@ -44,10 +46,12 @@ export function DiaryItem({ diary }: DiaryItemProps) {
       <p className="whitespace-pre-wrap break-words text-sm">{content}</p>
       {showToggle && (
         <button
-          className="self-start text-sm text-blue-600 hover:underline"
+          type="button"
+          className="flex h-6 w-6 cursor-pointer items-center justify-center self-start rounded-md text-muted-foreground hover:bg-accent"
           onClick={() => setContentExpanded((v) => !v)}
+          aria-label={contentExpanded ? '收起' : '展开'}
         >
-          {contentExpanded ? '收起' : '展开'}
+          {contentExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
         </button>
       )}
       <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">

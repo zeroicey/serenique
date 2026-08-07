@@ -1,4 +1,4 @@
-import { Clock, MessageCircle, MoreHorizontal, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, MessageCircle, MoreHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { formatDate } from '@/lib/format'
 import {
@@ -74,14 +74,6 @@ export function MomentItem({ moment }: MomentItemProps) {
     <div className="flex w-full max-w-[600px] flex-col gap-2">
       <div className="text-base">
         <p className="whitespace-pre-wrap break-words">{text}</p>
-        {showToggle && (
-          <button
-            className="mt-1 text-sm text-blue-600 hover:underline"
-            onClick={() => setTextExpanded((v) => !v)}
-          >
-            {textExpanded ? '收起' : '展开'}
-          </button>
-        )}
       </div>
 
       <MomentAttachmentGrid attachments={moment.attachments} />
@@ -100,6 +92,16 @@ export function MomentItem({ moment }: MomentItemProps) {
             >
               <MessageCircle size={14} />
               <span>{moment.commentCount} 条评论</span>
+            </button>
+          )}
+          {showToggle && (
+            <button
+              type="button"
+              className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
+              onClick={() => setTextExpanded((v) => !v)}
+              aria-label={textExpanded ? '收起' : '展开'}
+            >
+              {textExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             </button>
           )}
           <DropdownMenu>

@@ -46,6 +46,21 @@ describe('DiaryTodayCard', () => {
     expect(screen.getByRole('button', { name: '编辑' })).toBeInTheDocument()
   })
 
+  it('今天日记长内容全量展示，不出现展开按钮', () => {
+    vi.mocked(queries.useDiaryByDate).mockReturnValue({
+      isPending: false,
+      data: { ...makeDiary(), content: '长'.repeat(200) },
+    } as never)
+    renderWithProviders(
+      <MemoryRouter>
+        <DiaryTodayCard />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('长'.repeat(200))).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '展开' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '收起' })).not.toBeInTheDocument()
+  })
+
   it('加载中 → 显示骨架屏', () => {
     vi.mocked(queries.useDiaryByDate).mockReturnValue({
       isPending: true,
