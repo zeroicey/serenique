@@ -28,14 +28,20 @@ class DiaryListPage extends ConsumerWidget {
               return ListView(
                   children: const [ListTile(title: Text('还没有日记，点右下角写一篇'))]);
             }
+            final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
             return ListView.builder(
               itemCount: list.length,
               itemBuilder: (context, index) {
                 final e = list[index];
+                final isToday = e.diaryDate == today;
                 return ListTile(
                   title: Text(e.diaryDate),
-                  subtitle:
-                      Text(e.content, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    e.content,
+                    maxLines: isToday ? null : 2,
+                    overflow:
+                        isToday ? TextOverflow.visible : TextOverflow.ellipsis,
+                  ),
                   onTap: () => context.push('/diary/${e.diaryDate}'),
                 );
               },

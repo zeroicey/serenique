@@ -53,7 +53,11 @@ class AppShell extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('设置'),
-              onTap: () => context.go('/settings'),
+              onTap: () {
+                // 与上方模块条目一致：先关抽屉再跳转，避免设置页仍开着侧栏。
+                Scaffold.of(drawerContext).closeDrawer();
+                context.go('/settings');
+              },
             ),
           ],
         ),
