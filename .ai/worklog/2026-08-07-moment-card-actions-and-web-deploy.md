@@ -36,3 +36,8 @@ v0.3.2 发布后的又一轮改动：Flutter Moment 卡片改为列表页直接�
 - **闪记详情**：删除按钮从右下角 FAB 移到**右上角标题栏**（与日记右上角删除/保存同位置）。
 - **日记编辑**：「保存」文字按钮改为**勾选图标**（`Icons.check`）。
 - 验证：`flutter analyze` 无问题、`flutter test` 53/53 绿；重建 production release 装到手机。
+
+### 追加2（提交 1dcb3cb）
+- **添加按钮移到右上角**：闪记（+）与日记（写今天 edit 图标）的添加按钮从右下角 FAB 移到 AppShell AppBar 的 `actions`（按当前路由 `/moments`/`/diary` 显示），避免 FAB 挡住评论发送。列表页的 FAB 已删。
+- **间距收紧**：Moment 卡片时间行→评论间距 10→6，列表卡片垂直 padding 12→8（无评论时时间行到分割线不再那么远）。
+- 验证：`flutter test` 54/54 绿。
