@@ -235,6 +235,25 @@ serenique blob cleanup
 serenique blob cleanup --force
 ```
 
+### 服务端审计日志
+
+```sh
+# 列出审计日志（按时间倒序）
+serenique logs list
+serenique logs list --all                 # 一次返回全部记录（自动翻页）
+serenique logs list --level warn          # 按级别过滤 (info/warn/error)
+serenique logs list --event auth.login    # 按事件类型过滤
+serenique logs list --unread-only         # 仅显示未读日志
+serenique logs list --page 1 --page-size 50
+
+# 查看未读日志数
+serenique logs unread
+
+# 标记日志为已读（默认全部；--ids 精准标记）
+serenique logs read
+serenique logs read --ids <日志ID1>,<日志ID2>
+```
+
 ## AI Agent 使用指南
 
 CLI 工具同样为 AI Agent 设计，建议 AI 采用以下模式调用：
