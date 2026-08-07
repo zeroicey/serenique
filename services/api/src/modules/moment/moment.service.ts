@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { blobAttachments, blobs } from "@/modules/blob/blob.schema";
 import { moments } from "@/modules/moment/moment.schema";
@@ -193,7 +193,7 @@ export const momentService = {
       db
         .select()
         .from(moments)
-        .orderBy(moments.createdAt)
+        .orderBy(desc(moments.createdAt))
         .limit(input.pageSize)
         .offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(moments),

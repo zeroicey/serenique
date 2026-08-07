@@ -157,6 +157,35 @@ describe.skipIf(!RUN_DB_TESTS)("moment service DB integration", () => {
     expect(gotB.attachments).toHaveLength(0);
   });
 
+  test("list returns moments newest-first", async () => {
+    const a = await momentService.create({ text: uniqueTitle("moment-排序-1") });
+    const b = await momentService.create({ text: uniqueTitle("moment-排序-2") });
+    const c = await momentService.create({ text: uniqueTitle("moment-排序-3") });
+    createdMomentIds.push(a.id, b.id, c.id);
+
+    // defaultNow() can land several inserts in the same ms, so pin explicit
+    // distinct createdAt values (future dates guarantee our rows sort to the
+    // top of the DESC-ordered page regardless of leftover rows).
+    await db
+      .update(momentsTable)
+      .set({ createdAt: new Date("2030-01-01T00:00:00.000Z") })
+      .where(eq(momentsTable.id, a.id));
+    await db
+      .update(momentsTable)
+      .set({ createdAt: new Date("2030-01-02T00:00:00.000Z") })
+      .where(eq(momentsTable.id, b.id));
+    await db
+      .update(momentsTable)
+      .set({ createdAt: new Date("2030-01-03T00:00:00.000Z") })
+      .where(eq(momentsTable.id, c.id));
+
+    const result = await momentService.list({ page: 1, pageSize: 50 });
+    const ours = result.items.filter(
+      (m) => m.id === a.id || m.id === b.id || m.id === c.id,
+    );
+    expect(ours.map((m) => m.id)).toEqual([c.id, b.id, a.id]); // newest first
+  });
+
   test("addAttachment appends with the next sort order", async () => {
     const imageId = await upload("one.png", "image/png");
     const videoId = await upload("two.mp4", "video/mp4");

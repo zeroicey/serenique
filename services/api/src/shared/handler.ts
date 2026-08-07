@@ -32,14 +32,18 @@ export function uuidParam(c: Context, name: string): string {
 
 export function handleError(e: unknown, c: Context, scope?: string): Response {
   if (e instanceof AppError) {
-    return Res.error(e.message).status(e.status).build(c);
+    return Res.error(e.message).code(e.code).status(e.status).build(c);
   }
   if (e instanceof ZodError) {
-    return Res.validationFailed("参数校验失败", e.issues).build(c);
+    return Res.validationFailed("参数校验失败", e.issues)
+      .code(ErrorCode.VALIDATION)
+      .build(c);
   }
   if (e instanceof SyntaxError) {
-    return Res.badRequest("请求体必须是合法的 JSON").build(c);
+    return Res.badRequest("请求体必须是合法的 JSON")
+      .code(ErrorCode.VALIDATION)
+      .build(c);
   }
   logger.error({ err: e, scope }, "Unhandled error in handler");
-  return Res.internalError().build(c);
+  return Res.internalError().code(ErrorCode.INTERNAL).build(c);
 }

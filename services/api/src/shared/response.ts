@@ -4,6 +4,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 // ---------------------------------------------------------------------------
 // Unified API response — same shape for success and error.
 // Only `success` and `message` are always present.
+// `code` is present on error responses (set by error builders / handleError).
 // `data` and `error` are omitted when undefined.
 //
 // Inspired by the serenique Java project's ApiResponse + ApiResponses pattern:
@@ -18,6 +19,7 @@ class ResBuilder<T = never> {
   private _httpStatus: number;
   private _data: unknown;
   private _error: unknown;
+  private _code: string | undefined;
 
   constructor(
     private _success: boolean,
@@ -27,6 +29,7 @@ class ResBuilder<T = never> {
     this._httpStatus = httpStatus;
     this._data = undefined;
     this._error = undefined;
+    this._code = undefined;
   }
 
   /** Attach payload data. Only appears in JSON when set. */
@@ -38,6 +41,12 @@ class ResBuilder<T = never> {
   /** Attach error detail (validation issues, stack, etc.). Only appears in JSON when set. */
   error(err: unknown): this {
     this._error = err;
+    return this;
+  }
+
+  /** Attach an error code (e.g. NOT_FOUND, VALIDATION). Only appears in JSON when set. */
+  code(code: string): this {
+    this._code = code;
     return this;
   }
 
@@ -58,6 +67,7 @@ class ResBuilder<T = never> {
       success: this._success,
       message: this._message,
     };
+    if (this._code !== undefined) body.code = this._code;
     if (this._data !== undefined) body.data = this._data;
     if (this._error !== undefined) body.error = this._error;
 
@@ -95,32 +105,32 @@ export const Res = {
   // -- Error shortcuts --
 
   badRequest(msg: string) {
-    return new ResBuilder(false, msg, 400);
+    return new ResBuilder(false, msg, 400).code("VALIDATION");
   },
 
   validationFailed(msg: string, err?: unknown) {
-    const b = new ResBuilder(false, msg, 400);
+    const b = new ResBuilder(false, msg, 400).code("VALIDATION");
     if (err !== undefined) b.error(err);
     return b;
   },
 
   unauthorized(msg: string) {
-    return new ResBuilder(false, msg, 401);
+    return new ResBuilder(false, msg, 401).code("UNAUTHORIZED");
   },
 
   forbidden(msg: string) {
-    return new ResBuilder(false, msg, 403);
+    return new ResBuilder(false, msg, 403).code("FORBIDDEN");
   },
 
   notFound(msg: string) {
-    return new ResBuilder(false, msg, 404);
+    return new ResBuilder(false, msg, 404).code("NOT_FOUND");
   },
 
   conflict(msg: string) {
-    return new ResBuilder(false, msg, 409);
+    return new ResBuilder(false, msg, 409).code("CONFLICT");
   },
 
   internalError(msg = "Internal server error") {
-    return new ResBuilder(false, msg, 500);
+    return new ResBuilder(false, msg, 500).code("INTERNAL");
   },
 };
