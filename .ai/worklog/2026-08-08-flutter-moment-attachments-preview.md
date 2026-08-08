@@ -37,6 +37,19 @@
 - **坑**：`Hero` 内部自带一个 `SizedBox(width: null, height: null)`，测试里 `find.descendant(InteractiveViewer, SizedBox)` 会命中 2 个（自己的 expand + Hero 的 null 盒子）→ 断言要过滤 `width != null` 的；PageView 非当前页的 widget 可能仍在树里（`tester.widget` 单例断言会 "Too many elements"）。
 - 测试更新：预览页控制条初始隐藏→点按唤出→自动隐藏；网格导航测试改为先唤出控制条再点关闭。108/108 全绿。
 
+## 第三轮：换用现成组件 photo_view_plus（commit ecc57f6）
+
+用户对自研 Hero 仍不满意，要求用现有方案。调研 pub.dev：`photo_view` 0.15.0（2024 年后不维护）→ 选用维护中的 fork **`photo_view_plus` 1.1.1**（2026-04 更新，API 兼容）。
+
+- **预览页重写为 `PhotoViewGallery`**：图片页 `initialScale: PhotoViewScale.covered`（初始铺满全屏无黑边）+ `minScale: contained`（可捏合缩回看全图）+ 双击放大 + `heroAttributes`（与网格 Hero tag 同源 → 共享元素从小放大过渡）；视频/音频页用 `PhotoViewGalleryPageOptions.customChild` 复用 VideoPlayerView / AudioPlayerBar（`disableGestures: true`）。
+- **点按唤出控制条必须走 PhotoView 的 `onTapUp`**：外层 GestureDetector 的 tap 会在手势竞技场输给 PhotoView 的 RawGestureDetector。
+- **坑（测试环境）**：
+  - PhotoView 的 `DoubleTapGestureRecognizer` 让竞技场保持 **300ms** 才放行 tap → 测试里 tap 后必须 `tester.pump(Duration(milliseconds: 350))`，否则 onTapUp 永不触发。
+  - 图片解码是**真实异步**，widget 测试 fake 时钟下永远不完成 → `loadingBuilder` spinner 一直转 → `pumpAndSettle` 超时。解法：`tester.runAsync(() async { pump; await Future.delayed(300ms); pump; })` 后再 pumpAndSettle。**这俩坑以后凡是用 photo_view/带解码的组件测试都会遇到。**
+  - `photo_view_plus_gallery.dart` **不 export** 类型（PhotoViewScale/PhotoViewHeroAttributes/PhotoViewComputedScale 在 `photo_view_plus.dart`），要两个 import。
+  - Riverpod 3 无 `valueOrNull`，用 `.value`（可空）。
+- 108/108 全绿；release 已重装（生产 API）。
+
 ## 坑 / 对下一次会话的提示
 
 - **SDD 评审抓出两个 plan 笔误**，均已修正 plan 后修复：① 视频控制条被 `IgnorePointer` 整条包裹 → Slider/全屏按钮不可点（控制条必须可交互，只能让空白区透传）；② 音频重试 `_load()` 未取消旧 stream 订阅 → 每次 retry 泄漏 3 个订阅。**教训：控制条这类"部分区域可点、部分区域透传"的组件，写代码前先想清楚 hit-test 行为；重试路径的资源释放要在计划里写死。**
