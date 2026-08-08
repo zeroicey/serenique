@@ -82,7 +82,7 @@ export async function updateTaskGroup(
 
 export async function deleteTaskGroup(id: string): Promise<void> {
   const res = await api.delete(apiUrl(`task-groups/${id}`))
-  // 204 无响应体，对齐 deleteDiary 的守卫。
+  // 204 无响应体，对齐 delete 类接口的守卫。
   if (res.status === 204) return
   await unwrap(res)
 }

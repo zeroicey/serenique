@@ -1,5 +1,4 @@
 import {
-  BookOpen,
   CalendarDays,
   CheckCircle2,
   Images,
@@ -28,11 +27,10 @@ import { useSidebarCounts } from '@/app/layout/use-sidebar-counts'
 import { useAuditUnreadCount } from '@/features/audit/queries'
 
 // 全局侧边栏：品牌区 + 模块导航 + 底部设置/主题切换。新增模块在 NAV_ITEMS 追加一项。
-// 顺序与移动端 app_shell.dart 对齐：宁序 → 闪记 → 日记 → 习惯 → 任务 → 日历 → 素材库 → 日志。
+// 顺序与移动端 app_shell.dart 对齐：宁序 → 闪记 → 习惯 → 任务 → 日历 → 素材库 → 日志。
 const NAV_ITEMS: { icon: LucideIcon; label: string; path: string }[] = [
   { icon: Sparkles, label: '宁序', path: '/ai' },
   { icon: Zap, label: '闪记', path: '/moment' },
-  { icon: BookOpen, label: '日记', path: '/diary' },
   { icon: Repeat, label: '习惯', path: '/habit' },
   { icon: CheckCircle2, label: '任务', path: '/task' },
   { icon: CalendarDays, label: '日历', path: '/event' },
@@ -44,14 +42,12 @@ export function AppSidebar() {
   const counts = useSidebarCounts()
   const audit = useAuditUnreadCount()
 
-  // 右侧计数 badge（对齐移动端 app_shell.dart badgeFor）：闪记/日记真实计数，
+  // 右侧计数 badge（对齐移动端 app_shell.dart badgeFor）：闪记真实计数，
   // 任务/日历/习惯写死占位，日志用未读数（0 时不显示）。
   const badgeFor = (path: string): string | null => {
     switch (path) {
       case '/moment':
         return counts.data ? String(counts.data.moments) : null
-      case '/diary':
-        return counts.data ? String(counts.data.diaries) : null
       case '/task':
         return '3'
       case '/event':

@@ -1,5 +1,4 @@
 import {
-  BookOpen,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -14,7 +13,6 @@ import { Link } from 'react-router'
 const MODULES: { icon: LucideIcon; label: string; path: string }[] = [
   { icon: Sparkles, label: '宁序', path: '/ai' },
   { icon: Zap, label: '闪记', path: '/moment' },
-  { icon: BookOpen, label: '日记', path: '/diary' },
   { icon: CheckCircle2, label: '任务', path: '/task' },
   { icon: CalendarDays, label: '日历', path: '/event' },
   { icon: ScrollText, label: '日志', path: '/audit' },

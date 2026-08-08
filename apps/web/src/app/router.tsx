@@ -5,8 +5,6 @@ import { PageLoading } from '@/app/layout/page-loading'
 import { ModuleTitleNav } from '@/app/pages/module-title-nav'
 import { MomentNav } from '@/features/moment/components/moment-nav'
 import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
-import { DiaryNav } from '@/features/diary/components/diary-nav'
-import { DiaryCreateNav } from '@/features/diary/components/diary-create-nav'
 import { TaskNav } from '@/features/task/components/task-nav'
 import { EventNav } from '@/features/event/components/event-nav'
 import { AuditNav } from '@/features/audit/components/audit-nav'
@@ -41,16 +39,6 @@ const router = createBrowserRouter([
             path: 'moment/create',
             element: lazyPage(() => import('@/features/moment/pages/moment-create-page')),
             handle: { nav: <MomentCreateNav /> },
-          },
-          {
-            path: 'diary',
-            element: lazyPage(() => import('@/features/diary/pages/diary-list-page')),
-            handle: { nav: <DiaryNav /> },
-          },
-          {
-            path: 'diary/write',
-            element: lazyPage(() => import('@/features/diary/pages/diary-create-page')),
-            handle: { nav: <DiaryCreateNav /> },
           },
           {
             path: 'task',
