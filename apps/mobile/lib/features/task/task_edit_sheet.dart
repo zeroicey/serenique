@@ -79,6 +79,9 @@ class _TaskEditSheetState extends ConsumerState<_TaskEditSheet> {
               loading: () => const LinearProgressIndicator(),
               error: (err, _) => Text(humanizeError(err)),
               data: (list) {
+                // 组列表加载后兜底：新建（FAB 从日期 tab 进入）时 _groupId 为 null，
+                // 直接回落第一个组，保证下拉显示与提交值一致（onChanged 只在用户操作时触发）。
+                _groupId ??= list.isNotEmpty ? list.first.id : null;
                 if (list.isEmpty) {
                   return const Text('请先创建任务组');
                 }
