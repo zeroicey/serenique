@@ -44,3 +44,5 @@ moment 顺序、错误体 code、Web 404 修复均为**本地代码改动，未�
 - 验证公网 CORS/HTTP 从 hpazure 侧 curl（hpcore 自身有 NAT hairpin 空响应）。
 - 后端错误体现在带 `code`，移动端双匹配可逐步简化为只看 `code`，但 `auth` 429/401 仍无 code，别急着删双匹配。
 - 改生产 `.env` 前先 `cp .env .env.bak.*`，改后 `docker compose up -d --no-deps api` 重建容器。
+
+> 标准流程已抽到 `.ai/runbooks/hpcore-deploy.md`，本文件保留事件记录。

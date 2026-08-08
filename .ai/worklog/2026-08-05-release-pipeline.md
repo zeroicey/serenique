@@ -40,3 +40,5 @@
 - **gh（GitHub 登录）≠ Docker Hub 凭据**：推镜像要 Docker Hub 自己的 access token（`dckr_pat_*`），和 `gh auth` 无关。
 - **GitHub Actions 构建网络正常**：runner 能直连 npm registry，Docker 构建无需本机那种 `--build-arg http_proxy` 注入。
 - 新模块发布流程：改代码 → 提交推送 main（docker 出 `main` tag）→ 打 `vX.Y.Z` tag 推送（docker 出版本+latest、CLI 出 Release）。
+
+> 标准流程已抽到 `.ai/runbooks/release-process.md`，本文件保留事件记录。

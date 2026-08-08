@@ -42,3 +42,5 @@ bunx wrangler pages deploy dist --project-name=serenique-web
 - **自定义域名（后续可选）**：当前用自动 pages.dev。旧项目 `serenique.0icey.icu`（Cloudflare Pages 上的废弃旧前端）仍占用该域名且持续 502，若想复用需先在面板下线旧 Pages 项目再绑。绑定命令 `wrangler pages deployment list` / 面板 `Custom domains`。
 - **源码改动待提交**：`apps/web/public/_redirects` 是新增文件，未提交。以后若有人改了它，重建 dist 时会带上。
 - 也可考虑把「构建+部署」写进 CI（.github/workflows），用 `CLOUDFLARE_API_TOKEN`（secret）替代本地 OAuth，实现 push 自动部署。本次未做，先走通手动流程。
+
+> 标准流程已抽到 `.ai/runbooks/web-cloudflare-deploy.md`，本文件保留事件记录。

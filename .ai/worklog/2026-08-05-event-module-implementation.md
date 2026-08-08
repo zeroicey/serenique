@@ -39,3 +39,5 @@
 - Zod v4 顶层 `.refine()` 产生 `ZodEffects`，没有 `.extend()`：`UpdateEventSchema` 在 MCP 端必须手工重建并保留全部 `.optional()` 与 refine（同 update_task 先例）；`CreateEventSchema` 因 end>start 校验放在 domain 而非 refine，保持可 `.extend()`。
 - end>start 的 DB CHECK（`chk_events_end_after_start`）是兜底：service 层经 `assertValidEventRange` 先拦，集成测试断言 400 且行不变。
 - CLI 短横冲突：根命令持久 `-t` 已被 `--token` 占用，event list 的 `--to` 不留短横；其余 `-n/-s/-e/-a/-l/-f` 均安全。
+
+> 标准流程已抽到 `.ai/runbooks/docker-local-build.md`，本文件保留事件记录。

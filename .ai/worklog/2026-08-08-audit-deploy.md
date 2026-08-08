@@ -20,3 +20,5 @@
 - audit 表为空表，等登录/删除/上传事件触发后写入。
 - CLI `serenique logs` 已按契约实现（`b8f629a`），对已部署 API 可用。
 - 并发：部署期间有并行会话在提交 web/mobile audit 前端，与本部署无冲突。
+
+> 标准流程已抽到 `.ai/runbooks/hpcore-deploy.md`，本文件保留事件记录。

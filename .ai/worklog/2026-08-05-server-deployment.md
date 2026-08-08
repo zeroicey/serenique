@@ -45,3 +45,5 @@
 - **API 暂无鉴权**,局域网内任何设备可读写;上鉴权前如需收紧,把 compose 端口改绑 `127.0.0.1` 即可。
 - **GitHub releases 下载在本机可通过代理**(本机 `http_proxy=http://127.0.0.1:7897`),在服务器直连会挂——CLI 二进制这类产物走「本机下载(scp)→服务器」。
 - 部署暂存目录 `~/serenique-deploy/` 保留了脚本与产物(不含 secrets),可复用或删除。
+
+> 标准流程已抽到 `.ai/runbooks/hpcore-deploy.md`，本文件保留事件记录。

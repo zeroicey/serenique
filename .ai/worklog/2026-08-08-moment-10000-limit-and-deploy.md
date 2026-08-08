@@ -36,3 +36,5 @@ docker compose up -d --force-recreate api
 
 - 生产：2000 字 PUT → 通过校验 → 404「闪念不存在」；10001 字 → `"maximum":10000` VALIDATION。✅
 - 手机：release 新版已装并启动成功（含创建页 10000 上限）。
+
+> 标准流程已抽到 `.ai/runbooks/hpcore-deploy.md` + `.ai/runbooks/ios-device-install.md`，本文件保留事件记录。
