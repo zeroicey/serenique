@@ -2,7 +2,8 @@
 
 - 日期：2026-08-05
 - 状态：✅已实施（API + MCP + CLI 全部落地并评估通过；实施记录见 `.ai/worklog/2026-08-05-task-module-implementation.md`）
-- 范围：API 服务 `services/api` 新增 Task 模块；MCP / CLI 已同步完成
+  - 2026-08-09 更新：✅移动端（Flutter `apps/mobile`）任务模块已实施 — 4-tab 任务页（任务组/今日/本周/本月）、组详情、创建/编辑弹窗、抽屉真实待办徽标；✅`dueDate`（截止日期，`text` 列 YYYY-MM-DD）已落地 API + MCP + CLI（`--due-date`/`--due-from`/`--due-to`）+ 移动端；全部跨端套件通过 + iOS 模拟器全流程烟测通过。记录见 `.ai/worklog/2026-08-09-task-module-mobile-task10.md` 与 `.ai/worklog/2026-08-09-task-module-mobile-dueDate.md`
+- 范围：API 服务 `services/api` 新增 Task 模块；MCP / CLI 已同步完成；2026-08-09 扩展至移动端
 
 ---
 
