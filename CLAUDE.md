@@ -21,28 +21,28 @@ Before starting work on a subsystem, read the project memory in `.ai/` (below).
 
 `.ai/` at the repo root is the project's memory — treat it as documentation of record. It holds:
 
-- `worklog/` — dated work logs: what was built, evaluated, and fixed each day, plus explicit pitfalls ("对下一次会话的提示").
+- `worklog/` — dated work logs: what was built, evaluated, and fixed each day, plus explicit pitfalls ("tips for the next session").
 - `architecture/` — architecture design docs. Later docs supersede earlier ones (e.g. `2026-08-05-cli-tool-architecture-updates.md` explicitly marks itself as the finalized CLI architecture over the 08-04 design).
 - `decisions/` — decision records with **Why** / **How to apply** rationale, including rejected/deferred options.
 
 Read the latest relevant docs before changing a subsystem. The CLI's evaluation history and hardening contracts live in the 08-05 worklog/architecture/decisions files and are condensed into the CLI section below.
 
-## AI 智能体团队（多 Agent 协作）
+## AI agent team (multi-agent collaboration)
 
-Serenique 采用「队长 + 领域专家 Agent」的协作模式：**主会话（Claude Code）就是队长**，负责拆解需求、派活、验收与集成；领域专家以 `.claude/agents/*.md` 子代理形式存在，按需派发、可并行。
+Serenique uses a "captain + domain-expert agents" collaboration model: **the main session (Claude Code) is the captain**, responsible for breaking down requirements, dispatching work, acceptance, and integration. Domain experts exist as subagents in `.claude/agents/*.md`, dispatched on demand and able to run in parallel.
 
-| Agent | 文件 | 领域 |
-|-------|------|------|
-| API Agent | `.claude/agents/api-agent.md` | `services/api`：REST、数据模型、服务层、测试、`exports.ts` |
-| MCP Agent | `.claude/agents/mcp-agent.md` | `services/mcp`：AI 工具暴露、streamable-http |
-| CLI Agent | `.claude/agents/cli-agent.md` | `apps/cli`：Go 命令行客户端 |
-| Web Agent | `.claude/agents/web-agent.md` | `apps/web`：React 浏览器端 |
-| Deploy Agent | `.claude/agents/deploy-agent.md` | Docker、GitHub Actions、发布、服务器 |
-| Flutter Agent | `.claude/agents/flutter-agent.md` | 移动端 Flutter（iOS/Android，规划中） |
+| Agent | File | Domain |
+|-------|------|--------|
+| API Agent | `.claude/agents/api-agent.md` | `services/api`: REST, data models, service layer, tests, `exports.ts` |
+| MCP Agent | `.claude/agents/mcp-agent.md` | `services/mcp`: AI tool exposure, streamable-http |
+| CLI Agent | `.claude/agents/cli-agent.md` | `apps/cli`: Go command-line client |
+| Web Agent | `.claude/agents/web-agent.md` | `apps/web`: React browser app |
+| Deploy Agent | `.claude/agents/deploy-agent.md` | Docker, GitHub Actions, releases, servers |
+| Flutter Agent | `.claude/agents/flutter-agent.md` | Mobile Flutter (iOS/Android, planned) |
 
-派发规则：一个需求往往同时涉及多个子系统（如「新增 drive 模块」会动 API + MCP + CLI + Web），队长先拆解出受影响子系统，再**并行派发**相关 Agent，各自在领域内开发；队长负责跨端契约对齐（以 `services/api` 源码为准：字段名、响应结构、`exports.ts` 导出面）与最终验收。
+Dispatching rule: a requirement often touches multiple subsystems at once (e.g. "adding a drive module" involves API + MCP + CLI + Web). The captain first breaks down which subsystems are affected, then **dispatches the relevant agents in parallel**, each developing within its own domain; the captain owns cross-client contract alignment (with the `services/api` source as the source of truth: field names, response shapes, the `exports.ts` export surface) and final acceptance.
 
-所有 Agent 权限与队长一致（省略 `tools` 字段 = 继承全部工具），技术栈已限定为各端当前技术栈，且强制使用项目记忆（动工前读 `.ai/`、完成后写 worklog）。团队章程见 `.claude/agents/README.md`，决策记录见 `.ai/decisions/2026-08-06-ai-agent-team.md`。
+All agents have the same permissions as the captain (omitting the `tools` field = inheriting all tools), the tech stacks are constrained to each client's current stack, and using the project memory is mandatory (read `.ai/` before starting work, write to the worklog after finishing). Team charter: `.claude/agents/README.md`; decision record: `.ai/decisions/2026-08-06-ai-agent-team.md`.
 
 ## Commands
 
@@ -201,9 +201,9 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 |--------|------|--------|
 | GET | `/health` | Health check |
 | GET | `/` | API info |
-| POST | `/api/auth/login` | 认证登录（密钥换 HttpOnly 会话 Cookie） |
-| POST | `/api/auth/logout` | 退出登录（清 Cookie） |
-| GET | `/api/auth/me` | 登录态查询 |
+| POST | `/api/auth/login` | Authenticate (exchange the secret for an HttpOnly session cookie) |
+| POST | `/api/auth/logout` | Logout (clears the cookie) |
+| GET | `/api/auth/me` | Query login state |
 | GET, POST | `/api/diaries` | Diary list / create |
 | GET | `/api/diaries/by-date/:date` | Diary by date (404 if none; registered before `:id`) |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
@@ -232,15 +232,15 @@ Field-naming gotcha: diary uses `content`/`diaryDate`, but moment uses `text`. D
 
 User-facing messages are in Chinese.
 
-### 认证（Auth）
+### Authentication (Auth)
 
-单一共享密钥认证：所有端共用根 `.env` 的高熵 `AUTH_TOKEN`（≥32 字符，建议 48+）。**生产缺失则 API 启动即拒绝**（fail closed）；dev 未配置时认证整体跳过（本地零摩擦）。
+Single shared-secret authentication: all clients share the high-entropy `AUTH_TOKEN` from the root `.env` (≥32 chars, 48+ recommended). **If missing in production, the API refuses to start** (fail closed); when unset in dev, authentication is skipped entirely (zero friction locally).
 
-- **CLI / 移动端 / 脚本**：请求头 `Authorization: Bearer <AUTH_TOKEN>`。
-- **Web（浏览器）**：`/login` 表单提交 `{ token }` → 换 **HttpOnly 签名 Cookie**（`serenique_session`，无状态 HMAC 签名，无会话表），请求带 `credentials:"include"`。
-- **中间件放行列表**：`/health`、`/`、`/api/auth/login`、`/api/auth/logout`、签名 blob 文件链接（`/api/blobs/:id/file?expires=&signature=`）。
-- **换密钥 = 全端失效**：改 `.env` 重启后，旧会话 Cookie 与旧 Bearer 全部失效，无会话表可清。
-- 会话 Cookie 有效期默认 30 天（`SESSION_TTL`，秒）。生产跨域（如 pages.dev → api.zeroicey.me）需 `CORS_ORIGIN` 显式设为 Web 域名——带凭证跨域不允许 `*`。
+- **CLI / mobile / scripts:** send the request header `Authorization: Bearer <AUTH_TOKEN>`.
+- **Web (browser):** the `/login` form posts `{ token }` → exchanged for an **HttpOnly signed cookie** (`serenique_session`, stateless HMAC signature, no session table); requests use `credentials:"include"`.
+- **Middleware allowlist:** `/health`, `/`, `/api/auth/login`, `/api/auth/logout`, signed blob file links (`/api/blobs/:id/file?expires=&signature=`).
+- **Rotating the secret invalidates everything:** after changing `.env` and restarting, old session cookies and old Bearer tokens all stop working — there is no session table to clear.
+- Session cookie defaults to 30 days (`SESSION_TTL`, in seconds). Production cross-origin setups (e.g. pages.dev → api.zeroicey.me) need `CORS_ORIGIN` explicitly set to the web domain — credentialed cross-origin forbids `*`.
 
 ### services/mcp
 
@@ -266,24 +266,24 @@ Hard contracts from the 08-05 evaluation — do not regress these:
 
 Adding a new module (e.g. drive): `internal/client/drive.go` (typed methods) → `cmd/drive.go` (cobra commands) → register in `cmd/root.go`. Nothing else needs touching.
 
-## Release / 发布流程
+## Release / publishing process
 
-版本号来自 git tag（`vX.Y.Z`）——CLI 的 `--version` 由 tag 注入（`git describe --tags` / CI 里 `GITHUB_REF_NAME`），所以**打 tag 是发布的前提**。发布全走 GitHub Actions，流程两步：
+Versions come from git tags (`vX.Y.Z`) — the CLI's `--version` is injected from the tag (`git describe --tags` / `GITHUB_REF_NAME` in CI), so **tagging is a prerequisite for releasing**. Releases run entirely through GitHub Actions in two steps:
 
 ```sh
-# 1. 提交并推送 main → docker-publish 推 zeroicey/serenique-{api,mcp}:main
+# 1. Commit and push main → docker-publish pushes zeroicey/serenique-{api,mcp}:main
 git push origin main
 
-# 2. 打版本 tag 并推送 → 同时触发 docker-publish（版本 tag + latest）与 release-cli（GitHub Release）
+# 2. Tag the version and push → triggers docker-publish (version tag + latest) and release-cli (GitHub Release) at the same time
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-- `.github/workflows/docker-publish.yml` — 多架构（linux/amd64+arm64）构建推送 Docker Hub。tag `v*` → `{version}` / `v{version}` / `latest`；main push → `main`；支持 `workflow_dispatch`。需要 GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`（Docker Hub access token，**与 `gh` 的 GitHub 登录无关**）。
-- `.github/workflows/release-cli.yml` — tag `v*` 时云编译 5 平台（对齐 Makefile `build-all`）+ `checksums.txt` + `gh release create --generate-notes`。
-- Docker Hub 命名空间：`zeroicey`（`zeroicey/serenique-api`、`zeroicey/serenique-mcp`）。
-- 镜像以**非 root（UID 10001）**运行：全新命名卷自动继承镜像内属主；已存在的卷需一次性 chown 到 10001（`docker run --rm -v <vol>:/data alpine chown -R 10001:10001 /data`），否则容器写不进 `/data/blobs`。
-- 关键坑点（bun `--production` 隐式冻结 lockfile、`--filter` 与 `--frozen-lockfile` 不兼容、metadata-action `enable` 表达式写法）详见 `.ai/worklog/2026-08-05-release-pipeline.md`。
+- `.github/workflows/docker-publish.yml` — multi-arch (linux/amd64+arm64) build pushed to Docker Hub. tag `v*` → `{version}` / `v{version}` / `latest`; main push → `main`; `workflow_dispatch` supported. Requires GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (a Docker Hub access token, **unrelated to `gh`'s GitHub login**).
+- `.github/workflows/release-cli.yml` — on tag `v*`, cloud-compiles for 5 platforms (matching the Makefile `build-all`) + `checksums.txt` + `gh release create --generate-notes`.
+- Docker Hub namespace: `zeroicey` (`zeroicey/serenique-api`, `zeroicey/serenique-mcp`).
+- Images run as **non-root (UID 10001)**: fresh named volumes automatically inherit the in-image owner; existing volumes need a one-time chown to 10001 (`docker run --rm -v <vol>:/data alpine chown -R 10001:10001 /data`), otherwise the container cannot write to `/data/blobs`.
+- Key pitfalls (bun `--production` implicitly freezing the lockfile, `--filter` being incompatible with `--frozen-lockfile`, the metadata-action `enable` expression syntax) are detailed in `.ai/worklog/2026-08-05-release-pipeline.md`.
 
 ## Docker
 
