@@ -299,6 +299,50 @@ func TestTaskDeleteIssuesDelete(t *testing.T) {
 // Task list — filters and status validation
 // =============================================================================
 
+func TestTaskCreateSendsDueDate(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"t1","groupId":"g1","title":"写周报","status":"todo","dueDate":"2026-08-09","createdAt":"2026-08-05T00:00:00Z","updatedAt":"2026-08-05T00:00:00Z","completedAt":null}}`))
+	}, true, func(srv *httptest.Server) {
+		taskCreateTitle = "写周报"
+		taskCreateGroupID = "g1"
+		taskCreateDueDate = "2026-08-09"
+		t.Cleanup(func() { taskCreateTitle = ""; taskCreateGroupID = ""; taskCreateDueDate = "" })
+		if err := taskCreateCmd.RunE(taskCreateCmd, nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if gotBody["dueDate"] != "2026-08-09" {
+		t.Fatalf("expected dueDate in body, got %v", gotBody)
+	}
+}
+
+func TestTaskUpdateSendsEmptyDueDateToClear(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"t1","groupId":"g1","title":"写周报","status":"todo","dueDate":null,"createdAt":"2026-08-05T00:00:00Z","updatedAt":"2026-08-05T00:00:00Z","completedAt":null}}`))
+	}, true, func(srv *httptest.Server) {
+		taskUpdateTitle = "写周报"
+		t.Cleanup(func() { taskUpdateTitle = "" })
+		_ = taskUpdateCmd.Flags().Set("title", "写周报")
+		_ = taskUpdateCmd.Flags().Set("due-date", "")
+		// cmd.Flags().Set marks Changed; test asserts "" is serialized, not omitted
+		if err := taskUpdateCmd.RunE(taskUpdateCmd, []string{"t1"}); err != nil {
+			t.Fatal(err)
+		}
+		resetFlagChanged(taskUpdateCmd)
+	})
+	if gotBody["dueDate"] != "" {
+		t.Fatalf("expected empty dueDate (clear), got %v", gotBody["dueDate"])
+	}
+}
+
 func TestTaskListSendsGroupAndStatusFilters(t *testing.T) {
 	var gotQuery url.Values
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {

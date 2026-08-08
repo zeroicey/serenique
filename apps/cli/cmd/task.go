@@ -133,7 +133,8 @@ var taskCreateCmd = &cobra.Command{
 
 示例:
   serenique task create --title "写周报" --group-id a1b2c3d4
-  serenique task create -n "读文档" -g a1b2c3d4 --status done`,
+  serenique task create -n "读文档" -g a1b2c3d4 --status done
+  serenique task create -n "交房租" -g a1b2c3d4 --due-date 2026-08-31`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validateTaskStatus(taskCreateStatus); err != nil {
 			return err
@@ -142,6 +143,7 @@ var taskCreateCmd = &cobra.Command{
 			Title:   taskCreateTitle,
 			GroupID: taskCreateGroupID,
 			Status:  taskCreateStatus,
+			DueDate: taskCreateDueDate,
 		}
 
 		result, err := apiClient.CreateTask(commandContext(cmd), input)
@@ -153,6 +155,7 @@ var taskCreateCmd = &cobra.Command{
 			"任务组":  shortID(result.GroupID),
 			"标题":   result.Title,
 			"状态":   taskStatusLabel(result.Status),
+			"截止日期": nullableStr(result.DueDate),
 			"创建时间": result.CreatedAt,
 			"完成时间": nullableStr(result.CompletedAt),
 		})
@@ -164,6 +167,7 @@ var (
 	taskCreateTitle   string
 	taskCreateGroupID string
 	taskCreateStatus  string
+	taskCreateDueDate string
 )
 
 // task list
@@ -174,6 +178,8 @@ var (
 	taskListPageSize int
 	taskListGroupID  string
 	taskListStatus   string
+	taskListDueFrom  string
+	taskListDueTo    string
 	taskListAll      bool
 )
 
@@ -200,6 +206,7 @@ var taskGetCmd = &cobra.Command{
 			"任务组":  shortID(result.GroupID),
 			"标题":   result.Title,
 			"状态":   taskStatusLabel(result.Status),
+			"截止日期": nullableStr(result.DueDate),
 			"创建时间": result.CreatedAt,
 			"更新时间": result.UpdatedAt,
 			"完成时间": nullableStr(result.CompletedAt),
@@ -212,16 +219,19 @@ var taskGetCmd = &cobra.Command{
 var taskUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "更新任务",
-	Long: `更新指定任务，可修改标题、任务组或状态，至少需要提供一个字段。
+	Long: `更新指定任务，可修改标题、任务组、状态或截止日期，至少需要提供一个字段。
 
 状态取值: todo / done / abandon。
 完成时间 (completedAt) 由服务端根据状态自动同步：
   进入 done 时写入，离开 done 时清空。
+截止日期格式: YYYY-MM-DD；传空串 (--due-date "") 清除截止日期。
 
 示例:
   serenique task update a1b2c3d4 --title "新标题"
   serenique task update a1b2c3d4 --status done
-  serenique task update a1b2c3d4 --group-id c3d4e5f6 --status abandon`,
+  serenique task update a1b2c3d4 --group-id c3d4e5f6 --status abandon
+  serenique task update a1b2c3d4 --due-date 2026-08-31
+  serenique task update a1b2c3d4 --due-date ""`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		input := client.UpdateTaskInput{}
@@ -242,8 +252,12 @@ var taskUpdateCmd = &cobra.Command{
 			input.Status = &taskUpdateStatus
 			changed = true
 		}
+		if cmd.Flags().Changed("due-date") {
+			input.DueDate = &taskUpdateDueDate // literal "" = clear (API normalizes to null)
+			changed = true
+		}
 		if !changed {
-			return fmt.Errorf("至少需要提供一个待更新字段（--title / --group-id / --status）")
+			return fmt.Errorf("至少需要提供一个待更新字段（--title / --group-id / --status / --due-date）")
 		}
 
 		result, err := apiClient.UpdateTask(commandContext(cmd), args[0], input)
@@ -255,6 +269,7 @@ var taskUpdateCmd = &cobra.Command{
 			"任务组":  shortID(result.GroupID),
 			"标题":   result.Title,
 			"状态":   taskStatusLabel(result.Status),
+			"截止日期": nullableStr(result.DueDate),
 			"创建时间": result.CreatedAt,
 			"更新时间": result.UpdatedAt,
 			"完成时间": nullableStr(result.CompletedAt),
@@ -267,6 +282,7 @@ var (
 	taskUpdateTitle   string
 	taskUpdateGroupID string
 	taskUpdateStatus  string
+	taskUpdateDueDate string
 )
 
 // task delete
@@ -355,31 +371,34 @@ func init() {
 	taskCreateCmd.Flags().StringVarP(&taskCreateTitle, "title", "n", "", "任务标题 (必填)")
 	taskCreateCmd.Flags().StringVarP(&taskCreateGroupID, "group-id", "g", "", "任务组 ID (必填)")
 	taskCreateCmd.Flags().StringVarP(&taskCreateStatus, "status", "s", "todo", "任务状态 (todo / done / abandon)")
+	taskCreateCmd.Flags().StringVarP(&taskCreateDueDate, "due-date", "d", "", "截止日期 (YYYY-MM-DD)")
 	taskCreateCmd.MarkFlagRequired("title")
 	taskCreateCmd.MarkFlagRequired("group-id")
 
 	taskListCmd = paginatedListCommand[client.TaskEntry](listSpec[client.TaskEntry]{
 		use:   "list",
 		short: "列出任务",
-		long: `分页查询任务列表（按创建时间倒序），可按任务组和状态过滤。使用 --all 一次返回全部记录。
+		long: `分页查询任务列表（按创建时间倒序），可按任务组、状态和截止日期范围过滤。使用 --all 一次返回全部记录。
 
 示例:
   serenique task list
   serenique task list --all
   serenique task list --group-id a1b2c3d4
   serenique task list --status done
+  serenique task list --due-from 2026-08-01 --due-to 2026-08-31
   serenique task list --group-id a1b2c3d4 --status todo
   serenique task list --page 1 --page-size 50
   serenique task list --json`,
 		path:     "/api/tasks",
 		emptyMsg: "暂无任务",
-		headers:  []string{"ID", "任务组", "标题", "状态", "创建时间"},
+		headers:  []string{"ID", "任务组", "标题", "状态", "截止日期", "创建时间"},
 		row: func(t client.TaskEntry) map[string]string {
 			return map[string]string{
 				"ID":   shortID(t.ID),
 				"任务组":  shortID(t.GroupID),
 				"标题":   truncateRunes(t.Title, 30),
 				"状态":   taskStatusLabel(t.Status),
+				"截止日期": nullableStr(t.DueDate),
 				"创建时间": prefix(t.CreatedAt, 10),
 			}
 		},
@@ -389,6 +408,12 @@ func init() {
 			}
 			if taskListStatus != "" {
 				q.Set("status", taskListStatus)
+			}
+			if taskListDueFrom != "" {
+				q.Set("dueDateFrom", taskListDueFrom)
+			}
+			if taskListDueTo != "" {
+				q.Set("dueDateTo", taskListDueTo)
 			}
 		},
 	}, &taskListPage, &taskListPageSize, &taskListAll)
@@ -404,11 +429,14 @@ func init() {
 	taskListCmd.Flags().IntVarP(&taskListPageSize, "page-size", "l", 50, "每页条数")
 	taskListCmd.Flags().StringVarP(&taskListGroupID, "group-id", "g", "", "按任务组 ID 过滤")
 	taskListCmd.Flags().StringVarP(&taskListStatus, "status", "s", "", "按状态过滤 (todo / done / abandon)")
+	taskListCmd.Flags().StringVar(&taskListDueFrom, "due-from", "", "按截止日期范围过滤起点 (YYYY-MM-DD)")
+	taskListCmd.Flags().StringVar(&taskListDueTo, "due-to", "", "按截止日期范围过滤终点 (YYYY-MM-DD)")
 	taskListCmd.Flags().BoolVar(&taskListAll, "all", false, "一次返回全部记录（自动翻页）")
 
 	taskUpdateCmd.Flags().StringVarP(&taskUpdateTitle, "title", "n", "", "新标题")
 	taskUpdateCmd.Flags().StringVarP(&taskUpdateGroupID, "group-id", "g", "", "移动到的目标任务组 ID")
 	taskUpdateCmd.Flags().StringVarP(&taskUpdateStatus, "status", "s", "", "新状态 (todo / done / abandon)")
+	taskUpdateCmd.Flags().StringVarP(&taskUpdateDueDate, "due-date", "d", "", "新截止日期 (YYYY-MM-DD)，传空串清除")
 
 	taskDeleteCmd = deleteCommand("delete <id>", "删除任务", `删除指定的任务。此操作不可撤销，默认需要确认。
 
