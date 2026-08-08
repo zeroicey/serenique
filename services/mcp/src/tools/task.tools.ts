@@ -56,9 +56,16 @@ const CreateTaskToolSchema = CreateTaskSchema.extend({
   status: CreateTaskSchema.shape.status.describe(
     "任务状态：todo / done / abandon，可选，默认 todo",
   ),
+  dueDate: CreateTaskSchema.shape.dueDate.describe(
+    "截止日期 (YYYY-MM-DD)，可选",
+  ),
 });
 
-const ListTaskToolSchema = ListTaskSchema.extend({
+// ListTaskSchema carries a refine (dueDateFrom <= dueDateTo), and zod v4's
+// `.extend()` refuses to overwrite keys on schemas with refinements — use
+// `.safeExtend()`, which merges the shape and keeps the checks intact.
+
+const ListTaskToolSchema = ListTaskSchema.safeExtend({
   page: ListTaskSchema.shape.page.describe("页码，从 1 开始，默认 1"),
   pageSize: ListTaskSchema.shape.pageSize.describe(
     "每页条数，默认 10，最大 50",
@@ -68,6 +75,12 @@ const ListTaskToolSchema = ListTaskSchema.extend({
   ),
   status: ListTaskSchema.shape.status.describe(
     "按状态过滤：todo / done / abandon，可选",
+  ),
+  dueDateFrom: ListTaskSchema.shape.dueDateFrom.describe(
+    "按截止日期范围过滤起点 (YYYY-MM-DD)，可选",
+  ),
+  dueDateTo: ListTaskSchema.shape.dueDateTo.describe(
+    "按截止日期范围过滤终点 (YYYY-MM-DD)，可选",
   ),
 });
 
@@ -85,6 +98,10 @@ const UpdateTaskToolSchema = z
     status: TaskStatusSchema.optional().describe(
       "新的任务状态：todo / done / abandon，可选",
     ),
+    dueDate: z
+      .string()
+      .optional()
+      .describe("新的截止日期 (YYYY-MM-DD)，传空串表示清除，不传表示保持不变"),
   })
   .refine(
     (v) =>
@@ -192,7 +209,13 @@ export function registerTaskTools(server: McpServer) {
         "更新任务：可修改标题、所属任务组或状态。状态进入 done 时自动记录完成时间，离开 done 时清空完成时间。至少需要提供一个待更新字段。",
       inputSchema: UpdateTaskToolSchema,
     },
-    async (input) => runTool(() => taskService.updateTask(input)),
+    async (input) =>
+      runTool(() =>
+        taskService.updateTask({
+          ...input,
+          dueDate: input.dueDate === "" ? null : input.dueDate,
+        }),
+      ),
   );
 
   server.registerTool(
