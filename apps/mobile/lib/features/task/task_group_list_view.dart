@@ -7,9 +7,7 @@ import 'task_providers.dart';
 
 /// Tab 1 任务组：组卡片列表（组名 + 未完成数），点击进组详情。
 class TaskGroupListView extends ConsumerWidget {
-  const TaskGroupListView({super.key, required this.onCreateGroup});
-
-  final VoidCallback onCreateGroup;
+  const TaskGroupListView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -39,7 +37,12 @@ class TaskGroupListView extends ConsumerWidget {
                       width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
                   error: (_, _) => const Text(''),
                 ),
-                onTap: () => context.push('/task/groups/${g.id}'),
+                onTap: () async {
+                  await context.push('/task/groups/${g.id}');
+                  if (context.mounted) {
+                    ref.invalidate(groupTodoCountProvider(g.id));
+                  }
+                },
                 onLongPress: () async {
                   final action = await showModalBottomSheet<String>(
                     context: context,

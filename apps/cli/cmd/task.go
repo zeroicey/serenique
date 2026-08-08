@@ -378,7 +378,7 @@ func init() {
 	taskListCmd = paginatedListCommand[client.TaskEntry](listSpec[client.TaskEntry]{
 		use:   "list",
 		short: "列出任务",
-		long: `分页查询任务列表（按创建时间倒序），可按任务组、状态和截止日期范围过滤。使用 --all 一次返回全部记录。
+		long: `分页查询任务列表（默认按创建时间倒序；带截止日期范围过滤时按截止日期升序），可按任务组、状态和截止日期范围过滤。使用 --all 一次返回全部记录。
 
 示例:
   serenique task list

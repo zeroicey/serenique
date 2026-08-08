@@ -21,7 +21,7 @@ class _TaskPageState extends ConsumerState<TaskPage> {
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      TaskGroupListView(onCreateGroup: () => showTaskEditSheet(context)),
+      TaskGroupListView(),
       TaskDueListView(kind: TaskDueKind.today),
       TaskDueListView(kind: TaskDueKind.week),
       TaskDueListView(kind: TaskDueKind.month),
