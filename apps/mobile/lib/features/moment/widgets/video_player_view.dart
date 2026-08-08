@@ -15,7 +15,8 @@ class VideoPlayerView extends StatefulWidget {
 }
 
 class _VideoPlayerViewState extends State<VideoPlayerView> {
-  late VideoPlayerController _controller;
+  // 可空：重试 _load() 时会释放旧 controller 再建新的。
+  VideoPlayerController? _controller;
   bool _initialized = false;
   bool _loadFailed = false;
   bool _controlsVisible = true;
@@ -29,16 +30,26 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   }
 
   Future<void> _load() async {
+    // 重试路径：先释放上一次的 controller（含监听移除），防止泄漏。
+    final previous = _controller;
+    if (previous != null) {
+      previous.removeListener(_onTick);
+      try {
+        await previous.dispose();
+      } catch (_) {
+        // dispose 异常不阻塞重试。
+      }
+    }
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
       ..addListener(_onTick);
     try {
-      await _controller.initialize();
+      await _controller!.initialize();
       if (!mounted) return;
       setState(() {
         _initialized = true;
         _loadFailed = false;
       });
-      _controller.play();
+      _controller!.play();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadFailed = true);
@@ -51,11 +62,13 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
   void _togglePlay() {
     if (!_initialized) return;
-    _controller.value.isPlaying ? _controller.pause() : _controller.play();
+    _controller!.value.isPlaying
+        ? _controller!.pause()
+        : _controller!.play();
   }
 
   void _toggleFullscreen() {
-    if (_controller.value.aspectRatio == 0) return;
+    if (_controller!.value.aspectRatio == 0) return;
     if (_isLandscape) {
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     } else {
@@ -73,8 +86,11 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
   @override
   void dispose() {
-    _controller.removeListener(_onTick);
-    _controller.dispose();
+    final controller = _controller;
+    if (controller != null) {
+      controller.removeListener(_onTick);
+      controller.dispose();
+    }
     // 退出页面恢复竖屏（若用户切过全屏）。
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
@@ -111,9 +127,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       );
     }
 
-    final ratio = _controller.value.aspectRatio == 0
+    final ratio = _controller!.value.aspectRatio == 0
         ? 16 / 9
-        : _controller.value.aspectRatio;
+        : _controller!.value.aspectRatio;
     return Center(
       child: AspectRatio(
         aspectRatio: ratio,
@@ -122,10 +138,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              VideoPlayer(_controller),
+              VideoPlayer(_controller!),
               // 点按切换控制条显隐
               if (_controlsVisible) ...[
-                if (_controller.value.isPlaying)
+                if (_controller!.value.isPlaying)
                   Positioned(
                     left: 0,
                     right: 0,
@@ -144,7 +160,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                   iconSize: 56,
                   color: Colors.white,
                   icon: Icon(
-                    _controller.value.isPlaying
+                    _controller!.value.isPlaying
                         ? Icons.pause_circle_outline
                         : Icons.play_circle_outline,
                   ),
@@ -159,63 +175,62 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   }
 
   Widget _fadeBar({required List<Color> gradient}) {
-    final position = _controller.value.position;
-    final duration = _controller.value.duration;
+    final position = _controller!.value.position;
+    final duration = _controller!.value.duration;
     final maxMs =
         duration.inMilliseconds.toDouble().clamp(1, double.infinity).toDouble();
-    return IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: gradient,
-          ),
+    // 不加 IgnorePointer：让 Slider（seek）与全屏按钮可以正常接收触摸。
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: gradient,
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              Text(formatMediaDuration(position),
-                  style: const TextStyle(color: Colors.white, fontSize: 12)),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderThemeData(
-                    trackHeight: 2,
-                    thumbShape:
-                        const RoundSliderThumbShape(enabledThumbRadius: 6),
-                    overlayShape:
-                        const RoundSliderOverlayShape(overlayRadius: 12),
-                  ),
-                  child: Slider(
-                    value: _dragging
-                        ? _dragValue
-                        : position.inMilliseconds.clamp(0, maxMs).toDouble(),
-                    max: maxMs,
-                    onChanged: (v) => setState(() {
-                      _dragging = true;
-                      _dragValue = v;
-                    }),
-                    onChangeEnd: (v) {
-                      _controller.seekTo(Duration(milliseconds: v.round()));
-                      setState(() => _dragging = false);
-                    },
-                  ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: [
+            Text(formatMediaDuration(position),
+                style: const TextStyle(color: Colors.white, fontSize: 12)),
+            Expanded(
+              child: SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 2,
+                  thumbShape:
+                      const RoundSliderThumbShape(enabledThumbRadius: 6),
+                  overlayShape:
+                      const RoundSliderOverlayShape(overlayRadius: 12),
+                ),
+                child: Slider(
+                  value: _dragging
+                      ? _dragValue
+                      : position.inMilliseconds.clamp(0, maxMs).toDouble(),
+                  max: maxMs,
+                  onChanged: (v) => setState(() {
+                    _dragging = true;
+                    _dragValue = v;
+                  }),
+                  onChangeEnd: (v) {
+                    _controller!.seekTo(Duration(milliseconds: v.round()));
+                    setState(() => _dragging = false);
+                  },
                 ),
               ),
-              Text(formatMediaDuration(duration),
-                  style: const TextStyle(color: Colors.white, fontSize: 12)),
-              IconButton(
-                iconSize: 20,
-                color: Colors.white,
-                tooltip: _isLandscape ? '退出全屏' : '全屏',
-                icon: Icon(_isLandscape
-                    ? Icons.fullscreen_exit
-                    : Icons.fullscreen),
-                onPressed: _toggleFullscreen,
-              ),
-            ],
-          ),
+            ),
+            Text(formatMediaDuration(duration),
+                style: const TextStyle(color: Colors.white, fontSize: 12)),
+            IconButton(
+              iconSize: 20,
+              color: Colors.white,
+              tooltip: _isLandscape ? '退出全屏' : '全屏',
+              icon: Icon(_isLandscape
+                  ? Icons.fullscreen_exit
+                  : Icons.fullscreen),
+              onPressed: _toggleFullscreen,
+            ),
+          ],
         ),
       ),
     );
