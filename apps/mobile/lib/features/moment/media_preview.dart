@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'moment_models.dart';
 import 'moment_providers.dart';
@@ -46,8 +47,16 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
   late int _current = widget.initialIndex;
 
   @override
+  void initState() {
+    super.initState();
+    // 沉浸式全屏：隐藏状态栏与 Home Indicator（黑底上的系统横条），退出时恢复。
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
