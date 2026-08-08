@@ -4,7 +4,6 @@ import '../../../core/network/api_exception.dart';
 import '../moment_models.dart';
 import '../moment_providers.dart';
 import '../moment_time.dart';
-import 'attachment_grid.dart';
 import 'comment_row.dart';
 
 /// 朋友圈样式的闪记卡片：纯文本（「全文/收起」在正文下方）+ 时间行（⋮ 菜单）+ 内嵌评论 + 内联评论输入。
@@ -127,10 +126,6 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                   ),
                 ),
               ),
-            if (moment.attachments.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              AttachmentGrid(attachments: moment.attachments),
-            ],
             const SizedBox(height: 4),
             // 时间行：时间靠左，⋮ 菜单在最右。
             Row(

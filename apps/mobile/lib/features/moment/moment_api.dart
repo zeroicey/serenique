@@ -66,18 +66,4 @@ class MomentApi {
   Future<void> deleteComment(String momentId, String commentId) async {
     await _client.deleteData('/api/moments/$momentId/comments/$commentId');
   }
-
-  /// 申请签名访问链接（1 小时），返回完整 URL 与过期时间。
-  /// 对齐 Web：凭证放 query，媒体组件（Image.network / video_player）无需带请求头。
-  Future<({String url, DateTime expiresAt})> createBlobAccessLink(
-      String blobId) async {
-    final data = await _client.postData('/api/blobs/$blobId/access-link',
-        body: {'expiresInSeconds': 3600});
-    final path = data['path'] as String;
-    final expires = (data['expires'] as num).toInt();
-    return (
-      url: '${_client.apiBase}$path',
-      expiresAt: DateTime.fromMillisecondsSinceEpoch(expires * 1000),
-    );
-  }
 }

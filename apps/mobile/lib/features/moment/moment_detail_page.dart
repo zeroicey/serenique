@@ -5,7 +5,6 @@ import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
 import 'moment_providers.dart';
 import 'moment_time.dart';
-import 'widgets/attachment_grid.dart';
 import 'widgets/comment_section.dart';
 
 /// 闪记详情页 —— 正文可直接编辑（微信发布纯文本样式），右上角保存。
@@ -136,10 +135,6 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
                   border: InputBorder.none,
                 ),
               ),
-              if (moment.attachments.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                AttachmentGrid(attachments: moment.attachments),
-              ],
               const SizedBox(height: 6),
               Text(
                 formatMomentTime(moment.createdAt),

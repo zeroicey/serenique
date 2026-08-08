@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
-import 'blob_access.dart';
 import 'moment_api.dart';
 import 'moment_models.dart';
 
@@ -59,23 +58,3 @@ class MomentActions {
 
 final momentActionsProvider =
     Provider<MomentActions>((ref) => MomentActions(ref));
-
-/// 签名链接缓存服务：内存缓存 + 过期刷新 + 失败回退直链。
-final blobAccessServiceProvider = Provider<BlobAccessService>((ref) {
-  final api = ref.watch(momentApiProvider);
-  final client = ref.watch(apiClientProvider);
-  return BlobAccessService(
-    fetchLink: (blobId) async {
-      final link = await api.createBlobAccessLink(blobId);
-      return BlobAccessLink(url: link.url, expiresAt: link.expiresAt);
-    },
-    directUrl: (blobId) => '${client.apiBase}/api/blobs/$blobId/file',
-  );
-});
-
-/// 每个 blobId 的签名链接（autoDispose：瓦片重建时重新 resolve，
-/// 命中 service 内存缓存则不发请求）。
-final blobAccessUrlProvider =
-    FutureProvider.autoDispose.family<String, String>((ref, blobId) {
-  return ref.watch(blobAccessServiceProvider).resolve(blobId);
-});
