@@ -97,6 +97,8 @@ go vet ./...         # static check
 go test -count=1 ./...  # full test run (-count=1 bypasses cache)
 ```
 
+**Commit messages must be in English** (conventional-commit style: `feat:`, `fix:`, `docs:`, `chore:`, …) — the repo history is English-only, including `.ai/` and `docs/` commits. Chinese text belongs in `.ai/` doc content, never in commit messages.
+
 Network note: pulling Go modules requires the China mirror `GOPROXY=https://goproxy.cn,direct` (`proxy.golang.org` is unreachable on this network).
 
 Docker build network note: build containers cannot reach `registry.npmjs.org` directly — `docker compose build` fails at `bun install` with `ConnectionRefused`; inject the host proxy as build args (`host.docker.internal:7897`, Docker-predefined args, no Dockerfile changes). Full procedure: see `.ai/runbooks/docker-local-build.md`. `docker compose up -d` (without `--build`) doesn't need proxy args.
