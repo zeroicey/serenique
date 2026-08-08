@@ -309,4 +309,52 @@ describe.skipIf(!RUN_DB_TESTS)("task service DB integration", () => {
     expect(result.items[0].id).toBe(newer.id);
     expect(result.items[1].id).toBe(older.id);
   });
+
+  // ---- dueDate persistence + range filtering -------------------------------
+
+  test("create with dueDate persists; update clears it with null", async () => {
+    const group = await service.createTaskGroup({ title: uniqueTitle("组-截止") });
+    createdGroupIds.push(group.id);
+    const task = await service.createTask({
+      groupId: group.id,
+      title: uniqueTitle("任务-截止"),
+      dueDate: "2026-08-20",
+    });
+    expect(task.dueDate).toBe("2026-08-20");
+
+    const cleared = await service.updateTask({ id: task.id, dueDate: null });
+    expect(cleared.dueDate).toBeNull();
+
+    const reset = await service.updateTask({ id: task.id, dueDate: "2026-08-21" });
+    expect(reset.dueDate).toBe("2026-08-21");
+  });
+
+  test("list filters by inclusive dueDateFrom/dueDateTo and sorts by dueDate asc", async () => {
+    const group = await service.createTaskGroup({ title: uniqueTitle("组-截止过滤") });
+    createdGroupIds.push(group.id);
+    await service.createTask({ groupId: group.id, title: "过期", dueDate: "2026-08-01" });
+    await service.createTask({ groupId: group.id, title: "中间", dueDate: "2026-08-15" });
+    await service.createTask({ groupId: group.id, title: "未来", dueDate: "2026-09-01" });
+    await service.createTask({ groupId: group.id, title: "无日期" });
+
+    const inRange = await service.listTasks({
+      page: 1,
+      pageSize: 50,
+      groupId: group.id,
+      status: "todo",
+      dueDateFrom: "2026-08-01",
+      dueDateTo: "2026-08-31",
+    });
+    expect(inRange.items.map((t) => t.title)).toEqual(["过期", "中间"]);
+
+    const combined = await service.listTasks({
+      page: 1,
+      pageSize: 50,
+      groupId: group.id,
+      status: "todo",
+      dueDateTo: "2026-08-01",
+    });
+    expect(combined.items.map((t) => t.title)).toEqual(["过期"]);
+    expect(combined.total).toBe(1);
+  });
 });

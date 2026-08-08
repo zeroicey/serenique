@@ -18,7 +18,7 @@ import type {
   UpdateTaskInput,
 } from "@/modules/task/task.types";
 import { AppError, ErrorCode } from "@/shared/errors";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Task service — business orchestration over `db`.
@@ -119,6 +119,7 @@ export const taskService = {
           groupId: input.groupId,
           title: input.title,
           status,
+          dueDate: input.dueDate ?? null,
           completedAt,
         })
         .returning();
@@ -139,15 +140,25 @@ export const taskService = {
     const conditions = [
       input.groupId ? eq(tasks.groupId, input.groupId) : undefined,
       input.status ? eq(tasks.status, input.status) : undefined,
+      input.dueDateFrom ? gte(tasks.dueDate, input.dueDateFrom) : undefined,
+      input.dueDateTo ? lte(tasks.dueDate, input.dueDateTo) : undefined,
     ].filter((c): c is NonNullable<typeof c> => c !== undefined);
     const where = conditions.length ? and(...conditions) : undefined;
+
+    // Date-filtered lists sort by dueDate asc first (lexicographic = exact for
+    // YYYY-MM-DD), then createdAt desc for stable ties; unfiltered stays
+    // newest-first.
+    const orderBy =
+      input.dueDateFrom !== undefined || input.dueDateTo !== undefined
+        ? [asc(tasks.dueDate), desc(tasks.createdAt)]
+        : [desc(tasks.createdAt)];
 
     const [items, [{ count }]] = await Promise.all([
       db
         .select()
         .from(tasks)
         .where(where)
-        .orderBy(desc(tasks.createdAt))
+        .orderBy(...orderBy)
         .limit(input.pageSize)
         .offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(tasks).where(where),
@@ -187,6 +198,7 @@ export const taskService = {
           title: resolved.title,
           groupId: resolved.groupId,
           status: resolved.status,
+          dueDate: resolved.dueDate,
           completedAt: resolved.completedAt,
           updatedAt: new Date(),
         })
