@@ -433,3 +433,203 @@ func TestMomentEntryDecodesCommentsAndCount(t *testing.T) {
 		}
 	})
 }
+
+// =============================================================================
+// moment tag — subcommand registration and nested tag operations
+// =============================================================================
+
+// TestMomentTagCommandsRegistered verifies the tag subtree hangs under
+// momentCmd with the expected subcommands (add/remove/set).
+func TestMomentTagCommandsRegistered(t *testing.T) {
+	tagCmd, _, err := momentCmd.Find([]string{"tag"})
+	if err != nil {
+		t.Fatalf("moment tag not found: %v", err)
+	}
+	names := map[string]bool{}
+	for _, c := range tagCmd.Commands() {
+		names[c.Name()] = true
+	}
+	for _, want := range []string{"add", "remove", "set"} {
+		if !names[want] {
+			t.Errorf("moment tag %s not registered", want)
+		}
+	}
+}
+
+// TestMomentListSendsTagFilter verifies `moment list --tag <id>` adds the
+// additive ?tag= filter the API uses to filter by tag.
+func TestMomentListSendsTagFilter(t *testing.T) {
+	var gotQuery string
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"items":[],"total":0}}`))
+	}, true, func(srv *httptest.Server) {
+		momentListTag = "t1"
+		momentListPage = 1
+		momentListPageSize = 10
+		momentListAll = false
+		t.Cleanup(func() {
+			momentListTag = ""
+			momentListPage = 1
+			momentListPageSize = 50
+			momentListAll = false
+		})
+		if err := momentListCmd.RunE(momentListCmd, nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(gotQuery, "tag=t1") {
+		t.Fatalf("query = %q, want tag=t1", gotQuery)
+	}
+}
+
+// TestMomentTagAddSendsTagID verifies POST /api/moments/:id/tags with a JSON
+// body of {"tagId": ...}.
+func TestMomentTagAddSendsTagID(t *testing.T) {
+	var gotPath string
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"r1","tagId":"t1","ownerType":"moment","ownerId":"m1","createdAt":"2026-08-08T01:00:00Z"}}`))
+	}, true, func(srv *httptest.Server) {
+		if err := momentTagAddCmd.RunE(momentTagAddCmd, []string{"m1", "t1"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if gotPath != "/api/moments/m1/tags" {
+		t.Fatalf("path = %q, want /api/moments/m1/tags", gotPath)
+	}
+	if gotBody["tagId"] != "t1" {
+		t.Fatalf("tagId = %v, want t1", gotBody["tagId"])
+	}
+}
+
+// TestMomentTagRemoveIssuesDelete verifies DELETE
+// /api/moments/:id/tags/:tagId when confirmed with --force.
+func TestMomentTagRemoveIssuesDelete(t *testing.T) {
+	var gotMethod, gotPath string
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		w.WriteHeader(http.StatusNoContent)
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		momentTagRemoveForce = true
+		t.Cleanup(func() { momentTagRemoveForce = false })
+		if err := momentTagRemoveCmd.RunE(momentTagRemoveCmd, []string{"m1", "t1"}); err != nil {
+			t.Fatal(err)
+		}
+		if gotMethod != "DELETE" || gotPath != "/api/moments/m1/tags/t1" {
+			t.Fatalf("request = %s %s, want DELETE /api/moments/m1/tags/t1", gotMethod, gotPath)
+		}
+	})
+}
+
+func TestMomentTagRemoveRequiresConfirmation(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Error("server should not be reached when confirmation is declined")
+	}, true, func(srv *httptest.Server) {
+		withStdin(t, "") // immediate EOF — the pipe/CI/AI-agent case
+		momentTagRemoveForce = false
+		t.Cleanup(func() { momentTagRemoveForce = false })
+		if err := momentTagRemoveCmd.RunE(momentTagRemoveCmd, []string{"m1", "t1"}); err == nil {
+			t.Fatal("expected error when confirmation is not provided")
+		}
+	})
+}
+
+// TestMomentTagSetSendsTagIDs verifies PUT /api/moments/:id/tags with the
+// comma-separated ids expanded into a tagIds array.
+func TestMomentTagSetSendsTagIDs(t *testing.T) {
+	var gotMethod, gotPath string
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":[
+			{"id":"t1","name":"work","momentCount":1,"createdAt":"x","updatedAt":"x"},
+			{"id":"t2","name":"重要","momentCount":1,"createdAt":"x","updatedAt":"x"}
+		]}`))
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		if err := momentTagSetCmd.RunE(momentTagSetCmd, []string{"m1", "t1,t2"}); err != nil {
+			t.Fatal(err)
+		}
+		if gotMethod != "PUT" || gotPath != "/api/moments/m1/tags" {
+			t.Fatalf("request = %s %s, want PUT /api/moments/m1/tags", gotMethod, gotPath)
+		}
+		ids, ok := gotBody["tagIds"].([]any)
+		if !ok || len(ids) != 2 || ids[0] != "t1" || ids[1] != "t2" {
+			t.Fatalf("tagIds = %v, want [t1 t2]", gotBody["tagIds"])
+		}
+		tags, ok := rec.lastSuccess.data.([]client.TagEntry)
+		if !ok || len(tags) != 2 {
+			t.Fatalf("data = %T %v, want 2 TagEntry", rec.lastSuccess.data, rec.lastSuccess.data)
+		}
+	})
+}
+
+func TestMomentTagSetEmptyClears(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":[]}`))
+	}, true, func(srv *httptest.Server) {
+		if err := momentTagSetCmd.RunE(momentTagSetCmd, []string{"m1", ""}); err != nil {
+			t.Fatal(err)
+		}
+		ids, ok := gotBody["tagIds"].([]any)
+		if !ok || len(ids) != 0 {
+			t.Fatalf("tagIds = %v (%T), want empty array (clear all)", gotBody["tagIds"], gotBody["tagIds"])
+		}
+	})
+}
+
+func TestMomentTagSetRejectsEmptySegment(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		t.Error("server should not be reached for a malformed tag id list")
+	}, true, func(srv *httptest.Server) {
+		for _, bad := range []string{"t1,,t2", "t1,", ",t1", "t1, ,t2"} {
+			if err := momentTagSetCmd.RunE(momentTagSetCmd, []string{"m1", bad}); err == nil {
+				t.Errorf("parseTagIDList(%q) should fail", bad)
+			}
+		}
+	})
+}
+
+// =============================================================================
+// parseTagIDList
+// =============================================================================
+
+func TestParseTagIDList(t *testing.T) {
+	ids, err := parseTagIDList("t1,t2,t3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 3 || ids[0] != "t1" || ids[2] != "t3" {
+		t.Fatalf("ids = %v", ids)
+	}
+	// Surrounding whitespace around segments is tolerated ("t1, t2").
+	ids, err = parseTagIDList(" t1 , t2 ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ids) != 2 || ids[0] != "t1" || ids[1] != "t2" {
+		t.Fatalf("ids = %v", ids)
+	}
+	// But an empty segment is an error, never silently dropped.
+	for _, bad := range []string{"", "t1,", ",t1", "t1,,t2"} {
+		if _, err := parseTagIDList(bad); err == nil {
+			t.Errorf("parseTagIDList(%q) should fail", bad)
+		}
+	}
+}

@@ -341,6 +341,7 @@ func init() {
 	rootCmd.AddCommand(blobCmd)
 	rootCmd.AddCommand(taskCmd)
 	rootCmd.AddCommand(eventCmd)
+	rootCmd.AddCommand(tagCmd)
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(auditCmd)
 }

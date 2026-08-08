@@ -331,8 +331,7 @@ serenique diary list
 ## 临时访问链接（blob link）
 
 `serenique blob link` 依赖后端 `BLOB_SIGNING_SECRET` 环境变量（至少 32 个字符）。
-未配置时该命令会报错。请确保部署的 API 已配置该变量（`services/api/.env` 与
-`docker-compose.yml` 中均提供了开发默认值）。
+未配置时该命令会报错。请确保部署的 API 已配置该变量（`.env.example` 中有示例值）。
 
 ## 项目结构
 

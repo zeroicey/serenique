@@ -284,6 +284,28 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 	return c.do(req, nil)
 }
 
+// DeleteWithBody sends a DELETE with a JSON body, for endpoints whose payload
+// is a body rather than a path parameter (e.g. tag detach sends
+// {ownerType, ownerId}). It keeps Delete's connection-close behavior — the
+// API's Res.noContent endpoints send 204 with a body, and a kept-alive
+// connection would leak those stale bytes into the next request.
+func (c *Client) DeleteWithBody(ctx context.Context, path string, body any) error {
+	b, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("序列化请求体失败: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", c.url(path), bytes.NewReader(b))
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %w", err)
+	}
+	c.setHeaders(req)
+	req.Header.Set("Content-Type", "application/json")
+	req.Close = true
+
+	return c.do(req, nil)
+}
+
 // List sends a GET request to a paginated endpoint and unpacks the
 // {items, total} envelope. The query values are passed through unchanged
 // (callers set page/pageSize themselves).
