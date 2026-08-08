@@ -1,5 +1,6 @@
 import '../../../core/network/api_client.dart';
 import '../../../core/network/unwrap.dart';
+import 'blob_access.dart';
 import 'moment_models.dart';
 
 /// moment 的 HTTP 封装：只负责「请求 + 把 data 解成模型」。
@@ -65,5 +66,19 @@ class MomentApi {
 
   Future<void> deleteComment(String momentId, String commentId) async {
     await _client.deleteData('/api/moments/$momentId/comments/$commentId');
+  }
+
+  /// 申请 blob 签名访问链接，返回完整 URL 与过期时间。
+  /// 对齐 Web：凭证放 query，Image.network / video_player 等媒体组件
+  /// 无需带请求头。返回的 url 已是完整链接（服务端用 request origin 拼接）。
+  Future<BlobAccessLink> createBlobAccessLink(String blobId) async {
+    final data = await _client.postData('/api/blobs/$blobId/access-link',
+        body: {'expiresInSeconds': 3600});
+    final url = data['url'] as String;
+    final expires = (data['expires'] as num).toInt();
+    return BlobAccessLink(
+      url: url,
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(expires * 1000),
+    );
   }
 }

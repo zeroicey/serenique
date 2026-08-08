@@ -42,6 +42,11 @@ class ApiClient {
   final Future<void> Function()? onUnauthorized;
   late final Dio _dio;
 
+  /// 去尾斜杠的 base URL，用于拼接媒体直链等带 token 之外的 URL。
+  String get apiBase => baseUrl.endsWith('/')
+      ? baseUrl.substring(0, baseUrl.length - 1)
+      : baseUrl;
+
   Future<dynamic> getData(String path, {Map<String, dynamic>? query}) =>
       _guard(_dio.get(path, queryParameters: query));
 
