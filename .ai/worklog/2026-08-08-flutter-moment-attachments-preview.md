@@ -19,6 +19,16 @@
 - 设计文档：`.ai/architecture/2026-08-08-flutter-moment-attachments-design.md`；需求：`.ai/requirements/2026-08-08-mobile-moment-attachments.md`（上传下阶段）
 - **真机验证待做**（见下）
 
+## 用户真机验证 + 全屏修复（commit 5e8aa0b）
+
+用户真机实测反馈：图片预览不是全屏、顶部有个「header bar」。
+
+- **根因**：`Center(InteractiveViewer(child: Image.network(fit: contain)))` —— InteractiveViewer 收缩包裹，Image 按自身宽高比缩到「宽满屏、高不满」（如 4:3 图在 iPhone 上是 1179×1572），Center 悬浮在屏幕中间 → 上下黑边，顶部黑边里永远显示计数/关闭条，看起来像 header bar。已核实 SDK 3.44 的 `_InteractiveViewerBuilt` 对 `constrained:true` 的 child 不做约束强制。
+- **修复**：① `SizedBox.expand` 让图片盒子铺满整页（contain 按整屏计算，捏合/平移覆盖全屏）；② 顶部控制条 2.5s 自动隐藏 + 点按唤出（微信相册样式，`IgnorePointer` + `AnimatedOpacity`）；③ 预览期间 `SystemChrome.setEnabledSystemUIMode(immersiveSticky)` 隐藏状态栏，`dispose` 恢复 `edgeToEdge`。
+- **坑**：`SizedBox.expand()` 的 width/height 是 `double.infinity` 不是 null（测试断言写错过一次）；控制条自动隐藏用 `Timer`，测试里必须能 dispose 取消（flutter_test 对 pending timer 会报错）。
+- 测试：新增 `media_preview_page_test.dart` 3 例（初始显示→2.5s 隐藏、点按唤出、图片全屏盒子），108/108 全绿。
+- **Release 装机**（用户要求，API 用生产）：`flutter build ios --release --dart-define=API_BASE_URL=https://api.zeroicey.me` + `xcrun devicectl device install app --device C11AB076-... build/ios/iphoneos/Runner.app`（流程见 `.ai/runbooks/ios-device-install.md`）。构建 29s、安装成功。
+
 ## 坑 / 对下一次会话的提示
 
 - **SDD 评审抓出两个 plan 笔误**，均已修正 plan 后修复：① 视频控制条被 `IgnorePointer` 整条包裹 → Slider/全屏按钮不可点（控制条必须可交互，只能让空白区透传）；② 音频重试 `_load()` 未取消旧 stream 订阅 → 每次 retry 泄漏 3 个订阅。**教训：控制条这类"部分区域可点、部分区域透传"的组件，写代码前先想清楚 hit-test 行为；重试路径的资源释放要在计划里写死。**
