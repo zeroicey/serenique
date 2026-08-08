@@ -29,6 +29,14 @@
 - 测试：新增 `media_preview_page_test.dart` 3 例（初始显示→2.5s 隐藏、点按唤出、图片全屏盒子），108/108 全绿。
 - **Release 装机**（用户要求，API 用生产）：`flutter build ios --release --dart-define=API_BASE_URL=https://api.zeroicey.me` + `xcrun devicectl device install app --device C11AB076-... build/ios/iphoneos/Runner.app`（流程见 `.ai/runbooks/ios-device-install.md`）。构建 29s、安装成功。
 
+## 第二轮修复：微信式「从小放大」过渡（commit d7691a7）
+
+用户反馈：仍是黑边 + 「跳新页面」感。要微信/小红书式：点缩略图 → 图片从小放大铺满全屏。
+
+- **方案**：① **Hero 共享元素过渡**——网格图片瓦片与预览页图片都用 `Hero(tag: 'blob-<blobId>')` 包裹，点缩略图直接飞入放大；② **`BoxFit.cover`** 铺满全屏（无黑边，比例不匹配时裁边，捏合放大看细节，`minScale: 1.0` 保持铺满）；③ 控制条（关闭+计数）**默认隐藏**，点按唤出后 2.5s 自动隐藏。
+- **坑**：`Hero` 内部自带一个 `SizedBox(width: null, height: null)`，测试里 `find.descendant(InteractiveViewer, SizedBox)` 会命中 2 个（自己的 expand + Hero 的 null 盒子）→ 断言要过滤 `width != null` 的；PageView 非当前页的 widget 可能仍在树里（`tester.widget` 单例断言会 "Too many elements"）。
+- 测试更新：预览页控制条初始隐藏→点按唤出→自动隐藏；网格导航测试改为先唤出控制条再点关闭。108/108 全绿。
+
 ## 坑 / 对下一次会话的提示
 
 - **SDD 评审抓出两个 plan 笔误**，均已修正 plan 后修复：① 视频控制条被 `IgnorePointer` 整条包裹 → Slider/全屏按钮不可点（控制条必须可交互，只能让空白区透传）；② 音频重试 `_load()` 未取消旧 stream 订阅 → 每次 retry 泄漏 3 个订阅。**教训：控制条这类"部分区域可点、部分区域透传"的组件，写代码前先想清楚 hit-test 行为；重试路径的资源释放要在计划里写死。**
