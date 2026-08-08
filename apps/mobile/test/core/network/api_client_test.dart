@@ -199,4 +199,32 @@ void main() {
     expect(captured[0], 'multipart/form-data');
     expect(captured[1], 'has-boundary');
   });
+
+  test('postMultipart 超时对齐 Web（send/receive 300s）', () async {
+    Duration? sendTimeout;
+    Duration? receiveTimeout;
+    final adapter = _RecordingAdapter((options) {
+      sendTimeout = options.sendTimeout;
+      receiveTimeout = options.receiveTimeout;
+      return jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {'id': 'b1'},
+      });
+    });
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    await client.postMultipart(
+      '/api/blobs/upload',
+      bytes: Uint8List.fromList([1]),
+      filename: 'a.jpg',
+      mimeType: 'image/jpeg',
+    );
+    expect(sendTimeout, const Duration(seconds: 300));
+    expect(receiveTimeout, const Duration(seconds: 300));
+  });
 }

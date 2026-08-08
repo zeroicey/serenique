@@ -79,9 +79,10 @@ void main() {
     await tester.tap(find.byTooltip('新建闪记'));
     await tester.pumpAndSettle();
     expect(find.text('拍照'), findsOneWidget);
-    expect(find.text('选文件'), findsOneWidget);
+    expect(find.text('录像'), findsOneWidget);
     expect(find.text('从手机相册选择'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
+    expect(find.text('选文件'), findsNothing);
   });
 
   testWidgets('弹层点取消：不跳转发布页', (tester) async {

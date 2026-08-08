@@ -61,6 +61,7 @@ class ApiClient {
   Future<dynamic> deleteData(String path) => _guard(_dio.delete(path));
 
   /// multipart 文件上传（dio FormData + MultipartFile，bytes 已在内存）。
+  /// 上传超时对齐 Web 端（300s）：大视频上传耗时远超默认 10s receiveTimeout。
   Future<dynamic> postMultipart(
     String path, {
     required Uint8List bytes,
@@ -71,7 +72,15 @@ class ApiClient {
       'file': MultipartFile.fromBytes(bytes,
           filename: filename, contentType: DioMediaType.parse(mimeType)),
     });
-    return _guard(_dio.post(path, data: form));
+    return _guard(_dio.post(
+      path,
+      data: form,
+      options: Options(
+        connectTimeout: const Duration(seconds: 60),
+        receiveTimeout: const Duration(seconds: 300),
+        sendTimeout: const Duration(seconds: 300),
+      ),
+    ));
   }
 
   Future<dynamic> _guard(Future<Response<dynamic>> future) async {
