@@ -117,10 +117,6 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
           ),
         ],
       ),
-      // 浮动评论输入条：固定在底部（AI 聊天样式），键盘弹出时自动上移。
-      // 底部安全区由 CommentInputBar 内部按 viewPadding 处理。
-      bottomNavigationBar:
-          detail.hasValue ? CommentInputBar(momentId: widget.id) : null,
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => AsyncErrorView(
@@ -129,44 +125,53 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
           // 网格与全屏预览共用同一有序列表，保证索引一致。
           final attachments = sortedAttachments(moment.attachments);
           return SafeArea(
-          top: false,
-          child: ListView(
-            // 顶部间距收紧；底部留出浮动输入条的空间。
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
-            children: [
-              TextField(
-                controller: _controller,
-                minLines: 1,
-                maxLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                style: theme.textTheme.bodyLarge,
-                decoration: const InputDecoration(
-                  hintText: '写下此刻的想法…',
-                  border: InputBorder.none,
+            top: false,
+            child: Stack(
+              children: [
+                ListView(
+                  // 顶部间距收紧；底部留出浮动输入条的空间。
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                  children: [
+                    TextField(
+                      controller: _controller,
+                      minLines: 1,
+                      maxLines: null,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: theme.textTheme.bodyLarge,
+                      decoration: const InputDecoration(
+                        hintText: '写下此刻的想法…',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                    // 附件网格：正文下方，间距收紧。
+                    if (moment.attachments.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      AttachmentGrid(
+                        attachments: attachments,
+                        onTapTile: (index) => showMediaPreview(
+                          context,
+                          attachments: attachments,
+                          initialIndex: index,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    Text(
+                      formatMomentTime(moment.createdAt),
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                    ),
+                    const SizedBox(height: 12),
+                    CommentSection(momentId: moment.id),
+                  ],
                 ),
-              ),
-              // 附件网格：正文下方，间距收紧。
-              if (moment.attachments.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                AttachmentGrid(
-                  attachments: attachments,
-                  onTapTile: (index) => showMediaPreview(
-                    context,
-                    attachments: attachments,
-                    initialIndex: index,
-                  ),
+                // 浮动评论输入条：随 body 一起 resize，键盘弹出时自动上移。
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: CommentInputBar(momentId: moment.id),
                 ),
               ],
-              const SizedBox(height: 6),
-              Text(
-                formatMomentTime(moment.createdAt),
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
-              ),
-              const SizedBox(height: 12),
-              CommentSection(momentId: moment.id),
-            ],
-          ),
-        );
+            ),
+          );
         },
       ),
     );

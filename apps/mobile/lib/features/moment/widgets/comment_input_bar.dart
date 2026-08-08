@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
 import '../moment_providers.dart';
 
-/// 浮动评论输入条：固定在页面底部（AI 聊天样式），键盘弹出时随 Scaffold
-/// 上移，正文滚动时始终可见。圆角容器 + 微阴影浮在底部安全区之上。
+/// 浮动评论输入条：固定在页面底部（AI 聊天样式）。
+/// 无外框装饰，直接输入框 + 发送按钮；键盘弹出时随 Scaffold body 上移。
 class CommentInputBar extends ConsumerStatefulWidget {
   const CommentInputBar({super.key, required this.momentId});
 
@@ -47,27 +47,12 @@ class _CommentInputBarState extends ConsumerState<CommentInputBar> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // 底部留出 Home Indicator 安全区（viewPadding 比 padding 更可靠，
-    // 覆盖了 SafeArea 在测试环境不生效的场景）。
+    // 底部留出 Home Indicator 安全区（viewPadding 比 padding 更可靠）。
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    return Container(
-      margin: EdgeInsets.fromLTRB(12, 6, 12, bottomInset + 14),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: scheme.outlineVariant.withValues(alpha: 0.6),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 6, 12, bottomInset + 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: TextField(

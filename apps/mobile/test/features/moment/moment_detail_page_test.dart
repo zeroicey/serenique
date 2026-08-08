@@ -189,13 +189,25 @@ void main() {
   });
 
   testWidgets('曲面屏安全距离：评论输入框不贴屏幕底边', (tester) async {
-    tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+    // viewPadding 是物理像素，dpr=3 时逻辑 34 = 物理 102。
+    tester.view.viewPadding = const FakeViewPadding(bottom: 102);
     addTearDown(tester.view.reset);
     await pumpDetail(tester, withRouter: false);
 
-    // 发送按钮底部必须在手势条（34）之上，不能贴住屏幕底边（600）。
+    // 发送按钮底部必须在手势条（逻辑 34）之上，不能贴住屏幕底边（逻辑 600）。
     final rect = tester.getRect(find.byTooltip('发送'));
     expect(rect.bottom, lessThanOrEqualTo(600 - 34));
+  });
+
+  testWidgets('键盘弹起时评论输入条跟随上移，不被输入法遮挡', (tester) async {
+    // viewInsets 是物理像素，dpr=3 时逻辑 300 = 物理 900。
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.reset);
+    await pumpDetail(tester, withRouter: false);
+
+    // 输入条底部必须位于键盘（逻辑 y=300）之上。
+    final rect = tester.getRect(find.byTooltip('发送'));
+    expect(rect.bottom, lessThanOrEqualTo(300));
   });
 
   // 附件网格：详情页正文下方显示并可打开预览
