@@ -69,16 +69,19 @@ class MomentApi {
   }
 
   /// 申请 blob 签名访问链接，返回完整 URL 与过期时间。
-  /// 对齐 Web：凭证放 query，Image.network / video_player 等媒体组件
-  /// 无需带请求头。返回的 url 已是完整链接（服务端用 request origin 拼接）。
+  /// 对齐 Web `resolveApiPath`：用相对 path + 客户端 apiBase 拼接，
+  /// 而非后端拼好的完整 url —— 路由反代（如 api.hcyj.xyz/serenique）会
+  /// 剥离前缀再转发，后端返回的 url 会丢前缀导致 404。
   Future<BlobAccessLink> createBlobAccessLink(String blobId) async {
     final data = await _client.postData('/api/blobs/$blobId/access-link',
         body: {'expiresInSeconds': 3600});
-    final url = data['url'] as String;
+    final path = data['path'] as String;
     final expires = (data['expires'] as num).toInt();
     return BlobAccessLink(
-      url: url,
+      url: '$_apiBase$path',
       expiresAt: DateTime.fromMillisecondsSinceEpoch(expires * 1000),
     );
   }
+
+  String get _apiBase => _client.apiBase;
 }
