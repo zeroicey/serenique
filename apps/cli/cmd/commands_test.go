@@ -65,29 +65,6 @@ func TestMomentCreateSendsTextField(t *testing.T) {
 	}
 }
 
-func TestDiaryCreateSendsContentAndDate(t *testing.T) {
-	var gotBody map[string]any
-	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(b, &gotBody)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"d1","diaryDate":"2026-08-04","content":"hi","createdAt":"x","updatedAt":"x"}}`))
-	}, false, func(srv *httptest.Server) {
-		diaryCreateContent = "hi"
-		diaryCreateDate = "2026-08-04"
-		if err := diaryCreateCmd.RunE(diaryCreateCmd, nil); err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	if gotBody["content"] != "hi" {
-		t.Errorf("content = %v, want hi", gotBody["content"])
-	}
-	if gotBody["diaryDate"] != "2026-08-04" {
-		t.Errorf("diaryDate = %v, want 2026-08-04", gotBody["diaryDate"])
-	}
-}
-
 func TestMomentGetDecodesAttachments(t *testing.T) {
 	var gotPath string
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -301,31 +278,6 @@ func TestInitNonInteractiveEOFWithoutFlagsFails(t *testing.T) {
 	}
 }
 
-func TestDiaryDeleteJSONEmitsIDEnvelope(t *testing.T) {
-	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}, true, func(srv *httptest.Server) {
-		rec := &recordingPrinter{}
-		printer = rec
-		diaryDeleteForce = true
-		t.Cleanup(func() { diaryDeleteForce = false })
-
-		if err := diaryDeleteCmd.RunE(diaryDeleteCmd, []string{"d1"}); err != nil {
-			t.Fatal(err)
-		}
-		if rec.lastSuccess.message != "日记已删除" {
-			t.Fatalf("message = %q, want 日记已删除", rec.lastSuccess.message)
-		}
-		data, ok := rec.lastSuccess.data.(map[string]any)
-		if !ok {
-			t.Fatalf("data is %T, want map[string]any", rec.lastSuccess.data)
-		}
-		if data["id"] != "d1" {
-			t.Fatalf("data = %+v, want id d1", data)
-		}
-	})
-}
-
 func TestMomentGetDecodesBlobSubObject(t *testing.T) {
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -496,30 +448,30 @@ func TestFlagJSONRequestedFrom(t *testing.T) {
 		args []string
 		want bool
 	}{
-		{"bare long", []string{"diary", "get", "--json"}, true},
-		{"bare short", []string{"diary", "get", "-j"}, true},
-		{"long equals true", []string{"diary", "get", "--json=true"}, true},
-		{"short equals true", []string{"diary", "get", "-j=true"}, true},
+		{"bare long", []string{"moment", "get", "--json"}, true},
+		{"bare short", []string{"moment", "get", "-j"}, true},
+		{"long equals true", []string{"moment", "get", "--json=true"}, true},
+		{"short equals true", []string{"moment", "get", "-j=true"}, true},
 		{"long numeric true", []string{"--json=1"}, true},
-		{"long equals false", []string{"diary", "get", "--json=false"}, false},
-		{"short equals false", []string{"diary", "get", "-j=false"}, false},
+		{"long equals false", []string{"moment", "get", "--json=false"}, false},
+		{"short equals false", []string{"moment", "get", "-j=false"}, false},
 		{"long numeric false", []string{"--json=0"}, false},
-		{"no flag", []string{"diary", "list"}, false},
+		{"no flag", []string{"moment", "list"}, false},
 		{"unrelated flags", []string{"--baseurl", "http://x", "list"}, false},
 		// Value-taking flags must consume the next argument so a literal "--json"
 		// or "-j" used as content is not misdetected as a flag (pflag semantics
 		// confirmed: `-m --json` sets m="--json").
-		{"json consumed as short value", []string{"diary", "create", "-m", "--json"}, false},
-		{"json consumed as long value", []string{"diary", "create", "--content", "--json"}, false},
-		{"json consumed as short flag value", []string{"diary", "create", "-m", "-j"}, false},
-		{"json embedded in value", []string{"diary", "create", "-mj"}, false},
+		{"json consumed as short value", []string{"moment", "create", "-m", "--json"}, false},
+		{"json consumed as long value", []string{"moment", "create", "--text", "--json"}, false},
+		{"json consumed as short flag value", []string{"moment", "create", "-m", "-j"}, false},
+		{"json embedded in value", []string{"moment", "create", "-mj"}, false},
 		// Combined boolean shorthands must be recognized (-fj = force+json).
 		{"combined shorthand", []string{"blob", "delete", "-fj"}, true},
 		{"combined shorthand reversed", []string{"blob", "delete", "-jf"}, true},
 		// "--" terminates flag parsing; everything after is positional.
-		{"json after terminator", []string{"diary", "create", "--", "--json"}, false},
+		{"json after terminator", []string{"moment", "create", "--", "--json"}, false},
 		// "-m -- --json": "--" is consumed as m's value, so --json is a real flag.
-		{"json after value-taken terminator", []string{"diary", "create", "-m", "--", "--json"}, true},
+		{"json after value-taken terminator", []string{"moment", "create", "-m", "--", "--json"}, true},
 		{"short flag with attached value", []string{"blob", "download", "-j=true"}, true},
 		{"short flag attached false", []string{"blob", "download", "-j=false"}, false},
 	}
@@ -541,7 +493,7 @@ func TestBlobAttachmentsShortOwnerIDDoesNotPanic(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		// ownerId is a free-form business id (min 1 char per the API schema) and
 		// may be far shorter than the 8 chars a UUID truncation would assume.
-		w.Write([]byte(`{"success":true,"message":"ok","data":[{"id":"11111111-1111-1111-1111-111111111111","blobId":"22222222-2222-2222-2222-222222222222","ownerType":"diary","ownerId":"ab","role":"attachment","displayName":null,"sortOrder":0,"metadata":{},"createdAt":"2026-08-04T00:00:00Z","updatedAt":"2026-08-04T00:00:00Z"}]}`))
+		w.Write([]byte(`{"success":true,"message":"ok","data":[{"id":"11111111-1111-1111-1111-111111111111","blobId":"22222222-2222-2222-2222-222222222222","ownerType":"event","ownerId":"ab","role":"attachment","displayName":null,"sortOrder":0,"metadata":{},"createdAt":"2026-08-04T00:00:00Z","updatedAt":"2026-08-04T00:00:00Z"}]}`))
 	}, false, func(srv *httptest.Server) {
 		if err := blobAttachmentsCmd.RunE(blobAttachmentsCmd, []string{"22222222-2222-2222-2222-222222222222"}); err != nil {
 			t.Fatalf("command failed: %v", err)
@@ -567,14 +519,14 @@ func TestListFactoryEmptyPageMessage(t *testing.T) {
 		w.Write([]byte(`{"success":true,"message":"ok","data":{"items":[],"total":42}}`))
 	}, false, func(srv *httptest.Server) {
 		page, size, all := 1, 10, false
-		lc := paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
+		lc := paginatedListCommand[client.MomentEntry](listSpec[client.MomentEntry]{
 			use:      "list",
-			short:    "列出日记",
+			short:    "列出闪念",
 			long:     "long",
-			path:     "/api/diaries",
-			emptyMsg: "暂无日记记录",
-			headers:  []string{"ID", "日期"},
-			row:      func(d DiaryEntry) map[string]string { return map[string]string{} },
+			path:     "/api/moments",
+			emptyMsg: "暂无闪念记录",
+			headers:  []string{"ID", "内容"},
+			row:      func(m client.MomentEntry) map[string]string { return map[string]string{} },
 		}, &page, &size, &all)
 		out := captureStdout(t, func() {
 			if err := lc.RunE(lc, nil); err != nil {
@@ -599,20 +551,20 @@ func TestDeleteCommandFactoryIssuesDelete(t *testing.T) {
 		rec := &recordingPrinter{}
 		printer = rec
 		force := true
-		dc := deleteCommand("delete <id>", "x", "long", "日记", false,
-			func(id string) string { return "/api/diaries/" + id }, &force)
-		if err := dc.RunE(dc, []string{"d1"}); err != nil {
+		dc := deleteCommand("delete <id>", "x", "long", "闪念", false,
+			func(id string) string { return "/api/moments/" + id }, &force)
+		if err := dc.RunE(dc, []string{"m1"}); err != nil {
 			t.Fatal(err)
 		}
-		if gotMethod != "DELETE" || gotPath != "/api/diaries/d1" {
-			t.Fatalf("request = %s %s, want DELETE /api/diaries/d1", gotMethod, gotPath)
+		if gotMethod != "DELETE" || gotPath != "/api/moments/m1" {
+			t.Fatalf("request = %s %s, want DELETE /api/moments/m1", gotMethod, gotPath)
 		}
-		if rec.lastSuccess.message != "日记已删除" {
-			t.Fatalf("message = %q, want 日记已删除", rec.lastSuccess.message)
+		if rec.lastSuccess.message != "闪念已删除" {
+			t.Fatalf("message = %q, want 闪念已删除", rec.lastSuccess.message)
 		}
 		data, ok := rec.lastSuccess.data.(map[string]any)
-		if !ok || data["id"] != "d1" {
-			t.Fatalf("data = %+v, want id d1", rec.lastSuccess.data)
+		if !ok || data["id"] != "m1" {
+			t.Fatalf("data = %+v, want id m1", rec.lastSuccess.data)
 		}
 	})
 }
@@ -674,9 +626,6 @@ func TestIsLocalOnlyCommand(t *testing.T) {
 	if !isLocalOnlyCommand(configPathCmd) {
 		t.Error("config path should be local-only")
 	}
-	if isLocalOnlyCommand(diaryCmd) {
-		t.Error("diary should not be local-only")
-	}
 	if isLocalOnlyCommand(momentCmd) {
 		t.Error("moment should not be local-only")
 	}
@@ -704,7 +653,7 @@ func TestPersistentPreRunEBuildsClientForNetworkCommands(t *testing.T) {
 	if err := config.Save(&config.Config{BaseURL: "http://", Token: ""}); err != nil {
 		t.Fatal(err)
 	}
-	if err := rootCmd.PersistentPreRunE(diaryCmd, nil); err == nil {
+	if err := rootCmd.PersistentPreRunE(momentCmd, nil); err == nil {
 		t.Fatal("expected baseurl validation failure for a network command")
 	}
 }
@@ -818,16 +767,15 @@ func TestMomentCreateSendsAttachments(t *testing.T) {
 // --all pagination (shared list factory)
 // =============================================================================
 
-// diaryPageJSON renders a fake list response with n items and the given total.
-// The item shape is diary-shaped; plumbing tests that decode it into other entry
+// momentPageJSON renders a fake list response with n items and the given total.
+// The item shape is moment-shaped; plumbing tests that decode it into other entry
 // types rely on the fact that JSON mode only counts items, not field fidelity.
-func diaryPageJSON(n, total int) string {
+func momentPageJSON(n, total int) string {
 	items := make([]map[string]any, 0, n)
 	for i := 0; i < n; i++ {
 		items = append(items, map[string]any{
-			"id":        fmt.Sprintf("diary-%d", i),
-			"diaryDate": "2026-08-04",
-			"content":   "x",
+			"id":        fmt.Sprintf("moment-%d", i),
+			"text":      "x",
 			"createdAt": "2026-08-04T00:00:00Z",
 			"updatedAt": "2026-08-04T00:00:00Z",
 		})
@@ -851,9 +799,9 @@ func TestListAllFetchesAllPages(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch page {
 		case "1", "2":
-			w.Write([]byte(diaryPageJSON(50, 120)))
+			w.Write([]byte(momentPageJSON(50, 120)))
 		case "3":
-			w.Write([]byte(diaryPageJSON(20, 120)))
+			w.Write([]byte(momentPageJSON(20, 120)))
 		default:
 			t.Errorf("unexpected page request: %q", page)
 		}
@@ -861,12 +809,12 @@ func TestListAllFetchesAllPages(t *testing.T) {
 		rec := &recordingPrinter{}
 		printer = rec
 		page, size, all := 1, 10, true
-		lc := paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
-			use: "list", short: "列出日记", long: "long",
-			path:     "/api/diaries",
-			emptyMsg: "暂无日记记录",
-			headers:  []string{"ID", "日期"},
-			row:      func(d DiaryEntry) map[string]string { return map[string]string{} },
+		lc := paginatedListCommand[client.MomentEntry](listSpec[client.MomentEntry]{
+			use: "list", short: "列出闪念", long: "long",
+			path:     "/api/moments",
+			emptyMsg: "暂无闪念记录",
+			headers:  []string{"ID", "内容"},
+			row:      func(m client.MomentEntry) map[string]string { return map[string]string{} },
 		}, &page, &size, &all)
 		if err := lc.RunE(lc, nil); err != nil {
 			t.Fatal(err)
@@ -879,7 +827,7 @@ func TestListAllFetchesAllPages(t *testing.T) {
 		if !ok {
 			t.Fatalf("data is %T, want map[string]any", rec.lastSuccess.data)
 		}
-		items, _ := data["items"].([]DiaryEntry)
+		items, _ := data["items"].([]client.MomentEntry)
 		if len(items) != 120 {
 			t.Fatalf("items = %d, want 120 (all pages combined)", len(items))
 		}
@@ -896,17 +844,17 @@ func TestListAllStopsWhenTotalCovered(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		// A full 50-item page whose total is already covered must not trigger a
 		// second page request (the accumulated-items >= total guard).
-		w.Write([]byte(diaryPageJSON(50, 50)))
+		w.Write([]byte(momentPageJSON(50, 50)))
 	}, true, func(srv *httptest.Server) {
 		rec := &recordingPrinter{}
 		printer = rec
 		page, size, all := 1, 10, true
-		lc := paginatedListCommand[DiaryEntry](listSpec[DiaryEntry]{
-			use: "list", short: "列出日记", long: "long",
-			path:     "/api/diaries",
-			emptyMsg: "暂无日记记录",
-			headers:  []string{"ID", "日期"},
-			row:      func(d DiaryEntry) map[string]string { return map[string]string{} },
+		lc := paginatedListCommand[client.MomentEntry](listSpec[client.MomentEntry]{
+			use: "list", short: "列出闪念", long: "long",
+			path:     "/api/moments",
+			emptyMsg: "暂无闪念记录",
+			headers:  []string{"ID", "内容"},
+			row:      func(m client.MomentEntry) map[string]string { return map[string]string{} },
 		}, &page, &size, &all)
 		if err := lc.RunE(lc, nil); err != nil {
 			t.Fatal(err)
@@ -915,7 +863,7 @@ func TestListAllStopsWhenTotalCovered(t *testing.T) {
 			t.Fatalf("pages requested = %v, want [1]", pages)
 		}
 		data := rec.lastSuccess.data.(map[string]any)
-		if items, _ := data["items"].([]DiaryEntry); len(items) != 50 {
+		if items, _ := data["items"].([]client.MomentEntry); len(items) != 50 {
 			t.Fatalf("items = %d, want 50", len(items))
 		}
 	})
@@ -926,7 +874,7 @@ func TestListAllAppliesExtraQueryEveryPage(t *testing.T) {
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		mimeTypes = append(mimeTypes, r.URL.Query().Get("mimeType"))
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(diaryPageJSON(50, 80)))
+		w.Write([]byte(momentPageJSON(50, 80)))
 	}, true, func(srv *httptest.Server) {
 		rec := &recordingPrinter{}
 		printer = rec

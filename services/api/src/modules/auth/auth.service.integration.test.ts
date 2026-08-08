@@ -20,10 +20,10 @@ describe.skipIf(!RUN_DB_TESTS)("auth middleware integration", () => {
 
   test("rejects no-credential and wrong-token requests with 401", async () => {
     const app = await makeAuthedApp();
-    expect((await app.request("/api/diaries")).status).toBe(401);
+    expect((await app.request("/api/moments")).status).toBe(401);
     expect(
       (
-        await app.request("/api/diaries", {
+        await app.request("/api/moments", {
           headers: { authorization: "Bearer wrong-token" },
         })
       ).status,
@@ -41,30 +41,31 @@ describe.skipIf(!RUN_DB_TESTS)("auth middleware integration", () => {
     const setCookie = login.headers.get("set-cookie") ?? "";
     const cookie = setCookie.split(";")[0];
 
-    // 带 Cookie 建日记。diary 模块按 diaryDate 唯一，固定日期第二次跑会 409，
-    // 所以在 finally 里按 id 删除本轮创建的日记，保证对持久库可重复运行。
+    // 带 Cookie 建闪念（moment 取代已移除的 diary 作为写路径验证）。
+    // 无唯一性约束，所以用唯一文本并在 finally 里按 id 删除本轮创建的记录，
+    // 保证对持久库可重复运行。
     let id: string | undefined;
     try {
-      const created = await app.request("/api/diaries", {
+      const created = await app.request("/api/moments", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           cookie,
         },
-        body: JSON.stringify({ content: "auth-e2e", diaryDate: "2026-08-06" }),
+        body: JSON.stringify({ text: `auth-e2e-${Date.now()}` }),
       });
       expect(created.status).toBe(201);
       const body = await created.json();
       id = body.data.id as string;
 
       // 带 Cookie 读回
-      const got = await app.request(`/api/diaries/${id}`, { headers: { cookie } });
+      const got = await app.request(`/api/moments/${id}`, { headers: { cookie } });
       expect(got.status).toBe(200);
-      expect((await got.json()).data.content).toBe("auth-e2e");
+      expect((await got.json()).data.text).toContain("auth-e2e");
     } finally {
-      // 幂等清理：删除本轮创建的日记（即使中间断言失败也执行）。
+      // 幂等清理：删除本轮创建的闪念（即使中间断言失败也执行）。
       if (id) {
-        await app.request(`/api/diaries/${id}`, {
+        await app.request(`/api/moments/${id}`, {
           method: "DELETE",
           headers: { cookie },
         });

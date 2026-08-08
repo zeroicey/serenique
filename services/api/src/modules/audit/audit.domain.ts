@@ -16,7 +16,6 @@ export const EVENT_MESSAGES: Record<AuditEvent, string> = {
   "auth.unauthorized": "未认证或登录已过期",
   "blob.upload": "文件上传成功",
   "blob.delete": "文件已删除",
-  "diary.delete": "日记已删除",
   "moment.delete": "闪念已删除",
   "task.delete": "任务已删除",
   "task_group.delete": "任务组已删除（含组内任务）",

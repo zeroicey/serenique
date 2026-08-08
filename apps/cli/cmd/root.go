@@ -63,12 +63,12 @@ func SetVersion(v, c, d string) {
 // rootCmd is the base command.
 var rootCmd = &cobra.Command{
 	Use:   "serenique",
-	Short: "Serenique CLI — 个人日记与笔记管理工具",
+	Short: "Serenique CLI — 个人笔记管理工具",
 	Long: `Serenique CLI 是一个命令行工具，用于与 Serenique API 服务交互。
 
 通过该工具，你可以：
-  - 管理日记（创建、查看、更新、删除）
-  - 管理闪念笔记（创建、查看、删除）
+  - 管理闪念笔记（创建、查看、更新、删除）
+  - 管理任务与事件（创建、查看、更新、删除）
   - 上传和管理文件（上传、下载、关联到业务实体）
 
 使用 "serenique [command] --help" 查看各命令的详细用法。`,
@@ -149,7 +149,7 @@ func isLocalOnlyCommand(cmd *cobra.Command) bool {
 // printed per-file messages.
 //
 // Cobra validates args and required flags before PersistentPreRunE runs, so
-// errors like `diary get --json` with a missing id occur before the printer is
+// errors like `moment get --json` with a missing id occur before the printer is
 // constructed. To keep --json mode a reliable contract for AI/scripts, --json/-j
 // is detected from os.Args up front and such early errors fall back to a JSON
 // error object on stderr instead of a plain-text line.
@@ -207,7 +207,7 @@ func renderExecutionError(err error, jsonRequested bool) {
 // JSON object on stderr.
 //
 // The scan mirrors pflag's arity rules so it neither reports a false positive
-// (a literal "--json" consumed as the value of a preceding flag, e.g. `diary
+// (a literal "--json" consumed as the value of a preceding flag, e.g. `moment
 // create -m --json`) nor misses a false negative (combined boolean shorthands
 // like `blob delete -fj`). Values are parsed with strconv.ParseBool to mirror
 // pflag's accepted boolean spellings (1, t, true, 0, f, false...). An
@@ -336,7 +336,6 @@ func init() {
 	// Register subcommands
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(diaryCmd)
 	rootCmd.AddCommand(momentCmd)
 	rootCmd.AddCommand(blobCmd)
 	rootCmd.AddCommand(taskCmd)

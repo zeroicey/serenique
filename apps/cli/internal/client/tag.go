@@ -7,7 +7,7 @@ import (
 
 // TagOwnerTypeMoment is the ownerType value for moments — the only type in the
 // API's owner-type registry today (tag.domain.ts). The registry will grow as
-// diary/event/task start attaching tags.
+// event/task start attaching tags.
 const TagOwnerTypeMoment = "moment"
 
 // TagEntry mirrors the API's TagEntry response (tag.types.ts). MomentCount is

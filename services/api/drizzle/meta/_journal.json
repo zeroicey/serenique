@@ -85,6 +85,13 @@
       "when": 1786201871105,
       "tag": "0011_strange_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786207632332,
+      "tag": "0012_drop_diaries",
+      "breakpoints": true
     }
   ]
 }

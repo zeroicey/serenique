@@ -1,6 +1,6 @@
 # Serenique CLI
 
-Serenique 命令行工具，用于与 [Serenique API](../services/api/) 交互。支持日记管理、闪念笔记、文件上传下载等全部功能。
+Serenique 命令行工具，用于与 [Serenique API](../services/api/) 交互。支持闪念笔记、任务、事件、文件上传下载等全部功能。
 
 设计灵感来自 GitHub 的 `gh` CLI 工具，既适合开发者手动使用，也适合 AI Agent 通过命令行调用。
 
@@ -63,21 +63,20 @@ export SERENIQUE_TOKEN=your-token-here
 
 ```sh
 serenique --help          # 根命令帮助
-serenique diary --help    # 日记模块帮助
-serenique diary create --help  # 具体命令帮助（含使用示例）
+serenique moment --help   # 闪念模块帮助
+serenique moment create --help  # 具体命令帮助（含使用示例）
 ```
 
 ### 3. 开始使用
 
 ```sh
-# 创建今天的日记
-serenique diary create -m "今天完成了项目的第一阶段开发..."
-
-# 查看日记列表
-serenique diary list
-
 # 创建一条闪念笔记
-serenique moment create -m "突然想到一个好主意"
+serenique moment create -m "今天完成了项目的第一阶段开发..."
+
+# 查看闪念列表
+serenique moment list
+
+# 上传文件
 
 # 上传文件
 serenique blob upload photo.jpg
@@ -105,30 +104,6 @@ serenique init              # 交互式初始化配置
 serenique config            # 查看当前配置
 serenique config set <key> <value>  # 修改配置项
 serenique config path       # 显示配置文件路径
-```
-
-### 日记管理
-
-```sh
-# 列出日记
-serenique diary list
-serenique diary list --all        # 一次返回全部记录（自动翻页）
-serenique diary list --page 1 --page-size 50
-serenique diary list --json       # JSON 输出
-
-# 创建日记
-serenique diary create -m "日记内容"
-serenique diary create -m "补昨天的日记" --date 2026-08-03
-
-# 查看详情
-serenique diary get <日记ID>
-
-# 更新日记
-serenique diary update <日记ID> -m "新的内容"
-
-# 删除日记（需要确认）
-serenique diary delete <日记ID>
-serenique diary delete <日记ID> --force  # 跳过确认
 ```
 
 ### 闪念管理
@@ -218,8 +193,8 @@ serenique blob delete <文件ID> --force
 
 # 将文件关联到业务实体
 serenique blob attach <文件ID> \
-  --owner-type diary \
-  --owner-id <日记ID> \
+  --owner-type event \
+  --owner-id <事件ID> \
   --role cover \
   --display-name "封面图"
 
@@ -265,8 +240,8 @@ CLI 工具同样为 AI Agent 设计，建议 AI 采用以下模式调用：
 serenique --help
 
 # 2. 了解特定模块
-serenique diary --help
-serenique diary create --help
+serenique moment --help
+serenique moment create --help
 
 # 3. 配置连接（如果尚未配置）
 serenique init --baseurl http://localhost:3000
@@ -277,8 +252,8 @@ serenique init --baseurl http://localhost:3000
 使用 `--json` / `-j` 标志获取结构化输出，便于程序解析：
 
 ```sh
-# 查询日记列表
-serenique diary list --json
+# 查询闪念列表
+serenique moment list --json
 
 # 上传文件并获取 ID
 serenique blob upload image.png --json
@@ -308,9 +283,9 @@ token: ""
 `SERENIQUE_CONFIG_DIR` 环境变量指定配置目录（该目录下的 `config.yaml` 会被使用）：
 
 ```sh
-serenique --config /path/to/myconfig.yaml diary list
+serenique --config /path/to/myconfig.yaml moment list
 export SERENIQUE_CONFIG_DIR=/path/to/config-dir
-serenique diary list
+serenique moment list
 ```
 
 配置优先级（从高到低）：
@@ -345,7 +320,6 @@ apps/cli/
 │   ├── root.go              # 根命令 + 全局选项
 │   ├── init.go              # serenique init
 │   ├── config.go            # serenique config
-│   ├── diary.go             # serenique diary
 │   ├── moment.go            # serenique moment
 │   ├── blob.go              # serenique blob
 │   └── task.go              # serenique task

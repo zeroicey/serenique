@@ -233,8 +233,8 @@ func TestTagAttachRejectsUnknownOwnerType(t *testing.T) {
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Error("server should not be reached for an unsupported owner-type")
 	}, true, func(srv *httptest.Server) {
-		tagAttachOwnerType = "diary"
-		tagAttachOwnerID = "d1"
+		tagAttachOwnerType = "event"
+		tagAttachOwnerID = "e1"
 		t.Cleanup(func() { tagAttachOwnerType, tagAttachOwnerID = "", "" })
 		err := tagAttachCmd.RunE(tagAttachCmd, []string{"t1"})
 		if err == nil {
@@ -278,7 +278,7 @@ func TestValidateTagOwnerType(t *testing.T) {
 	if err := validateTagOwnerType(client.TagOwnerTypeMoment); err != nil {
 		t.Fatalf("moment owner-type rejected: %v", err)
 	}
-	for _, bad := range []string{"", "diary", "MOMENT", "event"} {
+	for _, bad := range []string{"", "task", "MOMENT", "event"} {
 		if err := validateTagOwnerType(bad); err == nil {
 			t.Errorf("validateTagOwnerType(%q) should fail", bad)
 		}

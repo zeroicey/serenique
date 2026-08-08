@@ -183,7 +183,7 @@ var (
 
 // validateTagOwnerType rejects an owner-type outside the API's registry
 // (moment is the only registered type today; the registry grows as
-// diary/event/task start attaching tags). Checked up front so a typo'd
+// event/task start attaching tags). Checked up front so a typo'd
 // --owner-type fails with an actionable message instead of a server-side
 // validation error.
 func validateTagOwnerType(s string) error {

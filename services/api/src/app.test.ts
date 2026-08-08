@@ -44,7 +44,7 @@ describe("REST contract smoke", () => {
 
   test("malformed JSON body maps to 400, not 500", async () => {
     const app = await makeApp();
-    const res = await app.request("/api/diaries", {
+    const res = await app.request("/api/moments", {
       method: "POST",
       headers: { ...AUTH, "content-type": "application/json" },
       body: "{ not valid json",
@@ -78,11 +78,10 @@ describe("REST contract smoke", () => {
   test("invalid UUID path params map to 400 VALIDATION, not 500", async () => {
     // Handlers validate the :id/:attachmentId param as a UUID before touching
     // the DB, so a malformed id must never surface as an unrelated 500 from a
-    // database query. Regression for the diary/blob handlers, which used to
+    // database query. Regression for the moment/blob handlers, which used to
     // pass any non-empty string straight through to the service.
     const app = await makeApp();
     const badRequests: Array<{ path: string; method?: string }> = [
-      { path: "/api/diaries/not-a-uuid" },
       { path: "/api/moments/not-a-uuid" },
       { path: "/api/tasks/not-a-uuid" },
       { path: "/api/task-groups/not-a-uuid" },

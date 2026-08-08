@@ -145,7 +145,7 @@ func printCreateResult(jsonMessage string, jsonData any, tableMessage string, kv
 // deleteCommand builds a "delete <id>" subcommand that confirms the destructive
 // action (unless --force), issues the DELETE, and renders the result. noun is
 // the Chinese resource label used in the confirmation prompt and success message
-// (e.g. "日记"); permanent words the prompt as "确认永久删除"; apiPath maps the
+// (e.g. "闪念"); permanent words the prompt as "确认永久删除"; apiPath maps the
 // id to the API path; force receives the --force flag value. Keeps the three
 // delete commands' confirmation + call + render scaffolding in one place.
 func deleteCommand(use, short, long, noun string, permanent bool, apiPath func(id string) string, force *bool) *cobra.Command {

@@ -94,8 +94,8 @@ describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
       detail: { it: RUN_TOKEN },
     });
     await auditService.record({
-      event: "diary.delete",
-      message: "日记已删除",
+      event: "moment.delete",
+      message: "闪念已删除",
       level: "warn",
       detail: { it: RUN_TOKEN, n: 2 },
     });
@@ -236,8 +236,8 @@ describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
     const ipB = `it-${RUN_TOKEN}-unauth-b`;
 
     // 同一 IP 两次 401 → 只写一条
-    expect((await app.request("/api/diaries", { headers: { "cf-connecting-ip": ipA } })).status).toBe(401);
-    expect((await app.request("/api/diaries", { headers: { "cf-connecting-ip": ipA } })).status).toBe(401);
+    expect((await app.request("/api/moments", { headers: { "cf-connecting-ip": ipA } })).status).toBe(401);
+    expect((await app.request("/api/moments", { headers: { "cf-connecting-ip": ipA } })).status).toBe(401);
     const rowsA = await waitForAuditRows(
       and(eq(auditLogs.event, "auth.unauthorized"), eq(auditLogs.ip, ipA)),
     );
@@ -246,7 +246,7 @@ describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
     track(rowsA[0]);
 
     // 不同 IP → 再写一条
-    expect((await app.request("/api/diaries", { headers: { "cf-connecting-ip": ipB } })).status).toBe(401);
+    expect((await app.request("/api/moments", { headers: { "cf-connecting-ip": ipB } })).status).toBe(401);
     const rowsB = await waitForAuditRows(
       and(eq(auditLogs.event, "auth.unauthorized"), eq(auditLogs.ip, ipB)),
     );

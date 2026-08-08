@@ -163,7 +163,7 @@ func TestShortIDToleratesShortAndLongInput(t *testing.T) {
 }
 
 // TestPrefixToleratesShortInput guards the ID/timestamp table truncation sites
-// (diary/moment/blob list, attachment rows): a future server contract change
+// (moment/blob list, attachment rows): a future server contract change
 // returning a shorter value must not panic the renderer. Unlike shortID, no
 // ellipsis is appended — a truncated timestamp column should not gain "...".
 func TestPrefixToleratesShortInput(t *testing.T) {

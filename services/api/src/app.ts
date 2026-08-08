@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "@/env";
 import { cors, logger } from "@/middleware";
-import { diaryRouter } from "@/modules/diary";
 import { momentRouter } from "@/modules/moment";
 import { blobRouter } from "@/modules/blob";
 import { taskRouter } from "@/modules/task";
@@ -45,7 +44,7 @@ export function createApp(env: Env) {
   app.get("/health", (c) => Res.ok("服务运行中", { status: "ok" }).build(c));
   app.get("/", (c) =>
     Res.ok("Serenique API", {
-      modules: ["diary", "moment", "blob", "task", "event", "audit", "tags"],
+      modules: ["moment", "blob", "task", "event", "audit", "tags"],
     }).build(c),
   );
 
@@ -54,7 +53,6 @@ export function createApp(env: Env) {
   //
   app.use("/api/*", authMiddleware);
   app.route("/api", authRouter);
-  app.route("/api", diaryRouter);
   app.route("/api", momentRouter);
   app.route("/api", blobRouter);
   app.route("/api", taskRouter);

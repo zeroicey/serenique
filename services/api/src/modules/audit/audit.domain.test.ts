@@ -67,7 +67,6 @@ describe("event registry + message building", () => {
       "auth.unauthorized",
       "blob.upload",
       "blob.delete",
-      "diary.delete",
       "moment.delete",
       "task.delete",
       "task_group.delete",

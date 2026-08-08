@@ -11,10 +11,10 @@ describe("RecordAuditSchema", () => {
     setTestEnv();
     const { RecordAuditSchema } = await import("./audit.types");
     const parsed = RecordAuditSchema.parse({
-      event: "diary.delete",
-      message: "日记已删除",
+      event: "moment.delete",
+      message: "闪念已删除",
     });
-    expect(parsed).toEqual({ event: "diary.delete", message: "日记已删除", level: "info" });
+    expect(parsed).toEqual({ event: "moment.delete", message: "闪念已删除", level: "info" });
   });
 
   test("accepts the full payload (source / ip / detail)", async () => {

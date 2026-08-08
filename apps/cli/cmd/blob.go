@@ -327,11 +327,11 @@ var blobDeleteForce bool
 var blobAttachCmd = &cobra.Command{
 	Use:   "attach <blob-id>",
 	Short: "创建业务关联",
-	Long: `将文件关联到业务实体（如日记、闪念等）。
+	Long: `将文件关联到业务实体（如事件、任务等）。
 
 示例:
-  serenique blob attach a1b2c3d4 --owner-type diary --owner-id b2c3d4e5
-  serenique blob attach a1b2c3d4 --owner-type diary --owner-id b2c3d4e5 --role cover --display-name "封面图"`,
+  serenique blob attach a1b2c3d4 --owner-type event --owner-id b2c3d4e5
+  serenique blob attach a1b2c3d4 --owner-type event --owner-id b2c3d4e5 --role cover --display-name "封面图"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// The API reserves the "moment" owner type for the moment module.
@@ -438,7 +438,7 @@ var blobDetachCmd = &cobra.Command{
 	Short: "删除业务关联",
 	Long: `删除一条业务关联记录。此操作仅删除引用，不会删除物理文件。
 
-仅支持非 moment 类型的业务关联（如 diary 等）。闪念 (moment) 的附件请使用:
+仅支持非 moment 类型的业务关联（如 event、task 等）。闪念 (moment) 的附件请使用:
   serenique moment detach <moment-id> <attachment-id>
 
 示例:

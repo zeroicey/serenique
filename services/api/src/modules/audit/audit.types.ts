@@ -14,7 +14,6 @@ export const AUDIT_EVENTS = [
   "auth.unauthorized",
   "blob.upload",
   "blob.delete",
-  "diary.delete",
   "moment.delete",
   "task.delete",
   "task_group.delete",

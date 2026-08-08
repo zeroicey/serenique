@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { events } from "@/modules/event/event.schema";
-import { diaries } from "@/modules/diary/diary.schema";
 import { moments } from "@/modules/moment/moment.schema";
 import { blobs } from "@/modules/blob/blob.schema";
 import { tasks, taskGroups } from "@/modules/task/task.schema";
@@ -75,19 +74,6 @@ export function titlePrefix(tag: string): string {
 }
 
 // ---- Row factories (for mapper / domain unit tests) -------------------------
-
-export function fakeDiaryRow(
-  overrides: Partial<typeof diaries.$inferSelect> = {},
-): typeof diaries.$inferSelect {
-  return {
-    id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f0001",
-    diaryDate: "2026-08-05",
-    content: "测试日记内容",
-    createdAt: new Date("2026-08-05T12:00:00.000Z"),
-    updatedAt: new Date("2026-08-05T12:00:00.000Z"),
-    ...overrides,
-  };
-}
 
 export function fakeMomentRow(
   overrides: Partial<typeof moments.$inferSelect> = {},

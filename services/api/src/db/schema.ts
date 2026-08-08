@@ -3,7 +3,6 @@
 // Drizzle Kit reads this file to generate migrations.
 // ---------------------------------------------------------------------------
 
-export { diaries } from "@/modules/diary/diary.schema";
 export { moments } from "@/modules/moment/moment.schema";
 export { momentComments } from "@/modules/moment/comment.schema";
 export { blobs, blobAttachments } from "@/modules/blob/blob.schema";

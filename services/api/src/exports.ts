@@ -6,24 +6,6 @@
 // External consumers import from "@serenique/api" (the package entry point).
 // ---------------------------------------------------------------------------
 
-// ---- Diary module ----
-export { diaryService } from "@/modules/diary/diary.service";
-export type {
-  DiaryEntry,
-  CreateDiaryInput,
-  ListDiaryInput,
-  GetDiaryInput,
-  GetDiaryByDateInput,
-  UpdateDiaryInput,
-  DeleteDiaryInput,
-} from "@/modules/diary/diary.types";
-export {
-  CreateDiarySchema,
-  GetDiaryByDateSchema,
-  ListDiarySchema,
-  UpdateDiaryBodySchema,
-} from "@/modules/diary/diary.types";
-
 // ---- Moment module ----
 export { momentService } from "@/modules/moment/moment.service";
 export { momentCommentService } from "@/modules/moment/comment.service";

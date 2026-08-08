@@ -263,7 +263,7 @@ func (c *Client) Put(ctx context.Context, path string, body any, result any) err
 
 // Delete sends a DELETE request. Returns nil on success (204 or 200).
 //
-// The API's Res.noContent endpoints (diary delete, moment delete, moment
+// The API's Res.noContent endpoints (moment delete, moment
 // detach) send HTTP 204 with a JSON body — a protocol violation: 204 is
 // bodyless, so Go hides resp.Body (NoBody) and the real bytes stay unread on
 // the connection. If that connection were returned to the keep-alive pool, the

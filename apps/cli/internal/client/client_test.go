@@ -41,7 +41,7 @@ func TestGetUnmarshalsData(t *testing.T) {
 		ID      string `json:"id"`
 		Content string `json:"content"`
 	}
-	if err := c.Get(context.Background(), "/api/diaries/x", nil, &out); err != nil {
+	if err := c.Get(context.Background(), "/api/moments/x", nil, &out); err != nil {
 		t.Fatal(err)
 	}
 	if out.ID != "abc" || out.Content != "hello" {
@@ -52,10 +52,10 @@ func TestGetUnmarshalsData(t *testing.T) {
 func TestGetMapsAPIError(t *testing.T) {
 	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"success":false,"message":"日记不存在","error":{"code":"NOT_FOUND"}}`))
+		w.Write([]byte(`{"success":false,"message":"闪念不存在","error":{"code":"NOT_FOUND"}}`))
 	})
 
-	err := c.Get(context.Background(), "/api/diaries/nope", nil, nil)
+	err := c.Get(context.Background(), "/api/moments/nope", nil, nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -66,8 +66,8 @@ func TestGetMapsAPIError(t *testing.T) {
 	if apiErr.HTTPStatus != 404 {
 		t.Fatalf("HTTPStatus = %d, want 404", apiErr.HTTPStatus)
 	}
-	if apiErr.Message != "日记不存在" {
-		t.Fatalf("Message = %q, want %q", apiErr.Message, "日记不存在")
+	if apiErr.Message != "闪念不存在" {
+		t.Fatalf("Message = %q, want %q", apiErr.Message, "闪念不存在")
 	}
 }
 
@@ -75,7 +75,7 @@ func TestDeleteNoContent(t *testing.T) {
 	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	if err := c.Delete(context.Background(), "/api/diaries/x"); err != nil {
+	if err := c.Delete(context.Background(), "/api/moments/x"); err != nil {
 		t.Fatal(err)
 	}
 }
