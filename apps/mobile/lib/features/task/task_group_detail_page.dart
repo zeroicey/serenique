@@ -45,9 +45,9 @@ class TaskGroupDetailPage extends ConsumerWidget {
                   task: t,
                   groupTitle: '',
                   showOverdue: t.status == 'todo',
-                  onToggle: () {
-                    ref.read(taskActionsProvider).toggleDone(t.id, t.status != 'done');
-                    ref.invalidate(groupTasksProvider(groupId)); // 家族 provider 不走全局 invalidate
+                  onToggle: () async {
+                    await ref.read(taskActionsProvider).toggleDone(t.id, t.status != 'done');
+                    if (context.mounted) ref.invalidate(groupTasksProvider(groupId)); // 家族 provider 不走全局 invalidate
                   },
                   onTap: () async {
                     await showTaskEditSheet(context, task: t);
