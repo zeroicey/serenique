@@ -1,7 +1,7 @@
 # 日记模块并入 Moment（用「日记」标签替代）需求文档
 
 - 日期：2026-08-08
-- 状态：✅已实施（数据迁移完成；模块代码移除为后续开发任务）
+- 状态：✅已实施（2026-08-09 模块代码移除 + 生产部署 + DROP TABLE 全部完成）
 - 范围：数据迁移（Notion → 生产库 Moments）、后续模块开发（services/api diary 模块移除、客户端同步）
 - 前置记录：`2026-08-05-diary-content-forms.md`（被本需求取代，日记不再扩展内容形态）、`2026-08-08-api-tag-module.md`（标签模块）、`2026-08-05-notion-diary-import.md`（第一轮 Notion 导入）
 
@@ -28,11 +28,13 @@ Notion「🔥 Diary」库 38 篇 + 生产库 diaries 表 5 篇应用内日记 �
 | ⑦ | 旧数据清理 | 迁移完成后删除 diaries 表全部 28 行（23 篇 08-05 导入 + 5 篇应用内日记），内容已完整进入 Moments |
 | ⑧ | 6 月旧应用日记 | 06-23 / 06-29 / 06-30 / 07-01 四篇（Notion 无对应，开发期应用内所写）一并迁成带「日记」标签的 Moment，createdAt 保持原值 |
 
-## 3. 后续开发任务（未做）
+## 3. 模块移除（2026-08-09 已完成）
 
-- 移除 `services/api/src/modules/diary/` 模块（schema/service/handler/router + db/schema.ts 导出 + app.ts 挂载 + exports.ts 导出 + drizzle 表删除迁移）
-- CLI / Web / 移动端 diary 相关命令与页面下线
-- MCP 工具面同步（若 diary 有暴露）
+- commit `2e57031`（feat!）：api 删 `modules/diary/` 整目录 + exports/app/schema/audit diary.delete 事件 + auth e2e 改用 moment；mcp 删 diary 工具；cli 删 diary 命令树 + README；web/mobile 删 diary feature（并行会话已先完成）
+- 迁移 `drizzle/0012_drop_diaries.sql`（`DROP TABLE "diaries" CASCADE`）
+- 生产：hpcore 部署新镜像（digest `34f5aa23…`）→ `/api/diaries*` 404 → psql DROP TABLE + 记入 `__drizzle_migrations`（id=13）
+- 验证：root typecheck ✓、api 229 测试 0 fail、mcp 7 pass、cli build/vet/test 全绿；`/api/moments` 正常
+- 遗留：tag 注册表跨文件泄漏导致全量跑集成测试 1 fail（既有问题，未修）
 
 ## 4. 数据源参考
 
