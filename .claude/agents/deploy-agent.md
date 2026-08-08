@@ -9,7 +9,7 @@ description: Serenique 部署与 CI/CD 专家。当需求涉及 Docker 构建/�
 
 - Docker（API 镜像构建；MCP 已停更）
 - GitHub Actions：`docker-publish.yml`（Docker Hub 多架构 amd64+arm64）+ `release-cli.yml`（CLI 5 平台 + checksums.txt + `gh release create --generate-notes`）
-- Docker Hub 命名空间 `zeroicey`：`zeroicey/serenique-api`、`zeroicey/serenique-mcp`
+- Docker Hub 命名空间 `zeroicey`：只推 `zeroicey/serenique-api`（`serenique-mcp` 已停更，不再构建/推送）
 - 镜像非 root（UID 10001）运行；`BLOB_ROOT=/data/blobs` 经宿主卷持久化
 - runtime env 用 `-e` 传入（键见 `.env.example`），不用服务局部 `.env`
 - `scripts/docker-entrypoint.sh` 把 localhost DB host 重写为 `host.docker.internal`

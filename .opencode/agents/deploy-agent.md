@@ -10,7 +10,7 @@ You are Serenique's deployment and CI/CD expert (Deploy Agent).
 
 - Docker (API image builds; MCP is sunset)
 - GitHub Actions: `docker-publish.yml` (Docker Hub multi-arch amd64+arm64) + `release-cli.yml` (CLI 5 platforms + checksums.txt + `gh release create --generate-notes`)
-- Docker Hub namespace `zeroicey`: `zeroicey/serenique-api`, `zeroicey/serenique-mcp`
+- Docker Hub namespace `zeroicey`: `zeroicey/serenique-api` only (`serenique-mcp` no longer built/pushed — MCP sunset)
 - Images run as non-root (UID 10001); `BLOB_ROOT=/data/blobs` persisted via a host volume
 - Runtime env passed via `-e` flags (keys in `.env.example`), no service-local `.env`
 - `scripts/docker-entrypoint.sh` rewrites the localhost DB host to `host.docker.internal`

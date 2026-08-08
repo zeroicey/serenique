@@ -7,7 +7,7 @@
 | Agent | 文件 | 领域 | 触发信号 |
 |---|---|---|---|
 | API Agent | `api-agent.md` | `services/api`（Bun + Hono + Drizzle） | REST 端点、表/迁移、服务层、校验、测试、`exports.ts` |
-| MCP Agent | `mcp-agent.md` | `services/mcp`（MCP SDK + streamable-http） | 新工具、工具暴露面、把 service 能力接入 AI |
+| MCP Agent（已停用） | `mcp-agent.md` | `services/mcp` — 已停更冻结（08-08 sunset） | **不要派发 — MCP 已冻结** |
 | CLI Agent | `cli-agent.md` | `apps/cli`（Go + cobra） | 命令功能、新增模块、配置、输出、传输 |
 | Web Agent | `web-agent.md` | `apps/web`（React 19 + Vite + shadcn/ui） | 页面、路由、feature、表单、服务端状态 |
 | Deploy Agent | `deploy-agent.md` | Docker / GitHub Actions / 发布 | 镜像、compose、CI 工作流、tag 发布、服务器 |
@@ -15,7 +15,7 @@
 
 ## 队长工作流
 
-1. **拆解**：理解需求，识别受影响子系统（一个需求常跨多个端，如新增模块 → API + MCP + CLI + Web）
+1. **拆解**：理解需求，识别受影响子系统（一个需求常跨多个端，如新增模块 → API + CLI + Web）。**`services/mcp` 已停更冻结（08-08 sunset），永远不是受影响子系统** ——「AI 工具暴露」类需求改走 CLI 或 API 服务层
 2. **定契约**：以 `services/api` 工作区源码为锚点锁定跨端契约（字段名、响应结构、`exports.ts` 导出面）
 3. **派发**：对受影响子系统**并行**派发对应 Agent（同一消息内多个 Agent 调用即并行）
 4. **验收**：核对各 Agent 返回的改动与契约一致；跑各端验证（typecheck / test / build）

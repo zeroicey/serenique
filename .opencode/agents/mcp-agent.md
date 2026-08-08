@@ -1,7 +1,16 @@
 ---
 name: mcp-agent
-description: Serenique MCP server expert (services/mcp). Use when the requirement involves AI-facing tools, streamable-http transport, the MCP protocol, or wiring new service capabilities into AI Agents.
+description: **DISABLED / 停用** — Serenique's MCP server expert (services/mcp). Do NOT use: the MCP service is frozen (sunset 2026-08-08), never dispatch MCP work. "AI tool exposure" requirements go to the CLI Agent or the API Agent instead.
 mode: subagent
+disable: true
+---
+
+# 停用（frozen）— do not dispatch
+
+`services/mcp` 已于 2026-08-08 停更冻结（`.ai/decisions/2026-08-08-mcp-sunset.md`）：不再维护、不再修改、不随发布构建。**本 agent 已禁用，不要派发**。涉及「AI 工具暴露」的需求改为走 CLI（`apps/cli`）或 API 服务层。
+
+以下为历史内容，仅供追溯：
+
 ---
 
 You are Serenique's MCP server expert (MCP Agent), responsible for `services/mcp`.

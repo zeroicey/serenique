@@ -8,7 +8,7 @@ Monorepo with two kinds of packages:
 
 - `services/` — server-side processes:
   - `services/api` — REST API (Bun + Hono + Drizzle + PostgreSQL)
-  - `services/mcp` — MCP server exposing the API's service layer to AI agents
+  - `services/mcp` — MCP server exposing the API's service layer to AI agents (**frozen — do not modify or schedule work on it**, see `.ai/decisions/2026-08-08-mcp-sunset.md`)
 - `apps/` — client applications:
   - `apps/cli` — Go CLI client (cobra), modeled after GitHub `gh`, for use by humans and AI agents
 
@@ -49,13 +49,13 @@ Serenique uses a "captain + domain-expert agent" collaboration model: the **main
 | Agent | File | Domain |
 |-------|------|--------|
 | API Agent | `.opencode/agents/api-agent.md` | `services/api`: REST, data models, service layer, tests, `exports.ts` |
-| MCP Agent | `.opencode/agents/mcp-agent.md` | `services/mcp`: AI tool exposure, streamable-http |
+| MCP Agent (disabled) | `.opencode/agents/mcp-agent.md` | `services/mcp` — frozen (MCP sunset 08-08); **do not dispatch** |
 | CLI Agent | `.opencode/agents/cli-agent.md` | `apps/cli`: Go CLI client |
 | Web Agent | `.opencode/agents/web-agent.md` | `apps/web`: React browser client |
 | Deploy Agent | `.opencode/agents/deploy-agent.md` | Docker, GitHub Actions, releases, servers |
 | Flutter Agent | `.opencode/agents/flutter-agent.md` | Flutter mobile (iOS/Android, planned) |
 
-Dispatch rules: a single requirement often touches multiple subsystems (e.g. "adding a drive module" affects API + MCP + CLI + Web). The captain first decomposes the affected subsystems, then **dispatches agents in parallel** (multiple Task tool calls in one message = parallel), each developing in its own domain; the captain owns cross-client contract alignment (with the `services/api` source as the source of truth: field names, response shapes, `exports.ts` export surface) and final acceptance. Manual invocation is possible via `@agent-name` in the conversation.
+Dispatch rules: a single requirement often touches multiple subsystems (e.g. "adding a drive module" affects API + CLI + Web). **`services/mcp` is frozen (sunset 2026-08-08) and is never an affected subsystem** — "AI tool exposure" requirements go through the CLI or the API service layer instead. The captain first decomposes the affected subsystems, then **dispatches agents in parallel** (multiple Task tool calls in one message = parallel), each developing in its own domain; the captain owns cross-client contract alignment (with the `services/api` source as the source of truth: field names, response shapes, `exports.ts` export surface) and final acceptance. Manual invocation is possible via `@agent-name` in the conversation.
 
 All agents share the captain's permissions (omitting the `permission` field = inheriting all tools), are restricted to each client's current tech stack, and are required to use the project memory (read `.ai/` before starting work, write to the worklog after finishing). See `.opencode/agents/README.md` for the team charter and `.ai/decisions/2026-08-06-ai-agent-team.md` for the decision record.
 
@@ -112,7 +112,7 @@ The runtime environment is passed via `docker run -e` flags (expected keys in `.
 ```
 apps/cli/             Go CLI client (cobra) — see "CLI module" below
 services/api/         REST API — Bun + Hono + Drizzle + PostgreSQL
-services/mcp/         MCP server exposing the API service layer via streamable-http
+services/mcp/         MCP server exposing the API service layer via streamable-http (frozen — see sunset decision)
 scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.docker.internal)
 .ai/                  Project memory: worklog/ architecture/ decisions/ requirements/ runbooks/ archive/ inbox/
 ```
@@ -187,7 +187,7 @@ Each module is a self-contained Hono instance, assembled in `app.ts` via `app.ro
 - **Path aliases:** `@/*` → `./src/*` (configured in tsconfig.json)
 - **Database:** the whole repo uses only the single `db` export from `db/connection.ts`; no second connection pool is allowed. The central `db/schema.ts` re-exports all table definitions — Drizzle Kit reads this file, so every new table must be exported there
 - **env in services:** services that need environment variables (e.g. `blob.service.ts` needs `BLOB_ROOT`/`BLOB_MAX_SIZE`) import directly from `@/env` — allowed when the service is tightly coupled to environment config
-- **Workspace exports:** `src/exports.ts` is the `@serenique/api` package entry point — re-exports the service layer, Zod schemas, and shared utilities (no handler/router/middleware). MCP consumes the API through it (`import { ... } from "@serenique/api"`). Keep the export surface small and typed; external consumers share the same DB connection
+- **Workspace exports:** `src/exports.ts` is the `@serenique/api` package entry point — re-exports the service layer, Zod schemas, and shared utilities (no handler/router/middleware). Keep the export surface small and typed; external consumers share the same DB connection
 
 ### Blob module (low-level binary storage)
 
@@ -237,7 +237,7 @@ The blob module serves as a **shared storage layer** for other modules (diary, m
 | GET, POST | `/api/events` | Event list (`?from=&to=` time window, **bare array**) / create |
 | GET, PUT, DELETE | `/api/events/:id` | Event detail / partial update / delete |
 
-Field naming pitfall: diary uses `content`/`diaryDate`, but moment uses `text` — don't mix them up. The CLI contract (and MCP) follows the API source: the moment body is `{ "text": ... }`. event uses `title`/`startAt`/`endAt`/`isAllDay`/`location`/`note`; its list returns a **bare array** for time-window queries (not `{ items, total }`).
+Field naming pitfall: diary uses `content`/`diaryDate`, but moment uses `text` — don't mix them up. The CLI contract follows the API source: the moment body is `{ "text": ... }`. event uses `title`/`startAt`/`endAt`/`isAllDay`/`location`/`note`; its list returns a **bare array** for time-window queries (not `{ items, total }`).
 
 User-visible messages must be in Chinese.
 
@@ -251,9 +251,9 @@ Single shared-secret authentication: all clients use the high-entropy `AUTH_TOKE
 - **Key rotation = all clients invalidated:** after changing `.env` and restarting, old session cookies and old Bearer tokens all become invalid; there is no session table to clear
 - Session cookies default to 30 days (`SESSION_TTL`, in seconds). Production cross-origin setups (e.g. pages.dev → api.zeroicey.me) need `CORS_ORIGIN` explicitly set to the web domain — credentialed cross-origin requests do not allow `*`
 
-### services/mcp
+### services/mcp (frozen)
 
-A Bun + `@modelcontextprotocol/sdk` server that exposes diary/moment/blob operations to AI agents via **streamable-http** at `/mcp` (port 3001). It calls the API service layer directly through the `@serenique/api` workspace package (same DB), without going over HTTP. Tools are defined in `src/tools/*.tools.ts` and registered in `src/server.ts`.
+**停更冻结（sunset — see `.ai/decisions/2026-08-08-mcp-sunset.md`）**: the code stays in the repo but is **not maintained, not built, not deployed, and not modified**. Never schedule requirements, fixes, or tool changes for `services/mcp`, and do not "keep it compiling" when the API surface changes — nothing consumes it anymore. "AI tool exposure" requirements go through the CLI (`apps/cli`) or the API service layer. (Historical context: it was a Bun + `@modelcontextprotocol/sdk` server calling the API service layer via `@serenique/api`.)
 
 ### CLI module (`apps/cli`)
 
@@ -280,7 +280,7 @@ Adding a new module (e.g. drive): `internal/client/drive.go` (typed methods) →
 Versions come from git tags (`vX.Y.Z`) — the CLI's `--version` is injected from the tag (`git describe --tags` / `GITHUB_REF_NAME` in CI), so **tagging is a prerequisite for releases**. All releases go through GitHub Actions, in two steps:
 
 ```sh
-# 1. Commit and push main → docker-publish pushes zeroicey/serenique-{api,mcp}:main
+# 1. Commit and push main → docker-publish pushes zeroicey/serenique-api:main (MCP image no longer built — sunset)
 git push origin main
 
 # 2. Tag a version and push → triggers both docker-publish (version tag + latest) and release-cli (GitHub Release)
@@ -290,7 +290,7 @@ git push origin vX.Y.Z
 
 - `.github/workflows/docker-publish.yml` — multi-arch (linux/amd64+arm64) builds pushed to Docker Hub. Tag `v*` → `{version}` / `v{version}` / `latest`; main push → `main`; supports `workflow_dispatch`. Requires GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (a Docker Hub access token, **unrelated to `gh`'s GitHub login**)
 - `.github/workflows/release-cli.yml` — on tag `v*`, cloud-compiles 5 platforms (matching Makefile `build-all`) + `checksums.txt` + `gh release create --generate-notes`
-- Docker Hub namespace: `zeroicey` (`zeroicey/serenique-api`, `zeroicey/serenique-mcp`)
+- Docker Hub namespace: `zeroicey` — `zeroicey/serenique-api` only (`serenique-mcp` is no longer built/pushed, see the MCP sunset decision)
 - Images run as **non-root (UID 10001)**: fresh named volumes automatically inherit the in-image owner; existing volumes need a one-time chown to 10001 (`docker run --rm -v <vol>:/data alpine chown -R 10001:10001 /data`), otherwise the container can't write to `/data/blobs`
 - Full release runbook (Docker Hub secrets, UID 10001 chown, key pitfalls like bun `--production` freezing the lockfile): see `.ai/runbooks/release-process.md`; server-side deployment: see `.ai/runbooks/hpcore-deploy.md`
 

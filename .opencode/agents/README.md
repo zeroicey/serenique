@@ -7,7 +7,7 @@ This directory holds Serenique's domain-expert Agents (opencode subagent specs).
 | Agent | File | Domain | Trigger signals |
 |---|---|---|---|
 | API Agent | `api-agent.md` | `services/api` (Bun + Hono + Drizzle) | REST endpoints, tables/migrations, service layer, validation, tests, `exports.ts` |
-| MCP Agent | `mcp-agent.md` | `services/mcp` (MCP SDK + streamable-http) | New tools, tool exposure surface, wiring service capabilities into AI |
+| MCP Agent (disabled) | `mcp-agent.md` | `services/mcp` — frozen (MCP sunset 08-08) | **Do NOT dispatch — MCP is frozen** |
 | CLI Agent | `cli-agent.md` | `apps/cli` (Go + cobra) | Command features, new modules, config, output, transfers |
 | Web Agent | `web-agent.md` | `apps/web` (React 19 + Vite + shadcn/ui) | Pages, routes, features, forms, server state |
 | Deploy Agent | `deploy-agent.md` | Docker / GitHub Actions / releases | Images, compose, CI workflows, tag releases, servers |
@@ -15,7 +15,7 @@ This directory holds Serenique's domain-expert Agents (opencode subagent specs).
 
 ## Captain workflow (opencode)
 
-1. **Break down**: understand the requirement, identify affected subsystems (one requirement often spans multiple clients, e.g. a new module → API + MCP + CLI + Web)
+1. **Break down**: understand the requirement, identify affected subsystems (one requirement often spans multiple clients, e.g. a new module → API + CLI + Web). **`services/mcp` is frozen (sunset 2026-08-08) and is never an affected subsystem** — "AI tool exposure" requirements go through the CLI or the API service layer
 2. **Pin the contract**: anchor the cross-client contract to the `services/api` workspace source (field names, response shapes, `exports.ts` export surface)
 3. **Dispatch**: dispatch the corresponding Agents for affected subsystems **in parallel** — launching multiple Task tool calls in the same message (`subagent_type` pointing to an agent name in this directory, i.e. the `*`-prefixed names) runs them in parallel
 4. **Accept**: verify each Agent's returned changes match the contract; run per-client validation (typecheck / test / build)
