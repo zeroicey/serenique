@@ -47,30 +47,10 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
       PageController(initialPage: widget.initialIndex);
   late int _current = widget.initialIndex;
 
-  /// 当前页是否处于放大状态：放大时 PageView 禁滑，
-  /// 左右滑动交由图片平移，到边缘后由页面内溢出手势翻页。
-  bool _zoomed = false;
-
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  void _onZoomChanged(bool zoomed) {
-    if (_zoomed != zoomed) setState(() => _zoomed = zoomed);
-  }
-
-  /// 放大状态下从图片边缘溢出翻页：delta>0 上一张，delta<0 下一张。
-  void _onEdgeSwipe(double overflowX) {
-    if (!mounted) return;
-    final target = _current - (overflowX > 0 ? 1 : -1);
-    if (target < 0 || target >= widget.attachments.length) return;
-    _controller.animateToPage(
-      target,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
   }
 
   @override
@@ -80,16 +60,10 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
       children: [
         PageView.builder(
           controller: _controller,
-          // 放大时禁滑：避免左右滑动直接翻页，先平移图片（微信/iOS 相册行为）
-          physics:
-              _zoomed ? const NeverScrollableScrollPhysics() : null,
           itemCount: attachments.length,
           onPageChanged: (i) => setState(() => _current = i),
-          itemBuilder: (ctx, i) => _MediaPage(
-            attachment: attachments[i],
-            onZoomChanged: _onZoomChanged,
-            onEdgeSwipe: _onEdgeSwipe,
-          ),
+          itemBuilder: (ctx, i) =>
+              _MediaPage(attachment: attachments[i]),
         ),
         Positioned(
           left: 0,
@@ -111,15 +85,9 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
 }
 
 class _MediaPage extends ConsumerStatefulWidget {
-  const _MediaPage({
-    required this.attachment,
-    required this.onZoomChanged,
-    required this.onEdgeSwipe,
-  });
+  const _MediaPage({required this.attachment});
 
   final MomentAttachment attachment;
-  final ValueChanged<bool> onZoomChanged;
-  final ValueChanged<double> onEdgeSwipe;
 
   @override
   ConsumerState<_MediaPage> createState() => _MediaPageState();
@@ -130,10 +98,7 @@ class _MediaPageState extends ConsumerState<_MediaPage>
   static const _doubleTapScale = 2.5;
 
   /// 双击后摇：此时间内的单击被忽略（防快速连点误触发退出，对齐微信体验）。
-  static const _doubleTapCooldown = Duration(milliseconds: 1200);
-
-  /// 放大状态下水平滑到图片边缘、继续滑动超过该像素数 → 翻页。
-  static const _edgeSwipeThreshold = 60.0;
+  static const _doubleTapCooldown = Duration(milliseconds: 1500);
 
   final _transformation = TransformationController();
   late final AnimationController _zoomController = AnimationController(
@@ -149,33 +114,20 @@ class _MediaPageState extends ConsumerState<_MediaPage>
   bool _inDoubleTapCooldown = false;
   Timer? _cooldownTimer;
 
-  /// 本次手势累积的水平边缘溢出量（放大状态、已滑到图片边缘后继续滑动）。
-  double _edgeOverflow = 0;
-
   MomentAttachment get _attachment => widget.attachment;
 
   @override
   void initState() {
     super.initState();
     _zoomAnim.addListener(() => _transformation.value = _zoomAnim.value);
-    _transformation.addListener(_syncZoomState);
   }
 
   @override
   void dispose() {
     _cooldownTimer?.cancel();
-    _transformation.removeListener(_syncZoomState);
     _zoomController.dispose();
     _transformation.dispose();
     super.dispose();
-  }
-
-  void _syncZoomState() {
-    final zoomed = _transformation.value.getMaxScaleOnAxis() > 1.01;
-    if (zoomed != _zoomed) {
-      _zoomed = zoomed;
-      widget.onZoomChanged(zoomed);
-    }
   }
 
   /// 以 focal 为中心的缩放矩阵：translate(focal) · scale · translate(-focal)。
@@ -195,6 +147,7 @@ class _MediaPageState extends ConsumerState<_MediaPage>
       ..begin = _transformation.value
       ..end = target;
     _zoomController.forward(from: 0);
+    setState(() => _zoomed = !_zoomed);
   }
 
   /// 单击关闭：双击后摇期间忽略（狂按连点不误退）。
@@ -211,38 +164,6 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     _cooldownTimer = Timer(_doubleTapCooldown, () {
       if (mounted) setState(() => _inDoubleTapCooldown = false);
     });
-  }
-
-  /// 放大状态下跟踪水平边缘溢出：图片已滑到水平边缘、继续水平滑动
-  /// 时累积距离；未到边缘则正常平移不清零累积（InteractiveViewer 自身
-  /// 处理平移）。缩放/回缩时清零。
-  void _handleInteractionUpdate(ScaleUpdateDetails details) {
-    if (!_zoomed) {
-      _edgeOverflow = 0;
-      return;
-    }
-    final dx = details.focalPointDelta.dx;
-    // InteractiveViewer 在边缘时会钳制平移，translation 不再变化；
-    // 此时 focalPointDelta 仍报告手指位移 → 累积为溢出。
-    final matrix = _transformation.value;
-    final scale = matrix.getMaxScaleOnAxis();
-    final tx = matrix.getTranslation().x;
-    final viewportW = context.size?.width ?? 0;
-    // 图片缩放后的可视宽度，平移到边缘时 tx 停在 [viewportW - w, 0]
-    final imgW = viewportW * scale;
-    final atRight = tx >= viewportW - imgW - 0.5; // 已到最左（图片左缘贴屏左）
-    final atLeft = tx <= 0.5; // 已到最右（图片右缘贴屏右）
-    if ((atRight && dx < 0) || (atLeft && dx > 0)) {
-      _edgeOverflow += dx;
-    }
-  }
-
-  void _handleInteractionEnd(ScaleEndDetails details) {
-    final overflow = _edgeOverflow;
-    _edgeOverflow = 0;
-    if (overflow.abs() >= _edgeSwipeThreshold) {
-      widget.onEdgeSwipe(overflow);
-    }
   }
 
   @override
@@ -266,8 +187,6 @@ class _MediaPageState extends ConsumerState<_MediaPage>
                 transformationController: _transformation,
                 minScale: 1,
                 maxScale: 4,
-                onInteractionUpdate: _handleInteractionUpdate,
-                onInteractionEnd: _handleInteractionEnd,
                 child: SizedBox.expand(
                   child: Image.network(
                     u,

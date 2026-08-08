@@ -199,29 +199,4 @@ void main() {
     expect(find.byIcon(Icons.audio_file), findsOneWidget);
     expect(find.text('a.mp3'), findsOneWidget);
   });
-
-  testWidgets('放大后 PageView 禁滑（水平滑动先平移图片），缩回恢复', (tester) async {
-    await open(tester, [att(0), att(1), att(2)]);
-    expect(find.text('1 / 3'), findsOneWidget);
-    // 初始：PageView 可滑动（默认 physics）
-    expect(tester.widget<PageView>(find.byType(PageView)).physics, isNull);
-    // 双击放大 → PageView 禁滑（水平滑动归图片平移）
-    final iv = find.byType(InteractiveViewer);
-    await tester.tap(iv);
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.tap(iv);
-    await tester.pumpAndSettle();
-    final matrix = tester.widget<InteractiveViewer>(iv).transformationController!.value;
-    expect(matrix.getMaxScaleOnAxis(), closeTo(2.5, 0.01));
-    expect(
-      tester.widget<PageView>(find.byType(PageView)).physics,
-      isA<NeverScrollableScrollPhysics>(),
-    );
-    // 双击缩回 → PageView 恢复可滑动
-    await tester.tap(iv);
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.tap(iv);
-    await tester.pumpAndSettle();
-    expect(tester.widget<PageView>(find.byType(PageView)).physics, isNull);
-  });
 }
