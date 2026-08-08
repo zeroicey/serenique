@@ -5,8 +5,9 @@ import '../moment_models.dart';
 import '../moment_providers.dart';
 import 'comment_row.dart';
 
-/// 评论区：新增 + 删除。评论数据来自 momentDetailProvider（评论内嵌在详情里）。
-/// 评论区与列表一致：直接平铺展示全部评论，不显示条数、不缩字号。
+/// 评论区：只展示评论列表（新增/删除）。输入框已拆到
+/// [CommentInputBar]（详情页底部浮动条）。
+/// 与列表一致：直接平铺展示全部评论，不显示条数、不缩字号。
 class CommentSection extends ConsumerStatefulWidget {
   const CommentSection({super.key, required this.momentId});
 
@@ -17,32 +18,7 @@ class CommentSection extends ConsumerStatefulWidget {
 }
 
 class _CommentSectionState extends ConsumerState<CommentSection> {
-  final _controller = TextEditingController();
-  bool _submitting = false;
   bool _removing = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _add() async {
-    final content = _controller.text.trim();
-    if (content.isEmpty) return;
-    setState(() => _submitting = true);
-    try {
-      await ref.read(momentActionsProvider).addComment(widget.momentId, content);
-      _controller.clear();
-    } on Exception catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
-      }
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
 
   Future<void> _remove(String commentId) async {
     if (_removing) return;
@@ -99,59 +75,24 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final detail = ref.watch(momentDetailProvider(widget.momentId));
     final comments = detail.hasValue ? detail.value!.comments : <MomentComment>[];
     final scheme = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (comments.isNotEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(8),
+    if (comments.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final c in comments)
+            CommentRow(
+              comment: c,
+              onLongPress: () => _showDeleteSheet(c),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final c in comments)
-                  CommentRow(
-                    comment: c,
-                    onLongPress: () => _showDeleteSheet(c),
-                  ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                maxLength: 2000,
-                maxLines: 3,
-                minLines: 1,
-                decoration: InputDecoration(
-                  hintText: '写评论…',
-                  isDense: true,
-                  filled: true,
-                  fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
-                  ),
-                  counterText: '',
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: _submitting ? null : _add,
-              icon: const Icon(Icons.send),
-              tooltip: '发送',
-            ),
-          ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

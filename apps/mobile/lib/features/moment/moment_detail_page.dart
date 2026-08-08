@@ -8,6 +8,7 @@ import 'moment_models.dart';
 import 'moment_providers.dart';
 import 'moment_time.dart';
 import 'widgets/attachment_grid.dart';
+import 'widgets/comment_input_bar.dart';
 import 'widgets/comment_section.dart';
 
 /// 闪记详情页 —— 正文可直接编辑（微信发布纯文本样式），右上角保存。
@@ -116,6 +117,10 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
           ),
         ],
       ),
+      // 浮动评论输入条：固定在底部（AI 聊天样式），键盘弹出时自动上移。
+      // 底部安全区由 CommentInputBar 内部按 viewPadding 处理。
+      bottomNavigationBar:
+          detail.hasValue ? CommentInputBar(momentId: widget.id) : null,
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => AsyncErrorView(
@@ -125,10 +130,9 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
           final attachments = sortedAttachments(moment.attachments);
           return SafeArea(
           top: false,
-          // 曲面屏/手势条：评论输入框不能贴屏幕底边，保底留 12 逻辑像素。
-          minimum: const EdgeInsets.only(bottom: 12),
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            // 顶部间距收紧；底部留出浮动输入条的空间。
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 88),
             children: [
               TextField(
                 controller: _controller,
@@ -141,10 +145,9 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
                   border: InputBorder.none,
                 ),
               ),
-              const SizedBox(height: 6),
-              // 附件网格：正文下方。
+              // 附件网格：正文下方，间距收紧。
               if (moment.attachments.isNotEmpty) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 AttachmentGrid(
                   attachments: attachments,
                   onTapTile: (index) => showMediaPreview(
@@ -154,11 +157,12 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
                   ),
                 ),
               ],
+              const SizedBox(height: 6),
               Text(
                 formatMomentTime(moment.createdAt),
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               CommentSection(momentId: moment.id),
             ],
           ),
