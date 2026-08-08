@@ -42,6 +42,10 @@ class ApiClient {
   final Future<void> Function()? onUnauthorized;
   late final Dio _dio;
 
+  /// 归一化 baseUrl：去掉尾斜杠，供媒体 URL 拼接（dio 对路径拼接宽容，媒体 URL 直接走网络层）。
+  String get apiBase =>
+      baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+
   Future<dynamic> getData(String path, {Map<String, dynamic>? query}) =>
       _guard(_dio.get(path, queryParameters: query));
 

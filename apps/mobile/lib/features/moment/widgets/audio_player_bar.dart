@@ -38,6 +38,8 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
     await _positionSub?.cancel();
     await _durationSub?.cancel();
     await _stateSub?.cancel();
+    // 重试期间被销毁则直接返回，避免重建泄漏的订阅。
+    if (!mounted) return;
     _positionSub = _player.positionStream.listen((_) {
       if (mounted && !_dragging) setState(() {});
     });

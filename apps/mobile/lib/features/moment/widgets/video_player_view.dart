@@ -40,6 +40,8 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
         // dispose 异常不阻塞重试。
       }
     }
+    // 重试期间被销毁则直接返回，避免创建孤儿 controller。
+    if (!mounted) return;
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
       ..addListener(_onTick);
     try {

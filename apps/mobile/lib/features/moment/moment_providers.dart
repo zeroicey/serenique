@@ -69,7 +69,7 @@ final blobAccessServiceProvider = Provider<BlobAccessService>((ref) {
       final link = await api.createBlobAccessLink(blobId);
       return BlobAccessLink(url: link.url, expiresAt: link.expiresAt);
     },
-    directUrl: (blobId) => '${client.baseUrl}/api/blobs/$blobId/file',
+    directUrl: (blobId) => '${client.apiBase}/api/blobs/$blobId/file',
   );
 });
 

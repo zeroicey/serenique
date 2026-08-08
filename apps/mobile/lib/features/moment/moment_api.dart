@@ -76,7 +76,7 @@ class MomentApi {
     final path = data['path'] as String;
     final expires = (data['expires'] as num).toInt();
     return (
-      url: '${_client.baseUrl}$path',
+      url: '${_client.apiBase}$path',
       expiresAt: DateTime.fromMillisecondsSinceEpoch(expires * 1000),
     );
   }

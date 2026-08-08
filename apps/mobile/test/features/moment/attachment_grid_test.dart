@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail_image_network/mocktail_image_network.dart';
+import 'package:serenique_mobile/features/moment/media_preview_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
 import 'package:serenique_mobile/features/moment/widgets/attachment_grid.dart';
@@ -75,5 +76,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('+3 更多'), findsNothing);
     expect(find.byType(Image), findsNWidgets(11));
+  });
+
+  testWidgets('点击图片瓦片进入全屏预览，关闭后返回网格', (tester) async {
+    await pumpGrid(tester, [
+      attachment(id: 'a1', mimeType: 'image/jpeg', name: 'x.jpg'),
+      attachment(id: 'a2', mimeType: 'image/jpeg', name: 'y.jpg'),
+    ]);
+    await tester.tap(find.byType(Image).first);
+    await tester.pumpAndSettle();
+
+    // 预览页：计数与关闭按钮不依赖图片加载结果。
+    expect(find.byType(MediaPreviewPage), findsOneWidget);
+    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+
+    // 已返回网格：预览页与计数消失。
+    expect(find.byType(MediaPreviewPage), findsNothing);
+    expect(find.text('1 / 2'), findsNothing);
   });
 }
