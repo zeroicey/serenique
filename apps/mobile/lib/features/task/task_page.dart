@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'task_due_list_view.dart';
 import 'task_edit_sheet.dart';
 import 'task_group_list_view.dart';
+import 'task_providers.dart';
 import 'task_time.dart';
 
 /// 任务模块主页面：外层 AppShell 提供 AppBar + 抽屉，本页自带底部悬浮
@@ -44,9 +45,13 @@ class _TaskPageState extends ConsumerState<TaskPage> {
     );
   }
 
-  void _onFabPressed() {
+  void _onFabPressed() async {
     if (_index == 0) {
-      showTaskEditSheet(context);
+      // 任务组 tab：FAB 新建任务组（对话框），不是任务编辑器
+      final title = await showGroupNameDialog(context);
+      if (title != null && context.mounted) {
+        await ref.read(taskActionsProvider).createGroup(title);
+      }
     } else {
       final preset = switch (_index) {
         1 => todayStr(),

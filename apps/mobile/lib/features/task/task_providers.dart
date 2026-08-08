@@ -42,6 +42,12 @@ final groupTodoCountProvider = FutureProvider.family<int, String>((ref, groupId)
   return data;
 });
 
+/// groupId → 任务组标题（任务条目下方小字用）；组不存在时回退空串。
+final groupTitleProvider = FutureProvider.family<String, String>((ref, groupId) async {
+  final groups = await ref.watch(taskGroupsProvider.future);
+  return groups.where((g) => g.id == groupId).map((g) => g.title).firstOrNull ?? '';
+});
+
 /// 写操作集中处：成功后 invalidate 对应 provider。
 class TaskActions {
   TaskActions(this._ref);
