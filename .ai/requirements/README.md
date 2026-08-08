@@ -5,7 +5,7 @@
 | `2026-08-05-diary-content-forms.md` | 日记内容形态 | ⏳待实施（暂缓） |
 | `2026-08-05-event-module.md` | 事件模块 | ✅已实施 |
 | `2026-08-05-moment-comments.md` | Moment 评论 | ✅已实施 |
-| `2026-08-05-moment-tags.md` | Moment 标签 | ⏳待实施 |
+| `2026-08-05-moment-tags.md` | Moment 标签 | ✅已实施 |
 | `2026-08-05-task-module.md` | 任务模块 | ✅已实施 |
 | `2026-08-06-auth.md` | 认证 | ✅已实施 |
 | `2026-08-08-audit-module.md` | 审计模块 | ✅已实施 |

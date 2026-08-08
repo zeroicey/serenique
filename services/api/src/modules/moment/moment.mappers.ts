@@ -1,6 +1,7 @@
 import type { blobs, blobAttachments } from "@/modules/blob/blob.schema";
 import type { moments } from "@/modules/moment/moment.schema";
 import type { MomentCommentEntry } from "@/modules/moment/comment.types";
+import type { TagEntry } from "@/modules/tag/tag.types";
 import type {
   MomentAttachmentEntry,
   MomentBlobEntry,
@@ -87,6 +88,7 @@ export function toMomentEntry(
   attachments: MomentAttachmentEntry[] = [],
   comments: MomentCommentEntry[] = [],
   commentCount: number = comments.length,
+  tags: TagEntry[] = [],
 ): MomentEntry {
   return {
     id: row.id,
@@ -94,6 +96,7 @@ export function toMomentEntry(
     attachments,
     comments,
     commentCount,
+    tags,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

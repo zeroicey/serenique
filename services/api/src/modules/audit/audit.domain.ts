@@ -21,6 +21,7 @@ export const EVENT_MESSAGES: Record<AuditEvent, string> = {
   "task.delete": "任务已删除",
   "task_group.delete": "任务组已删除（含组内任务）",
   "event.delete": "事件已删除",
+  "tag.delete": "标签已删除",
 };
 
 /** Default message for an event — write points may override with a richer one. */

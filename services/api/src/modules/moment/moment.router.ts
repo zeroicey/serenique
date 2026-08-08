@@ -17,6 +17,9 @@ export const momentRouter = new Hono()
     "/moments/:id/attachments/:attachmentId",
     momentHandler.deleteAttachment,
   )
+  .post("/moments/:id/tags", momentHandler.addTag)
+  .put("/moments/:id/tags", momentHandler.replaceTags)
+  .delete("/moments/:id/tags/:tagId", momentHandler.removeTag)
   .get("/moments/:id", momentHandler.get)
   .put("/moments/:id", momentHandler.update)
   .delete("/moments/:id", momentHandler.delete);

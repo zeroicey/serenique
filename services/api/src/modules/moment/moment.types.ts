@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { BlobEntry } from "@/modules/blob/blob.types";
 import type { MomentCommentEntry } from "@/modules/moment/comment.types";
+import type { TagEntry } from "@/modules/tag/tag.types";
 
 // ---------------------------------------------------------------------------
 // Moment module — request/response types
@@ -17,6 +18,8 @@ export const MomentAttachmentInputSchema = z.object({
 export const CreateMomentSchema = z.object({
   text: z.string().min(1).max(10000),
   attachments: z.array(MomentAttachmentInputSchema).default([]),
+  /** Inline tag ids, bound in the same transaction (tag must exist). */
+  tags: z.array(z.string().uuid()).default([]),
 });
 
 /** PUT partial update — text is the only updatable field. */
@@ -27,9 +30,16 @@ export const UpdateMomentSchema = z.object({
 export const ListMomentSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(10),
+  /** Filter by tag id (additive — MCP `.extend()` inherits it automatically). */
+  tag: z.string().uuid().optional(),
 });
 
 export const AddMomentAttachmentSchema = MomentAttachmentInputSchema;
+
+/** Moment nested tag binding body. */
+export const AddMomentTagSchema = z.object({
+  tagId: z.string().uuid(),
+});
 
 export type CreateMomentInput = z.input<typeof CreateMomentSchema>;
 export type ListMomentInput = z.infer<typeof ListMomentSchema>;
@@ -42,6 +52,8 @@ export type DeleteMomentAttachmentInput = {
   momentId: string;
   attachmentId: string;
 };
+export type AddMomentTagInput = z.input<typeof AddMomentTagSchema>;
+export type RemoveMomentTagInput = { momentId: string; tagId: string };
 
 export type MomentBlobEntry = Pick<
   BlobEntry,
@@ -76,6 +88,7 @@ export type MomentEntry = {
   attachments: MomentAttachmentEntry[];
   comments: MomentCommentEntry[];
   commentCount: number;
+  tags: TagEntry[];
   createdAt: string;
   updatedAt: string;
 };

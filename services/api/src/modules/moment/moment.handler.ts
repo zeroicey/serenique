@@ -7,10 +7,12 @@ import {
 import { momentService } from "@/modules/moment/moment.service";
 import {
   AddMomentAttachmentSchema,
+  AddMomentTagSchema,
   CreateMomentSchema,
   ListMomentSchema,
   UpdateMomentSchema,
 } from "@/modules/moment/moment.types";
+import { ReplaceTagsSchema } from "@/modules/tag/tag.types";
 import { handleError, uuidParam } from "@/shared/handler";
 import { Res } from "@/shared/response";
 
@@ -139,6 +141,37 @@ export const momentHandler = {
         commentId: uuidParam(c, "commentId"),
       });
       return Res.noContent("评论删除成功").build(c);
+    } catch (e) {
+      return handleError(e, c, "moment");
+    }
+  },
+
+  // ---- Tag sub-resource handlers ----
+
+  async addTag(c: Context) {
+    try {
+      const body = AddMomentTagSchema.parse(await c.req.json());
+      const result = await momentService.addTag(uuidParam(c, "id"), body.tagId);
+      return Res.created("标签绑定成功", result).build(c);
+    } catch (e) {
+      return handleError(e, c, "moment");
+    }
+  },
+
+  async removeTag(c: Context) {
+    try {
+      await momentService.removeTag(uuidParam(c, "id"), uuidParam(c, "tagId"));
+      return Res.noContent("标签解绑成功").build(c);
+    } catch (e) {
+      return handleError(e, c, "moment");
+    }
+  },
+
+  async replaceTags(c: Context) {
+    try {
+      const body = ReplaceTagsSchema.parse(await c.req.json());
+      const result = await momentService.replaceTags(uuidParam(c, "id"), body.tagIds);
+      return Res.ok("标签已更新", result).build(c);
     } catch (e) {
       return handleError(e, c, "moment");
     }

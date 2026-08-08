@@ -30,6 +30,8 @@ export { momentCommentService } from "@/modules/moment/comment.service";
 export type {
   AddMomentAttachmentInput,
   DeleteMomentAttachmentInput,
+  AddMomentTagInput,
+  RemoveMomentTagInput,
   MomentEntry,
   MomentAttachmentEntry,
   MomentBlobEntry,
@@ -41,6 +43,7 @@ export type {
 } from "@/modules/moment/moment.types";
 export {
   AddMomentAttachmentSchema,
+  AddMomentTagSchema,
   CreateMomentSchema,
   ListMomentSchema,
   MomentAttachmentInputSchema,
@@ -134,6 +137,30 @@ export {
   ListAuditSchema,
   MarkReadSchema,
 } from "@/modules/audit/audit.types";
+
+// ---- Tag module ----
+export { tagService } from "@/modules/tag/tag.service";
+export type {
+  TagEntry,
+  TagRelationEntry,
+  CreateTagInput,
+  RenameTagInput,
+  ListTagInput,
+  GetTagInput,
+  DeleteTagInput,
+  AttachTagInput,
+  DetachTagInput,
+  ReplaceTagsInput,
+} from "@/modules/tag/tag.types";
+export {
+  CreateTagSchema,
+  RenameTagSchema,
+  ListTagSchema,
+  AttachTagSchema,
+  DetachTagSchema,
+  ReplaceTagsSchema,
+  TagNameSchema,
+} from "@/modules/tag/tag.types";
 
 // ---- Shared utilities ----
 export { AppError, ErrorCode } from "@/shared/errors";

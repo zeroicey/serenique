@@ -4,6 +4,7 @@ import { diaries } from "@/modules/diary/diary.schema";
 import { moments } from "@/modules/moment/moment.schema";
 import { blobs } from "@/modules/blob/blob.schema";
 import { tasks, taskGroups } from "@/modules/task/task.schema";
+import { tagRelations, tags } from "@/modules/tag/tag.schema";
 
 // ---------------------------------------------------------------------------
 // Shared test helpers — single source of truth for env setup, DB gating,
@@ -159,6 +160,31 @@ export function fakeTaskRow(
     createdAt: new Date("2026-08-05T12:00:00.000Z"),
     updatedAt: new Date("2026-08-05T12:00:00.000Z"),
     completedAt: null,
+    ...overrides,
+  };
+}
+
+export function fakeTagRow(
+  overrides: Partial<typeof tags.$inferSelect> = {},
+): typeof tags.$inferSelect {
+  return {
+    id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f5001",
+    name: "工作",
+    createdAt: new Date("2026-08-05T12:00:00.000Z"),
+    updatedAt: new Date("2026-08-05T12:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export function fakeTagRelationRow(
+  overrides: Partial<typeof tagRelations.$inferSelect> = {},
+): typeof tagRelations.$inferSelect {
+  return {
+    id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f5002",
+    tagId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f5001",
+    ownerType: "moment",
+    ownerId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001",
+    createdAt: new Date("2026-08-05T12:00:00.000Z"),
     ...overrides,
   };
 }

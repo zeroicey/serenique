@@ -94,6 +94,17 @@ describe("REST contract smoke", () => {
         path: "/api/moments/not-a-uuid/attachments/not-a-uuid",
         method: "DELETE",
       },
+      { path: "/api/tags/not-a-uuid" },
+      { path: "/api/tags/not-a-uuid", method: "PUT" },
+      { path: "/api/tags/not-a-uuid", method: "DELETE" },
+      { path: "/api/tags/not-a-uuid/attach", method: "POST" },
+      { path: "/api/tags/not-a-uuid/detach", method: "DELETE" },
+      { path: "/api/moments/not-a-uuid/tags", method: "POST" },
+      { path: "/api/moments/not-a-uuid/tags", method: "PUT" },
+      {
+        path: "/api/moments/not-a-uuid/tags/not-a-uuid",
+        method: "DELETE",
+      },
     ];
     for (const { path, method } of badRequests) {
       const res = await app.request(path, {

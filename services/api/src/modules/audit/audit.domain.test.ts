@@ -72,6 +72,7 @@ describe("event registry + message building", () => {
       "task.delete",
       "task_group.delete",
       "event.delete",
+      "tag.delete",
     ]);
   });
 
