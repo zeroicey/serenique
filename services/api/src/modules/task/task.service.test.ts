@@ -32,7 +32,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
     const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
-      { title: "写周报", groupId: "g1", status: "todo", completedAt: null },
+      { title: "写周报", groupId: "g1", status: "todo", completedAt: null, dueDate: null },
       { status: "done" },
       NOW,
     );
@@ -42,6 +42,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
       groupId: "g1",
       status: "done",
       completedAt: NOW,
+      dueDate: null,
     });
   });
 
@@ -50,7 +51,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
     const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
-      { title: "写周报", groupId: "g1", status: "done", completedAt: OLD },
+      { title: "写周报", groupId: "g1", status: "done", completedAt: OLD, dueDate: null },
       { status: "todo" },
       NOW,
     );
@@ -64,7 +65,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
     const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
-      { title: "写周报", groupId: "g1", status: "done", completedAt: OLD },
+      { title: "写周报", groupId: "g1", status: "done", completedAt: OLD, dueDate: null },
       { title: "写周报（终稿）" },
       NOW,
     );
@@ -79,7 +80,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
     const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
-      { title: "写周报", groupId: "g1", status: "done", completedAt: OLD },
+      { title: "写周报", groupId: "g1", status: "done", completedAt: OLD, dueDate: null },
       { status: "done" },
       NOW,
     );
@@ -92,7 +93,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
     const { resolveTaskUpdate } = await import("./task.domain");
 
     const result = resolveTaskUpdate(
-      { title: "写周报", groupId: "g1", status: "todo", completedAt: null },
+      { title: "写周报", groupId: "g1", status: "todo", completedAt: null, dueDate: null },
       { title: "写周报（终稿）", groupId: "g2", status: "done" },
       NOW,
     );
@@ -102,6 +103,7 @@ describe("resolveTaskUpdate — combines patch with current row", () => {
       groupId: "g2",
       status: "done",
       completedAt: NOW,
+      dueDate: null,
     });
   });
 });
@@ -227,6 +229,7 @@ describe("task mappers", () => {
       groupId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f3001",
       title: "测试任务",
       status: "todo",
+      dueDate: null,
       createdAt: "2026-08-05T12:00:00.000Z",
       updatedAt: "2026-08-05T12:00:00.000Z",
       completedAt: null,
@@ -253,5 +256,43 @@ describe("task mappers", () => {
       createdAt: "2026-08-05T12:00:00.000Z",
       updatedAt: "2026-08-05T12:00:00.000Z",
     });
+  });
+});
+
+describe("DueDateSchema — YYYY-MM-DD validation", () => {
+  test("accepts valid dates, rejects bad formats", async () => {
+    setTestEnv();
+    const { DueDateSchema } = await import("./task.types");
+
+    expect(DueDateSchema.parse("2026-08-09")).toBe("2026-08-09");
+    expect(() => DueDateSchema.parse("2026/08/09")).toThrow();
+    expect(() => DueDateSchema.parse("2026-8-9")).toThrow();
+    expect(() => DueDateSchema.parse("2026-02-30")).toThrow(); // invalid calendar day
+    expect(() => DueDateSchema.parse("2026-13-01")).toThrow();
+  });
+});
+
+describe("UpdateTaskSchema dueDate — clear semantics", () => {
+  test("null clears, '' normalizes to null, valid string passes, absent keeps", async () => {
+    setTestEnv();
+    const { UpdateTaskSchema } = await import("./task.types");
+
+    expect(UpdateTaskSchema.parse({ dueDate: null })).toEqual({ dueDate: null });
+    expect(UpdateTaskSchema.parse({ dueDate: "" })).toEqual({ dueDate: null });
+    expect(UpdateTaskSchema.parse({ dueDate: "2026-08-09" })).toEqual({ dueDate: "2026-08-09" });
+    // dueDate alone satisfies the "at least one field" refine
+    expect(UpdateTaskSchema.parse({ dueDate: null }).dueDate).toBeNull();
+  });
+});
+
+describe("resolveTaskUpdate — dueDate resolution", () => {
+  test("absent patch keeps current; null clears; string sets", async () => {
+    setTestEnv();
+    const { resolveTaskUpdate } = await import("./task.domain");
+
+    const row = { title: "t", groupId: "g", status: "todo", completedAt: null, dueDate: "2026-08-09" } as const;
+    expect(resolveTaskUpdate(row, {}, NOW).dueDate).toBe("2026-08-09");
+    expect(resolveTaskUpdate(row, { dueDate: null }, NOW).dueDate).toBeNull();
+    expect(resolveTaskUpdate(row, { dueDate: "2026-09-01" }, NOW).dueDate).toBe("2026-09-01");
   });
 });

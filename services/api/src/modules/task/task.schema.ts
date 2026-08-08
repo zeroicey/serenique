@@ -36,6 +36,7 @@ export const tasks = pgTable(
       .references(() => taskGroups.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     status: text("status").notNull().$type<TaskStatus>(),
+    dueDate: text("due_date"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -51,6 +52,11 @@ export const tasks = pgTable(
       t.status,
       t.createdAt.desc(),
     ),
+    index("idx_tasks_due_date_status").on(t.dueDate, t.status),
     check("chk_tasks_status", sql`${t.status} IN ('todo', 'done', 'abandon')`),
+    check(
+      "chk_tasks_due_date_format",
+      sql`${t.dueDate} IS NULL OR ${t.dueDate} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
+    ),
   ],
 );

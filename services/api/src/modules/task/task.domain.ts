@@ -11,6 +11,7 @@ export type TaskUpdateRowLike = {
   groupId: string;
   status: TaskStatus;
   completedAt: Date | null;
+  dueDate: string | null;
 };
 
 /** Partial update fields accepted by resolveTaskUpdate. */
@@ -18,6 +19,7 @@ export type TaskUpdatePatch = {
   title?: string;
   groupId?: string;
   status?: TaskStatus;
+  dueDate?: string | null;
 };
 
 /** Result of resolving a task update: the next row values. */
@@ -26,6 +28,7 @@ export type TaskUpdateResult = {
   groupId: string;
   status: TaskStatus;
   completedAt: Date | null;
+  dueDate: string | null;
 };
 
 /**
@@ -65,5 +68,6 @@ export function resolveTaskUpdate(
     groupId: patch.groupId ?? current.groupId,
     status: patch.status ?? current.status,
     completedAt,
+    dueDate: patch.dueDate === undefined ? current.dueDate : patch.dueDate,
   };
 }

@@ -144,6 +144,7 @@ export function fakeTaskRow(
     groupId: "0198f6d0-9e7c-71d7-8214-2a0f7f5f3001",
     title: "测试任务",
     status: "todo",
+    dueDate: null,
     createdAt: new Date("2026-08-05T12:00:00.000Z"),
     updatedAt: new Date("2026-08-05T12:00:00.000Z"),
     completedAt: null,

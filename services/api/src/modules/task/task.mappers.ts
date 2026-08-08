@@ -22,6 +22,7 @@ export function toTaskEntry(row: typeof tasks.$inferSelect): TaskEntry {
     groupId: row.groupId,
     title: row.title,
     status: row.status,
+    dueDate: row.dueDate,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
