@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'core/network/api_exception.dart';
 import 'features/audit/audit_providers.dart';
 import 'features/moment/moment_providers.dart';
@@ -19,7 +18,6 @@ class AppShell extends ConsumerWidget {
   static const _items = <({IconData icon, String label, String path})>[
     (icon: Icons.auto_awesome, label: '宁序', path: '/ai'),
     (icon: Icons.bolt, label: '闪记', path: '/moments'),
-    (icon: Icons.book_outlined, label: '日记', path: '/diary'),
     (icon: Icons.repeat, label: '习惯', path: '/habit'),
     (icon: Icons.check_circle_outline, label: '任务', path: '/task'),
     (icon: Icons.calendar_today_outlined, label: '日历', path: '/event'),
@@ -57,10 +55,9 @@ class AppShell extends ConsumerWidget {
     final counts = ref.watch(countsProvider);
     final auditUnread = ref.watch(auditUnreadCountProvider);
 
-    // 右侧 badge：闪记/日记走真实计数，任务/日历/习惯先写死占位，日志走未读数。
+    // 右侧 badge：闪记走真实计数，任务/日历/习惯先写死占位，日志走未读数。
     String? badgeFor(String path) => switch (path) {
-          '/moments' => counts.hasValue ? '${counts.value!.moments}' : null,
-          '/diary' => counts.hasValue ? '${counts.value!.diaries}' : null,
+          '/moments' => counts.hasValue ? '${counts.value}' : null,
           '/task' => '3',
           '/event' => '2',
           '/habit' => '5',
@@ -70,7 +67,7 @@ class AppShell extends ConsumerWidget {
           _ => null,
         };
 
-    // 抽屉选中态：模块子路由（如 /diary/2026-08-08）也选中对应模块。
+    // 抽屉选中态：模块子路由（如 /moments/123）也选中对应模块。
     bool isActive(String path) =>
         location == path || location.startsWith('$path/');
 
@@ -103,14 +100,6 @@ class AppShell extends ConsumerWidget {
                   padding: EdgeInsets.all(8),
                   child: Icon(Icons.add),
                 ),
-              ),
-            ),
-          if (location == '/diary')
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              tooltip: '写今天',
-              onPressed: () => context.push(
-                '/diary/${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
               ),
             ),
           // 日志页：全部已读放顶部导航栏右侧（无未读时禁用）。
@@ -189,7 +178,6 @@ class AppShell extends ConsumerWidget {
 String moduleTitle(String path) {
   if (path.startsWith('/settings')) return '设置';
   if (path.startsWith('/moments')) return '闪记';
-  if (path.startsWith('/diary')) return '日记';
   if (path.startsWith('/habit')) return '习惯';
   if (path.startsWith('/task')) return '任务';
   if (path.startsWith('/event')) return '日历';

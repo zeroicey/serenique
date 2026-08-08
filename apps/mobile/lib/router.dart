@@ -6,8 +6,6 @@ import 'features/auth/auth_providers.dart';
 import 'features/auth/login_page.dart';
 import 'features/auth/splash_page.dart';
 import 'features/audit/audit_page.dart';
-import 'features/diary/diary_edit_page.dart';
-import 'features/diary/diary_list_page.dart';
 import 'features/moment/moment_create_page.dart';
 import 'features/moment/moment_detail_page.dart';
 import 'features/moment/moment_list_page.dart';
@@ -35,7 +33,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(path: '/moments', builder: (context, state) => const MomentListPage()),
-          GoRoute(path: '/diary', builder: (context, state) => const DiaryListPage()),
           GoRoute(path: '/task', builder: (context, state) => const PlaceholderPage(title: '任务', icon: Icons.check_circle_outline)),
           GoRoute(path: '/event', builder: (context, state) => const PlaceholderPage(title: '日历', icon: Icons.calendar_today_outlined)),
           GoRoute(path: '/habit', builder: (context, state) => const PlaceholderPage(title: '习惯', icon: Icons.repeat)),
@@ -49,10 +46,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/moments/:id',
         builder: (context, state) => MomentDetailPage(id: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/diary/:date',
-        builder: (context, state) => DiaryEditPage(date: state.pathParameters['date']!),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
     ],

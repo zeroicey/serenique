@@ -98,12 +98,12 @@ void main() {
         response: Response(
           requestOptions: RequestOptions(path: '/'),
           statusCode: 404,
-          data: {'success': false, 'code': 'NOT_FOUND', 'message': '日记不存在'},
+          data: {'success': false, 'code': 'NOT_FOUND', 'message': '闪记不存在'},
         ),
       );
       final ae = ApiException.fromDioException(e);
       expect(ae.code, 'NOT_FOUND');
-      expect(ae.message, '日记不存在');
+      expect(ae.message, '闪记不存在');
       expect(ae.statusCode, 404);
     });
   });

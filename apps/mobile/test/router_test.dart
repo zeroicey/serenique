@@ -30,7 +30,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
-      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
@@ -43,7 +43,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
-      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
@@ -63,7 +63,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
-      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
@@ -84,7 +84,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
-      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      countsProvider.overrideWith((ref) async => 0),
       auditListProvider.overrideWith(
           (ref) async => const AuditLogPage(items: [], total: 0)),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
@@ -107,7 +107,7 @@ void main() {
       tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
       verifyTokenProvider.overrideWithValue((token) async {}),
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
-      countsProvider.overrideWith((ref) async => (moments: 0, diaries: 0)),
+      countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
