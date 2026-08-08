@@ -52,7 +52,7 @@ Common commands from the repository root:
 bun install          # Install workspace deps
 bun run typecheck    # Type-check api + mcp
 bun test             # Runs ONLY services/mcp tests (bun run --cwd services/mcp test)
-docker compose up -d --build api mcp
+docker build -t serenique-api -f services/api/Dockerfile .
 ```
 
 `bun test` at the root only covers the MCP service. API tests run from `services/api/`.
@@ -84,17 +84,18 @@ go test -count=1 ./...  # Full test run (use -count=1 to bypass cache)
 
 Network note: pulling Go modules requires the China mirror `GOPROXY=https://goproxy.cn,direct` (`proxy.golang.org` is unreachable on this network).
 
-Docker build network note: the build container cannot reach `registry.npmjs.org` directly — `docker compose build` fails at `bun install` with `ConnectionRefused` on every tarball. Rebuild with the host proxy injected as build args (Docker's predefined proxy args, no Dockerfile change):
+Docker build network note: the build container cannot reach `registry.npmjs.org` directly — `docker build` fails at `bun install` with `ConnectionRefused` on every tarball. Rebuild with the host proxy injected as build args (Docker's predefined proxy args, no Dockerfile change):
 
 ```sh
-docker compose build --build-arg http_proxy=http://host.docker.internal:7897 \
+docker build --build-arg http_proxy=http://host.docker.internal:7897 \
   --build-arg https_proxy=http://host.docker.internal:7897 \
-  --build-arg no_proxy=localhost,127.0.0.1 api mcp
+  --build-arg no_proxy=localhost,127.0.0.1 \
+  -t serenique-api -f services/api/Dockerfile .
 ```
 
-`host.docker.internal:7897` is the host's local HTTP proxy (see the `http_proxy` env on this machine); adjust the port if it changes. `docker compose up -d` (without `--build`) does not need it — only rebuilds. The Dockerfile itself stays registry-agnostic so it builds on any network.
+`host.docker.internal:7897` is the host's local HTTP proxy (see the `http_proxy` env on this machine); adjust the port if it changes. Running an already-built image (`docker run`) does not need it — only rebuilds. The Dockerfile itself stays registry-agnostic so it builds on any network.
 
-Runtime environment for Docker Compose is loaded from the project root `.env`. Service-local `.env` files are not used. Keep secrets out of images; root `.dockerignore` excludes `.env` files from the build context.
+The runtime environment is passed via `docker run -e` flags (expected keys in `.env.example`). Service-local `.env` files are not used. Keep secrets out of images; root `.dockerignore` excludes `.env` files from the build context.
 
 ## Architecture
 
@@ -287,24 +288,22 @@ git push origin vX.Y.Z
 
 ## Docker
 
-```sh
-docker compose up -d --build api mcp
-```
-
-Docker Compose reads `.env` from the project root. See `.env.example` for the expected keys. `BLOB_ROOT` is fixed to `/data/blobs` inside the containers and persisted through the `blob-data` volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites localhost database hosts to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is wired through from `.env` and is required for the `blob link` / signed access-link feature.
-
-Manual image builds use the repository root as context:
+The repo has no docker-compose file; images are built and run directly with the repo root as the build context:
 
 ```sh
 docker build -t serenique-api -f services/api/Dockerfile .
-docker build -t serenique-mcp -f services/mcp/Dockerfile .
 
 docker run -p 3000:3000 \
   -e DATABASE_URL=postgresql://serenique:serenique@host:5432/serenique \
   -e BLOB_ROOT=/data/blobs \
   -e BLOB_MAX_SIZE=104857600 \
+  -e BLOB_SIGNING_SECRET=<32+ chars> \
+  -e AUTH_TOKEN=<32+ chars> \
+  -e CORS_ORIGIN=https://your-web-domain \
   -v /host/path:/data/blobs \
   serenique-api
 ```
+
+The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed to `/data/blobs` inside the container and persisted through a host volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites localhost database hosts to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access-link feature. Auth is optional in dev (skipped when `AUTH_TOKEN` is unset), required in production (fail closed).
 
 Default values in Dockerfiles: `NODE_ENV=production`, `BLOB_ROOT=/data/blobs`, `BLOB_MAX_SIZE=104857600` (100 MB), API `PORT=3000`, MCP `PORT=3001`, MCP `MCP_TRANSPORT=streamable-http`.

@@ -19,6 +19,6 @@ export interface BlobEntry {
 export async function uploadBlob(file: File): Promise<BlobEntry> {
   const form = new FormData()
   form.append('file', file)
-  const res = await api.post(apiUrl('blobs/upload'), { body: form, timeout: 60_000 })
+  const res = await api.post(apiUrl('blobs/upload'), { body: form, timeout: 300_000 })
   return unwrap<BlobEntry>(res)
 }

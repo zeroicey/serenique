@@ -67,7 +67,7 @@ Common commands at the repo root:
 bun install          # install workspace dependencies
 bun run typecheck    # typecheck api + mcp
 bun test             # only runs services/mcp tests (bun run --cwd services/mcp test)
-docker compose up -d --build api mcp
+docker build -t serenique-api -f services/api/Dockerfile .
 ```
 
 `bun test` at the root only covers the MCP service. API tests must be run inside `services/api/`.
@@ -101,9 +101,9 @@ go test -count=1 ./...  # full test run (-count=1 bypasses cache)
 
 Network note: pulling Go modules requires the China mirror `GOPROXY=https://goproxy.cn,direct` (`proxy.golang.org` is unreachable on this network).
 
-Docker build network note: build containers cannot reach `registry.npmjs.org` directly — `docker compose build` fails at `bun install` with `ConnectionRefused`; inject the host proxy as build args (`host.docker.internal:7897`, Docker-predefined args, no Dockerfile changes). Full procedure: see `.ai/runbooks/docker-local-build.md`. `docker compose up -d` (without `--build`) doesn't need proxy args.
+Docker build network note: build containers cannot reach `registry.npmjs.org` directly — `docker build` fails at `bun install` with `ConnectionRefused`; inject the host proxy as build args (`host.docker.internal:7897`, Docker-predefined args, no Dockerfile changes). Full procedure: see `.ai/runbooks/docker-local-build.md`. Running an already-built image (`docker run`) doesn't need proxy args.
 
-Docker Compose loads the runtime environment from the project root `.env`. Per-service `.env` files are not used. Secrets never enter images; the root `.dockerignore` excludes `.env`.
+The runtime environment is passed via `docker run -e` flags (expected keys in `.env.example`). Per-service `.env` files are not used. Secrets never enter images; the root `.dockerignore` excludes `.env`.
 
 ## Architecture
 
@@ -296,24 +296,22 @@ git push origin vX.Y.Z
 
 ## Docker
 
-```sh
-docker compose up -d --build api mcp
-```
-
-Docker Compose reads configuration from the project root `.env`. Expected keys are in `.env.example`. `BLOB_ROOT` is fixed at `/data/blobs` inside the container, persisted via the `blob-data` volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites the localhost database host to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) flows through from `.env` and is required for the `blob link` / signed access link feature.
-
-To build images manually, use the repo root as the build context:
+The repo has no docker-compose file; images are built and run directly with the repo root as the build context:
 
 ```sh
 docker build -t serenique-api -f services/api/Dockerfile .
-docker build -t serenique-mcp -f services/mcp/Dockerfile .
 
 docker run -p 3000:3000 \
   -e DATABASE_URL=postgresql://serenique:serenique@host:5432/serenique \
   -e BLOB_ROOT=/data/blobs \
   -e BLOB_MAX_SIZE=104857600 \
+  -e BLOB_SIGNING_SECRET=<32+ chars> \
+  -e AUTH_TOKEN=<32+ chars> \
+  -e CORS_ORIGIN=https://your-web-domain \
   -v /host/path:/data/blobs \
   serenique-api
 ```
+
+The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed at `/data/blobs` inside the container, persisted via a host volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites the localhost database host to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access link feature. Auth is optional in dev (skipped when `AUTH_TOKEN` is unset), required in production (fail closed).
 
 Dockerfile defaults: `NODE_ENV=production`, `BLOB_ROOT=/data/blobs`, `BLOB_MAX_SIZE=104857600` (100 MB), API `PORT=3000`, MCP `PORT=3001`, MCP `MCP_TRANSPORT=streamable-http`.

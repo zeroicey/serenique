@@ -22,6 +22,6 @@
 
 ## How to apply
 
-- **运维**：生产 `ssh -J hpazure hpcore` → `cd /srv/compose/serenique && docker compose stop mcp`；本地 `docker compose stop mcp`。
+- **运维**：生产 `ssh -J hpazure hpcore` → `cd /srv/compose/serenique && docker compose stop mcp`；本地 `docker stop <mcp 容器名>`（仓库根 docker-compose.yml 已于 2026-08-08 删除）。
 - **发布**：手动构建镜像时只构建 `serenique-api`；不触碰 `serenique-mcp` 构建步骤（`docker-publish.yml` 停更后不主动触发）。
 - **记忆**：后续会话不要为 MCP 安排需求/修复；涉及「AI 工具暴露」的需求改为「CLI 或 API 层」。
