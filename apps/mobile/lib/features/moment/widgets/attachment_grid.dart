@@ -40,7 +40,12 @@ class _AttachmentGridState extends ConsumerState<AttachmentGrid> {
           mainAxisSpacing: 4,
           crossAxisSpacing: 4,
           children: [
-            for (final a in display) _AttachmentTile(attachment: a),
+            for (final (i, a) in display.indexed)
+              _AttachmentTile(
+                attachment: a,
+                all: sorted,
+                index: i,
+              ),
             if (needsExpand && !_expanded)
               _MoreTile(
                 count: sorted.length - _previewCount,
@@ -54,9 +59,15 @@ class _AttachmentGridState extends ConsumerState<AttachmentGrid> {
 }
 
 class _AttachmentTile extends ConsumerWidget {
-  const _AttachmentTile({required this.attachment});
+  const _AttachmentTile({
+    required this.attachment,
+    required this.all,
+    required this.index,
+  });
 
   final MomentAttachment attachment;
+  final List<MomentAttachment> all;
+  final int index;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -68,10 +79,7 @@ class _AttachmentTile extends ConsumerWidget {
         borderRadius: BorderRadius.circular(8),
         child: GestureDetector(
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => MediaPreviewPage(
-              attachments: [attachment],
-              initialIndex: 0,
-            ),
+            builder: (_) => MediaPreviewPage(attachments: all, initialIndex: index),
           )),
           child: url.when(
             loading: () => ColoredBox(
