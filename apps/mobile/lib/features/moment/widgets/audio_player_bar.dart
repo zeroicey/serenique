@@ -35,6 +35,9 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
       _loading = true;
       _loadFailed = false;
     });
+    await _positionSub?.cancel();
+    await _durationSub?.cancel();
+    await _stateSub?.cancel();
     _positionSub = _player.positionStream.listen((_) {
       if (mounted && !_dragging) setState(() {});
     });
