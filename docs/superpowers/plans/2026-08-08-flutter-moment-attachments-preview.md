@@ -1377,7 +1377,10 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
   @override
   void initState() {
     super.initState();
-    _index = widget.initialIndex.clamp(0, widget.attachments.length - 1);
+    // 空列表先兜底（grid 只会从非空附件进入，防御性处理）
+    _index = widget.attachments.isEmpty
+        ? 0
+        : widget.initialIndex.clamp(0, widget.attachments.length - 1);
     _controller = PageController(initialPage: _index);
   }
 
