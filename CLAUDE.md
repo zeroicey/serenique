@@ -131,7 +131,7 @@ services/api/src/
 └── modules/
     ├── blob/         — Generic binary storage layer (all MIME types, SHA-256 dedup)
     ├── diary/        — Diary entries (one per day, dated; fields: content, diaryDate)
-    ├── moment/       — Flash notes (≤500 chars; field: text; media attachments via blob refs; nested self-comments in `comment.*`, ≤2000 chars)
+    ├── moment/       — Flash notes (≤10000 chars; field: text; media attachments via blob refs; nested self-comments in `comment.*`, ≤2000 chars)
     ├── task/         — Task groups (custom) + simple tasks (fields: groupId/title/status; completedAt synced by status)
     └── event/        — Calendar events (fields: title/startAt/endAt/isAllDay/location/note; time-range list, bare array)
 ```
@@ -208,7 +208,7 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET | `/api/diaries/by-date/:date` | Diary by date (404 if none; registered before `:id`) |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
 | GET, POST | `/api/moments` | Moment list / create (create accepts optional `attachments[]`) |
-| GET, DELETE | `/api/moments/:id` | Moment detail / delete |
+| GET, PUT, DELETE | `/api/moments/:id` | Moment detail / update / delete |
 | POST, DELETE | `/api/moments/:id/attachments[/:attachmentId]` | Moment attachment create / delete |
 | GET, POST | `/api/moments/:id/comments` | Moment comment list / create (body `{ content }`, ≤2000) |
 | PUT, DELETE | `/api/moments/:id/comments/:commentId` | Moment comment update / delete |
