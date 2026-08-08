@@ -86,10 +86,17 @@ void main() {
     await tester.tap(find.byType(Image).first);
     await tester.pumpAndSettle();
 
-    // 预览页：计数与关闭按钮不依赖图片加载结果。
+    // 预览页打开，控制条默认隐藏（全屏沉浸）
     expect(find.byType(MediaPreviewPage), findsOneWidget);
+    expect(
+      tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity,
+      0,
+    );
+
+    // 点击页面唤出控制条 → 点关闭返回
+    await tester.tap(find.byType(PageView));
+    await tester.pump();
     expect(find.text('1 / 2'), findsOneWidget);
-    expect(find.byIcon(Icons.close), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();

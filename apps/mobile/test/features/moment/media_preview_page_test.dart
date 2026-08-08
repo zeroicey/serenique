@@ -44,37 +44,51 @@ double barOpacity(WidgetTester tester) =>
     tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity;
 
 void main() {
-  testWidgets('预览页初始显示控制条，2.5 秒后自动隐藏', (tester) async {
+  testWidgets('预览页初始隐藏控制条（全屏沉浸），点击唤出后 2.5 秒自动隐藏', (tester) async {
     await pumpPreview(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
-    expect(barOpacity(tester), 1);
-
-    await tester.pump(const Duration(seconds: 3));
-    expect(barOpacity(tester), 0);
-  });
-
-  testWidgets('隐藏后点击页面重新显示控制条', (tester) async {
-    await pumpPreview(tester);
-    await tester.pump(const Duration(seconds: 3));
     expect(barOpacity(tester), 0);
 
     await tester.tap(find.byType(PageView));
     await tester.pump();
     expect(barOpacity(tester), 1);
     expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+    expect(barOpacity(tester), 0);
   });
 
-  testWidgets('图片铺满整页（InteractiveViewer 子组件为全屏盒子）', (tester) async {
+  testWidgets('控制条隐藏时页面仍可点按唤出', (tester) async {
     await pumpPreview(tester);
-    final box = tester.widget<SizedBox>(
-      find.descendant(
-        of: find.byType(InteractiveViewer),
-        matching: find.byType(SizedBox),
-      ),
+    expect(find.byType(MediaPreviewPage), findsOneWidget);
+
+    await tester.tap(find.byType(PageView));
+    await tester.pump();
+    expect(barOpacity(tester), 1);
+  });
+
+  testWidgets('图片铺满整页：cover 无黑边 + Hero 共享元素过渡', (tester) async {
+    await pumpPreview(tester);
+
+    // Hero 共享元素存在（缩略图放大飞入全屏）
+    expect(find.byType(Hero), findsOneWidget);
+
+    // 图片盒子 = 全屏（SizedBox.expand；Hero 内部还有一个 null 尺寸的 SizedBox，跳过它）
+    final expanded = tester
+        .widgetList<SizedBox>(
+          find.descendant(
+            of: find.byType(InteractiveViewer),
+            matching: find.byType(SizedBox),
+          ),
+        )
+        .where((b) => b.width != null);
+    expect(expanded, isNotEmpty);
+    expect(
+      expanded.every((b) => b.width == double.infinity && b.height == double.infinity),
+      isTrue,
     );
-    expect(box, isNotNull);
-    // SizedBox.expand：图片盒子 = 视口大小，contain 按整屏计算
-    expect(box.width, double.infinity);
-    expect(box.height, double.infinity);
+
+    // cover 模式：图片铺满屏幕，无黑边
+    final image = tester.widget<Image>(find.byType(Image));
+    expect(image.fit, BoxFit.cover);
   });
 }

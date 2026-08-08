@@ -9,7 +9,8 @@ import 'widgets/video_player_view.dart';
 
 /// 全屏媒体预览（朋友圈样式）：黑底 PageView 左右滑动切换，
 /// 图片可捏合缩放，视频/音频可播放。只构建当前页 → 翻页自动释放上一页播放器。
-/// 顶部控制条（关闭 + 计数）2.5 秒后自动隐藏，点按页面唤出；预览期间隐藏系统状态栏。
+/// 图片默认铺满全屏（cover，无黑边）+ Hero 共享元素过渡（缩略图放大飞入）；
+/// 顶部控制条（关闭 + 计数）默认隐藏，点按唤出后 2.5 秒自动隐藏；预览期间隐藏系统状态栏。
 class MediaPreviewPage extends StatefulWidget {
   const MediaPreviewPage({
     super.key,
@@ -27,7 +28,7 @@ class MediaPreviewPage extends StatefulWidget {
 class _MediaPreviewPageState extends State<MediaPreviewPage> {
   late final PageController _controller;
   late int _index;
-  bool _controlsVisible = true;
+  bool _controlsVisible = false;
   Timer? _hideTimer;
 
   @override
@@ -40,7 +41,6 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
     _controller = PageController(initialPage: _index);
     // 沉浸式全屏：隐藏系统状态栏，退出页面时恢复。
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    _scheduleHide();
   }
 
   @override
@@ -155,17 +155,22 @@ class _PreviewItem extends ConsumerWidget {
       ),
       data: (u) {
         if (attachment.isImage) {
-          // SizedBox.expand：图片盒子铺满整页，contain 按整屏计算（不再收缩包裹 + Center 悬浮）。
+          // 铺满全屏（cover，无黑边）+ Hero 共享元素过渡（缩略图放大飞入）；
+          // minScale 1.0 保持全屏铺满，捏合放大看细节。
           return InteractiveViewer(
             maxScale: 4,
+            minScale: 1.0,
             child: SizedBox.expand(
-              child: Image.network(
-                u,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Icon(
-                    Icons.broken_image_outlined,
-                    color: Colors.white54,
-                    size: 48),
+              child: Hero(
+                tag: 'blob-${attachment.blob.id}',
+                child: Image.network(
+                  u,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white54,
+                      size: 48),
+                ),
               ),
             ),
           );

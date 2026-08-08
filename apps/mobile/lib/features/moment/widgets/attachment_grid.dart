@@ -93,7 +93,13 @@ class _AttachmentTile extends ConsumerWidget {
               ),
             ),
             error: (_, _) => const _FileTile(icon: Icons.broken_image_outlined),
-            data: (u) => _tileBody(context, u),
+            data: (u) => attachment.isImage
+                // Hero 共享元素：缩略图放大飞入全屏预览（微信/小红书式过渡）。
+                ? Hero(
+                    tag: 'blob-${attachment.blob.id}',
+                    child: _tileBody(context, u),
+                  )
+                : _tileBody(context, u),
           ),
         ),
       ),
