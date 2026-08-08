@@ -19,14 +19,28 @@ Before modifying a subsystem, read the project memory `.ai/` first (see below).
 
 ## Project memory (`.ai/`)
 
-The `.ai/` directory at the repo root is the project memory, treated as formal documentation. It contains:
+The `.ai/` directory at the repo root is the project memory, treated as formal documentation. **It is an auto-capturing system**: skills + a plugin capture knowledge as work happens — read `.ai/README.md` first (index + rules), then the latest documents relevant to the change.
 
 - `worklog/` — dated work logs: what was done, evaluated, and fixed each day, plus explicit pitfalls ("hints for the next session")
-- `architecture/` — architecture design documents. Later documents supersede earlier ones (e.g. `2026-08-05-cli-tool-architecture-updates.md` explicitly marks the finalized CLI architecture)
 - `decisions/` — decision records with **Why** / **How to apply** rationale, including rejected/deferred options
-- `requirements/` — requirements documents
+- `requirements/` — requirement docs, each with a status line (✅已实施 / ⏳待实施 / 🔶设计中 / 🪦已否决); status board in `requirements/README.md`
+- `architecture/` — architecture design documents. Later documents supersede earlier ones (e.g. `2026-08-05-cli-tool-architecture-updates.md` explicitly marks the finalized CLI architecture)
+- `runbooks/` — **standard procedures live here only** (hpcore deploy / web Cloudflare upload / iOS install / docker build / release). Worklogs never duplicate a procedure — they link to the runbook
+- `archive/` — dead documents (implemented plans)
+- `inbox/` — raw session captures from the memory plugin; consumed by the memory skills and emptied
 
 Before starting work, read the latest documents relevant to the change. The CLI evaluation history and hardened contracts from 08-05 are in the worklog/architecture/decisions and have been distilled into the CLI section below.
+
+### 项目记忆纪律（自动捕获）
+
+| 场景 | 动作 |
+|------|------|
+| 解决新问题 / 踩坑 | 写 worklog（remember-worklog skill） |
+| 完成珍贵/难的需求或流程 | 写 worklog + 可复现则写 runbook（remember-runbook skill） |
+| 与用户讨论需求 | 边讨论边写 requirements（remember-requirement skill） |
+| 做出决策 | 写 decisions（remember-decision skill） |
+
+技能定义在 `.opencode/skills/remember-*`；memory 插件自动把会话片段写进 `.ai/inbox/`，由 memory-consolidate 整理。标准流程只放 `.ai/runbooks/`，worklog 不重复收录。
 
 ## AI agent team (multi-agent collaboration)
 
@@ -85,15 +99,7 @@ go test -count=1 ./...  # full test run (-count=1 bypasses cache)
 
 Network note: pulling Go modules requires the China mirror `GOPROXY=https://goproxy.cn,direct` (`proxy.golang.org` is unreachable on this network).
 
-Docker build network note: build containers cannot reach `registry.npmjs.org` directly — `docker compose build` will report `ConnectionRefused` for each tarball during `bun install`. When rebuilding, inject the host proxy as build args (Docker-predefined proxy args, no Dockerfile changes needed):
-
-```sh
-docker compose build --build-arg http_proxy=http://host.docker.internal:7897 \
-  --build-arg https_proxy=http://host.docker.internal:7897 \
-  --build-arg no_proxy=localhost,127.0.0.1 api mcp
-```
-
-`host.docker.internal:7897` is the host machine's local HTTP proxy (see the local `http_proxy` env); change it if the port changes. `docker compose up -d` (without `--build`) doesn't need proxy args — only rebuilds do. The Dockerfile stays registry-agnostic and can be built on any network.
+Docker build network note: build containers cannot reach `registry.npmjs.org` directly — `docker compose build` fails at `bun install` with `ConnectionRefused`; inject the host proxy as build args (`host.docker.internal:7897`, Docker-predefined args, no Dockerfile changes). Full procedure: see `.ai/runbooks/docker-local-build.md`. `docker compose up -d` (without `--build`) doesn't need proxy args.
 
 Docker Compose loads the runtime environment from the project root `.env`. Per-service `.env` files are not used. Secrets never enter images; the root `.dockerignore` excludes `.env`.
 
@@ -106,7 +112,7 @@ apps/cli/             Go CLI client (cobra) — see "CLI module" below
 services/api/         REST API — Bun + Hono + Drizzle + PostgreSQL
 services/mcp/         MCP server exposing the API service layer via streamable-http
 scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.docker.internal)
-.ai/                  Project memory: worklog/ architecture/ decisions/ requirements/
+.ai/                  Project memory: worklog/ architecture/ decisions/ requirements/ runbooks/ archive/ inbox/
 ```
 
 ### services/api
@@ -284,7 +290,7 @@ git push origin vX.Y.Z
 - `.github/workflows/release-cli.yml` — on tag `v*`, cloud-compiles 5 platforms (matching Makefile `build-all`) + `checksums.txt` + `gh release create --generate-notes`
 - Docker Hub namespace: `zeroicey` (`zeroicey/serenique-api`, `zeroicey/serenique-mcp`)
 - Images run as **non-root (UID 10001)**: fresh named volumes automatically inherit the in-image owner; existing volumes need a one-time chown to 10001 (`docker run --rm -v <vol>:/data alpine chown -R 10001:10001 /data`), otherwise the container can't write to `/data/blobs`
-- Key pitfalls (bun `--production` implicitly freezes the lockfile, `--filter` is incompatible with `--frozen-lockfile`, the metadata-action `enable` expression syntax) are detailed in `.ai/worklog/2026-08-05-release-pipeline.md`
+- Full release runbook (Docker Hub secrets, UID 10001 chown, key pitfalls like bun `--production` freezing the lockfile): see `.ai/runbooks/release-process.md`; server-side deployment: see `.ai/runbooks/hpcore-deploy.md`
 
 ## Docker
 
