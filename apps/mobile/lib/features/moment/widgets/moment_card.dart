@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
+import '../media_preview.dart';
 import '../moment_models.dart';
 import '../moment_providers.dart';
 import '../moment_time.dart';
+import 'attachment_grid.dart';
 import 'comment_row.dart';
 
 /// 朋友圈样式的闪记卡片：纯文本（「全文/收起」在正文下方）+ 时间行（⋮ 菜单）+ 内嵌评论 + 内联评论输入。
@@ -127,6 +129,18 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                 ),
               ),
             const SizedBox(height: 4),
+            // 附件网格：正文下方、时间行上方（朋友圈位置）。
+            if (moment.attachments.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              AttachmentGrid(
+                attachments: moment.attachments,
+                onTapTile: (index) => showMediaPreview(
+                  context,
+                  attachments: moment.attachments,
+                  initialIndex: index,
+                ),
+              ),
+            ],
             // 时间行：时间靠左，⋮ 菜单在最右。
             Row(
               children: [

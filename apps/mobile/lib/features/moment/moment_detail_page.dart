@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
+import 'media_preview.dart';
 import 'moment_providers.dart';
 import 'moment_time.dart';
+import 'widgets/attachment_grid.dart';
 import 'widgets/comment_section.dart';
 
 /// 闪记详情页 —— 正文可直接编辑（微信发布纯文本样式），右上角保存。
@@ -136,6 +138,18 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
                 ),
               ),
               const SizedBox(height: 6),
+              // 附件网格：正文下方。
+              if (moment.attachments.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                AttachmentGrid(
+                  attachments: moment.attachments,
+                  onTapTile: (index) => showMediaPreview(
+                    context,
+                    attachments: moment.attachments,
+                    initialIndex: index,
+                  ),
+                ),
+              ],
               Text(
                 formatMomentTime(moment.createdAt),
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),

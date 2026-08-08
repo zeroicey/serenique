@@ -2,9 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mocktail_image_network/mocktail_image_network.dart';
 import 'package:serenique_mobile/features/moment/moment_detail_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
+import 'package:serenique_mobile/features/moment/widgets/attachment_grid.dart';
+
+MomentAttachment att(int i) => MomentAttachment(
+      id: 'a$i',
+      blobId: 'b$i',
+      role: 'attachment',
+      sortOrder: i,
+      blob: MomentBlob(
+        id: 'b$i', originalName: 'p$i.jpg', mimeType: 'image/jpeg',
+        size: 1, fileUrl: '/api/blobs/b$i/file', createdAt: 't',
+      ),
+    );
+
+/// 等待图片解码完成。Flutter 3.44 的 NetworkImage 解码是引擎异步操作，
+/// 纯 fake-async 的 pumpAndSettle 下永不完成（CircularProgressIndicator 卡死超时），
+/// 需要 runAsync + 真实延时放行事件循环，并交替 pump 驱动 provider 解析与构建。
+Future<void> settle(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    for (var i = 0; i < 8; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+    }
+  });
+  await tester.pumpAndSettle();
+}
+
 
 /// 假写操作：记录 update/delete/deleteComment，不走网络。
 class _FakeActions extends MomentActions {
@@ -169,5 +196,28 @@ void main() {
     // 发送按钮底部必须在手势条（34）之上，不能贴住屏幕底边（600）。
     final rect = tester.getRect(find.byTooltip('发送'));
     expect(rect.bottom, lessThanOrEqualTo(600 - 34));
+  });
+
+  // 附件网格：详情页正文下方显示并可打开预览
+  testWidgets('详情页正文下方显示附件网格，点瓦片打开预览', (tester) async {
+    await mockNetworkImages(() async {
+      final withAtt = Moment(
+        id: 'm1', text: '看图', attachments: [att(0), att(1)],
+        comments: const [], commentCount: 0, createdAt: 't', updatedAt: 't',
+      );
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          momentDetailProvider.overrideWith((ref, id) async => withAtt),
+          blobAccessUrlProvider.overrideWith((ref, blobId) async => 'https://img.test/$blobId'),
+        ],
+        child: MaterialApp(home: MomentDetailPage(id: 'm1')),
+      ));
+      await settle(tester);
+      expect(find.byType(AttachmentGrid), findsOneWidget);
+      expect(find.byType(Image), findsNWidgets(2));
+      await tester.tap(find.byType(Image).first);
+      await settle(tester);
+      expect(find.text('1 / 2'), findsOneWidget);
+    });
   });
 }
