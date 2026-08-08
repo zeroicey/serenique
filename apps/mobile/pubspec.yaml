@@ -42,6 +42,8 @@ dependencies:
   flutter_secure_storage: ^11.0.0
   flutter_svg: ^2.3.0
   http: ^1.6.0
+  image_picker: ^1.2.3
+  file_picker: ^11.0.3
 
 dev_dependencies:
   flutter_test:
@@ -58,6 +60,14 @@ dev_dependencies:
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
+
+# file_picker 11.x declares win32 ^5.9.0 (Windows-only), which conflicts with
+# flutter_secure_storage 11.x requiring win32 ^6.x. This app only targets
+# iOS/Android (no windows/ dir), so win32 is never compiled — pinning it to a
+# 6.x version satisfying flutter_secure_storage is safe. If Windows desktop is
+# ever added, bump file_picker to a 12.x version instead.
+dependency_overrides:
+  win32: ^6.0.1
 
 # The following section is specific to Flutter packages.
 flutter:
