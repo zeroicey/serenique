@@ -21,6 +21,22 @@ class _FakeAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
+/// 把 options 交给回调构造响应，便于断言请求头/请求体。
+class _RecordingAdapter implements HttpClientAdapter {
+  _RecordingAdapter(this.onRequest);
+
+  final String Function(RequestOptions options) onRequest;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+          Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async =>
+      ResponseBody.fromString(onRequest(options), 200,
+          headers: {Headers.contentTypeHeader: ['application/json']});
+
+  @override
+  void close({bool force = false}) {}
+}
+
 void main() {
   group('applyAuthHeader', () {
     test('有 token：注入 Bearer', () {
@@ -71,8 +87,7 @@ void main() {
     });
   });
 
-  group('onUnauthorized', () {
-    test('401 触发回调', () async {
+  group('onUnauthorized', () {    test('401 触发回调', () async {
       final dio = Dio();
       dio.httpClientAdapter = _FakeAdapter(
           401, jsonEncode({'success': false, 'code': 'UNAUTHORIZED', 'message': '未认证或登录已过期'}));
@@ -99,5 +114,27 @@ void main() {
       await expectLater(client.getData('/api/moments'), throwsA(isA<ApiException>()));
       expect(called, isFalse);
     });
+  });
+
+  test('postMultipart 发送 multipart/form-data 并解包响应', () async {
+    final captured = <String>[];
+    final adapter = _RecordingAdapter((options) {
+      // dio 5.11: RequestOptions.contentType 只是 header 字符串，需自行解析
+      final header = options.headers[Headers.contentTypeHeader] as String? ?? '';
+      final mediaType = header.isEmpty ? null : DioMediaType.parse(header);
+      captured.add(mediaType?.mimeType ?? '');
+      captured.add(mediaType?.parameters['boundary'] != null ? 'has-boundary' : 'no-boundary');
+      return jsonEncode({'success': true, 'message': 'ok', 'data': {'id': 'b1'}});
+    });
+    final client = ApiClient(
+        baseUrl: 'https://api.test',
+        tokenReader: () => null,
+        dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+          ..httpClientAdapter = adapter);
+    final data = await client.postMultipart('/api/blobs/upload',
+        bytes: Uint8List.fromList([1, 2, 3]), filename: 'a.jpg', mimeType: 'image/jpeg');
+    expect((data as Map)['id'], 'b1');
+    expect(captured[0], 'multipart/form-data');
+    expect(captured[1], 'has-boundary');
   });
 }

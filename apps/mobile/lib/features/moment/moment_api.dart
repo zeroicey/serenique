@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../../core/network/api_client.dart';
 import '../../../core/network/unwrap.dart';
 import 'blob_access.dart';
@@ -29,8 +31,20 @@ class MomentApi {
     return Moment.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<Moment> create(String text) async {
-    final data = await _client.postData('/api/moments', body: {'text': text});
+  Future<MomentBlob> uploadBlob(Uint8List bytes,
+      {required String filename, required String mimeType}) async {
+    final data = await _client.postMultipart('/api/blobs/upload',
+        bytes: bytes, filename: filename, mimeType: mimeType);
+    return MomentBlob.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<Moment> create(String text,
+      {List<MomentAttachmentInput> attachments = const []}) async {
+    final data = await _client.postData('/api/moments', body: {
+      'text': text,
+      if (attachments.isNotEmpty)
+        'attachments': attachments.map((a) => a.toJson()).toList(),
+    });
     return Moment.fromJson(data as Map<String, dynamic>);
   }
 

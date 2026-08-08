@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/auth_providers.dart';
@@ -57,6 +59,20 @@ class ApiClient {
       _guard(_dio.put(path, data: body));
 
   Future<dynamic> deleteData(String path) => _guard(_dio.delete(path));
+
+  /// multipart 文件上传（dio FormData + MultipartFile，bytes 已在内存）。
+  Future<dynamic> postMultipart(
+    String path, {
+    required Uint8List bytes,
+    required String filename,
+    required String mimeType,
+  }) {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes,
+          filename: filename, contentType: DioMediaType.parse(mimeType)),
+    });
+    return _guard(_dio.post(path, data: form));
+  }
 
   Future<dynamic> _guard(Future<Response<dynamic>> future) async {
     try {

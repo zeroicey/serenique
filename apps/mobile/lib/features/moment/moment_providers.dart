@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
 import 'blob_access.dart';
@@ -27,6 +29,31 @@ class MomentActions {
 
   Future<Moment> create(String text) async {
     final created = await _api.create(text);
+    _ref.invalidate(momentListProvider);
+    return created;
+  }
+
+  /// 上传编排：逐个 uploadBlob → createMoment（对齐 Web useCreateMomentWithMedia）。
+  /// 任一步失败抛错，由页面保留已选附件供重试。
+  Future<Moment> createWithMedia(
+    String text,
+    List<({Uint8List bytes, String filename, String mimeType})> files,
+  ) async {
+    final blobs = <String>[];
+    for (var i = 0; i < files.length; i++) {
+      final f = files[i];
+      final blob =
+          await _api.uploadBlob(f.bytes, filename: f.filename, mimeType: f.mimeType);
+      blobs.add(blob.id);
+    }
+    final created = await _api.create(
+      text,
+      attachments: [
+        for (var i = 0; i < blobs.length; i++)
+          MomentAttachmentInput(
+              blobId: blobs[i], displayName: files[i].filename, sortOrder: i),
+      ],
+    );
     _ref.invalidate(momentListProvider);
     return created;
   }

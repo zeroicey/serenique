@@ -109,6 +109,25 @@ class MomentAttachment {
       );
 }
 
+/// 创建 Moment 时的附件输入（对齐 services/api MomentAttachmentInputSchema）。
+class MomentAttachmentInput {
+  const MomentAttachmentInput({
+    required this.blobId,
+    this.displayName,
+    required this.sortOrder,
+  });
+
+  final String blobId;
+  final String? displayName;
+  final int sortOrder;
+
+  Map<String, dynamic> toJson() => {
+        'blobId': blobId,
+        if (displayName != null) 'displayName': displayName,
+        'sortOrder': sortOrder,
+      };
+}
+
 /// 与 API 同款比较器 (sortOrder, createdAt, id) 稳定排序，返回新列表、不改原列表。
 /// 网格与全屏预览必须共用本函数的结果，保证「网格第 i 格 == 预览 initialIndex=i」。
 List<MomentAttachment> sortedAttachments(List<MomentAttachment> attachments) {

@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/core/network/api_client.dart';
 import 'package:serenique_mobile/features/moment/moment_api.dart';
+import 'package:serenique_mobile/features/moment/moment_models.dart';
 
 class _FakeAdapter implements HttpClientAdapter {
   _FakeAdapter(this.body);
@@ -15,6 +16,28 @@ class _FakeAdapter implements HttpClientAdapter {
           Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async =>
       ResponseBody.fromString(body, 200,
           headers: {Headers.contentTypeHeader: ['application/json']});
+
+  @override
+  void close({bool force = false}) {}
+}
+
+/// 记录最近一次请求的 body（JSON 请求时 options.data 是 Map，需 jsonEncode）。
+class _RecordingAdapter implements HttpClientAdapter {
+  _RecordingAdapter(this.onRequest);
+
+  final String Function(RequestOptions options) onRequest;
+  String? lastBody;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    final data = options.data;
+    if (data is Map<String, dynamic>) {
+      lastBody = jsonEncode(data);
+    }
+    return ResponseBody.fromString(onRequest(options), 200,
+        headers: {Headers.contentTypeHeader: ['application/json']});
+  }
 
   @override
   void close({bool force = false}) {}
@@ -70,5 +93,61 @@ void main() {
     final link = await api.createBlobAccessLink('b2');
     expect(link.url,
         'https://api.zeroicey.me/api/blobs/b2/file?expires=2100000000&signature=sig2');
+  });
+
+  test('uploadBlob 走 multipart 并解析 BlobEntry', () async {
+    final adapter = _RecordingAdapter((options) => jsonEncode({
+          'success': true,
+          'message': 'ok',
+          'data': {
+            'id': 'b1',
+            'originalName': 'a.jpg',
+            'mimeType': 'image/jpeg',
+            'size': 3,
+            'checksum': 'x',
+            'metadata': {},
+            'width': 1,
+            'height': 1,
+            'duration': null,
+            'createdAt': 't',
+          },
+        }));
+    final client = ApiClient(
+        baseUrl: 'https://api.test',
+        tokenReader: () => null,
+        dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+          ..httpClientAdapter = adapter);
+    final blob = await MomentApi(client).uploadBlob(
+        Uint8List.fromList([1, 2, 3]), filename: 'a.jpg', mimeType: 'image/jpeg');
+    expect(blob.id, 'b1');
+    expect(blob.mimeType, 'image/jpeg');
+  });
+
+  test('create 带 attachments 时请求体包含 blobId/displayName/sortOrder', () async {
+    final adapter = _RecordingAdapter((options) => jsonEncode({
+          'success': true,
+          'message': 'ok',
+          'data': {
+            'id': 'm1',
+            'text': '看图',
+            'attachments': [],
+            'comments': [],
+            'commentCount': 0,
+            'createdAt': 't',
+            'updatedAt': 't',
+          },
+        }));
+    final client = ApiClient(
+        baseUrl: 'https://api.test',
+        tokenReader: () => null,
+        dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+          ..httpClientAdapter = adapter);
+    await MomentApi(client).create('看图', attachments: [
+      MomentAttachmentInput(blobId: 'b1', displayName: 'a.jpg', sortOrder: 0),
+    ]);
+    final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
+    expect(body['text'], '看图');
+    expect((body['attachments'] as List).single,
+        {'blobId': 'b1', 'displayName': 'a.jpg', 'sortOrder': 0});
   });
 }
