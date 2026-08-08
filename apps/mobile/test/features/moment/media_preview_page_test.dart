@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail_image_network/mocktail_image_network.dart';
+import 'package:photo_view_plus/photo_view_plus.dart';
+import 'package:photo_view_plus/photo_view_plus_gallery.dart';
 import 'package:serenique_mobile/features/moment/media_preview_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
@@ -23,18 +25,25 @@ MomentAttachment imageAttachment(String id) => MomentAttachment(
 
 Future<void> pumpPreview(WidgetTester tester) {
   return mockNetworkImages(() async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        blobAccessUrlProvider.overrideWith(
-            (ref, blobId) async => 'http://media.test/$blobId'),
-      ],
-      child: MaterialApp(
-        home: MediaPreviewPage(
-          attachments: [imageAttachment('a1'), imageAttachment('a2')],
-          initialIndex: 0,
+    // runAsync：让真实异步（图片解码）完成——fake 时钟下解码永远不结束，
+    // PhotoView 的 loadingBuilder spinner 会一直转导致 pumpAndSettle 超时。
+    await tester.runAsync(() async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          blobAccessUrlProvider.overrideWith(
+              (ref, blobId) async => 'http://media.test/$blobId'),
+        ],
+        child: MaterialApp(
+          home: MediaPreviewPage(
+            attachments: [imageAttachment('a1'), imageAttachment('a2')],
+            initialIndex: 0,
+          ),
         ),
-      ),
-    ));
+      ));
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await tester.pump();
+    });
     await tester.pumpAndSettle();
   });
 }
@@ -49,7 +58,8 @@ void main() {
     expect(barOpacity(tester), 0);
 
     await tester.tap(find.byType(PageView));
-    await tester.pump();
+    // PhotoView 的 DoubleTap 识别器让竞技场保持 300ms，需推进假时钟才能收到 tap 回调
+    await tester.pump(const Duration(milliseconds: 350));
     expect(barOpacity(tester), 1);
     expect(find.text('1 / 2'), findsOneWidget);
 
@@ -62,33 +72,23 @@ void main() {
     expect(find.byType(MediaPreviewPage), findsOneWidget);
 
     await tester.tap(find.byType(PageView));
-    await tester.pump();
+    // PhotoView 的 DoubleTap 识别器让竞技场保持 300ms，需推进假时钟才能收到 tap 回调
+    await tester.pump(const Duration(milliseconds: 350));
     expect(barOpacity(tester), 1);
   });
 
-  testWidgets('图片铺满整页：cover 无黑边 + Hero 共享元素过渡', (tester) async {
+  testWidgets('图片页基于 PhotoViewGallery：covered 铺满 + Hero 共享元素过渡', (tester) async {
     await pumpPreview(tester);
 
-    // Hero 共享元素存在（缩略图放大飞入全屏）
+    final gallery =
+        tester.widget<PhotoViewGallery>(find.byType(PhotoViewGallery));
+    final page = gallery.pageOptions!.first;
+    // Hero 过渡：tag 与网格缩略图一致（blob-a1 的 blobId 是 'blob-a1'）
+    expect(page.heroAttributes?.tag, 'blob-blob-a1');
+    // covered：初始铺满全屏无黑边；可捏合缩回 contained 看全图
+    expect(page.initialScale, PhotoViewScale.covered);
+    expect(page.minScale, PhotoViewScale.contained);
+    // 图库内有 Hero 元素（飞入过渡由 photo_view 提供）
     expect(find.byType(Hero), findsOneWidget);
-
-    // 图片盒子 = 全屏（SizedBox.expand；Hero 内部还有一个 null 尺寸的 SizedBox，跳过它）
-    final expanded = tester
-        .widgetList<SizedBox>(
-          find.descendant(
-            of: find.byType(InteractiveViewer),
-            matching: find.byType(SizedBox),
-          ),
-        )
-        .where((b) => b.width != null);
-    expect(expanded, isNotEmpty);
-    expect(
-      expanded.every((b) => b.width == double.infinity && b.height == double.infinity),
-      isTrue,
-    );
-
-    // cover 模式：图片铺满屏幕，无黑边
-    final image = tester.widget<Image>(find.byType(Image));
-    expect(image.fit, BoxFit.cover);
   });
 }

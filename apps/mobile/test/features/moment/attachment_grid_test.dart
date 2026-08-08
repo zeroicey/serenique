@@ -83,7 +83,14 @@ void main() {
       attachment(id: 'a1', mimeType: 'image/jpeg', name: 'x.jpg'),
       attachment(id: 'a2', mimeType: 'image/jpeg', name: 'y.jpg'),
     ]);
-    await tester.tap(find.byType(Image).first);
+    // runAsync：预览页 PhotoView 的图片解码是真实异步，fake 时钟下不会完成，
+    // loadingBuilder spinner 会一直转导致 pumpAndSettle 超时。
+    await tester.runAsync(() async {
+      await tester.tap(find.byType(Image).first);
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await tester.pump();
+    });
     await tester.pumpAndSettle();
 
     // 预览页打开，控制条默认隐藏（全屏沉浸）
@@ -95,7 +102,8 @@ void main() {
 
     // 点击页面唤出控制条 → 点关闭返回
     await tester.tap(find.byType(PageView));
-    await tester.pump();
+    // PhotoView 的 DoubleTap 识别器让竞技场保持 300ms，需推进假时钟才能收到 tap 回调
+    await tester.pump(const Duration(milliseconds: 350));
     expect(find.text('1 / 2'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.close));

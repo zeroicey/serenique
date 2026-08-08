@@ -2,16 +2,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:photo_view_plus/photo_view_plus.dart';
+import 'package:photo_view_plus/photo_view_plus_gallery.dart';
 import 'moment_models.dart';
 import 'moment_providers.dart';
 import 'widgets/audio_player_bar.dart';
 import 'widgets/video_player_view.dart';
 
-/// 全屏媒体预览（朋友圈样式）：黑底 PageView 左右滑动切换，
-/// 图片可捏合缩放，视频/音频可播放。只构建当前页 → 翻页自动释放上一页播放器。
-/// 图片默认铺满全屏（cover，无黑边）+ Hero 共享元素过渡（缩略图放大飞入）；
-/// 顶部控制条（关闭 + 计数）默认隐藏，点按唤出后 2.5 秒自动隐藏；预览期间隐藏系统状态栏。
-class MediaPreviewPage extends StatefulWidget {
+/// 全屏媒体预览（朋友圈/小红书样式），基于 photo_view_plus（photo_view 维护分支）：
+/// - 图片页：PhotoViewGallery，`covered` 初始铺满全屏（无黑边），可捏合缩回 contained 看全图、
+///   双击放大；`heroAttributes` 与网格缩略图 Hero 同 tag → 从小放大飞入过渡。
+/// - 视频/音频页：`customChild` 复用 VideoPlayerView / AudioPlayerBar。
+/// 只构建当前页 → 翻页自动释放上一页播放器。顶部控制条（关闭 + 计数）默认隐藏，
+/// 点按唤出后 2.5 秒自动隐藏；预览期间隐藏系统状态栏。
+class MediaPreviewPage extends ConsumerStatefulWidget {
   const MediaPreviewPage({
     super.key,
     required this.attachments,
@@ -22,10 +26,10 @@ class MediaPreviewPage extends StatefulWidget {
   final int initialIndex;
 
   @override
-  State<MediaPreviewPage> createState() => _MediaPreviewPageState();
+  ConsumerState<MediaPreviewPage> createState() => _MediaPreviewPageState();
 }
 
-class _MediaPreviewPageState extends State<MediaPreviewPage> {
+class _MediaPreviewPageState extends ConsumerState<MediaPreviewPage> {
   late final PageController _controller;
   late int _index;
   bool _controlsVisible = false;
@@ -63,27 +67,61 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
     if (_controlsVisible) _scheduleHide();
   }
 
+  /// PhotoView 的 tap 回调：点按唤出/隐藏控制条（外层 GestureDetector
+  /// 会在手势竞技场输给 PhotoView 的 tap 识别器，必须走这里）。
+  void _onTapUp(
+      BuildContext context, TapUpDetails details, PhotoViewControllerValue value) {
+    _toggleControls();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.attachments.isEmpty) {
       return const Scaffold(backgroundColor: Colors.black);
     }
+    // 逐个附件解析签名 URL（网格已预热缓存，几乎瞬时）；全部就绪后构建图库。
+    final urls = <String, AsyncValue<String>>{};
+    var anyLoading = false;
+    for (final a in widget.attachments) {
+      final v = ref.watch(blobAccessUrlProvider(a.blob.id));
+      urls[a.id] = v;
+      if (v.isLoading) anyLoading = true;
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _toggleControls,
-            child: PageView.builder(
-              controller: _controller,
-              itemCount: widget.attachments.length,
-              onPageChanged: (i) => setState(() => _index = i),
-              itemBuilder: (context, i) =>
-                  _PreviewItem(attachment: widget.attachments[i]),
-            ),
-          ),
-          // 顶部：关闭 + 计数（2.5 秒自动隐藏，点按唤出）
+          if (anyLoading)
+            const Center(
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(
+                    color: Colors.white70, strokeWidth: 3),
+              ),
+            )
+          else
+            // 点按唤出控制条由 PhotoView 自己的 onTapUp 处理（外层 GestureDetector
+            // 会在手势竞技场输给 PhotoView 的 tap 识别器）。
+            PhotoViewGallery(
+                pageController: _controller,
+                onPageChanged: (i) => setState(() => _index = i),
+                backgroundDecoration: const BoxDecoration(color: Colors.black),
+                loadingBuilder: (context, event) => const Center(
+                  child: SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: CircularProgressIndicator(
+                        color: Colors.white70, strokeWidth: 3),
+                  ),
+                ),
+                pageOptions: [
+                  for (final a in widget.attachments)
+                    _pageOption(a, urls[a.id]!),
+                ],
+              ),
+          // 顶部：关闭 + 计数（默认隐藏，点按唤出，2.5 秒自动隐藏）
           Positioned(
             top: 0,
             left: 0,
@@ -121,81 +159,98 @@ class _MediaPreviewPageState extends State<MediaPreviewPage> {
       ),
     );
   }
-}
 
-class _PreviewItem extends ConsumerWidget {
-  const _PreviewItem({required this.attachment});
-
-  final MomentAttachment attachment;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final url = ref.watch(blobAccessUrlProvider(attachment.blob.id));
-    return url.when(
-      loading: () => const Center(
-        child: SizedBox(
-          width: 36,
-          height: 36,
-          child: CircularProgressIndicator(color: Colors.white70, strokeWidth: 3),
-        ),
-      ),
-      error: (err, _) => Center(
+  PhotoViewGalleryPageOptions _pageOption(
+      MomentAttachment a, AsyncValue<String> url) {
+    // Riverpod 3：.value 在无数据时为 null
+    final u = url.value;
+    if (a.isImage) {
+      if (u == null) {
+        return PhotoViewGalleryPageOptions.customChild(
+          disableGestures: true,
+          onTapUp: _onTapUp,
+          child: _LoadError(
+            onRetry: () =>
+                ref.invalidate(blobAccessUrlProvider(a.blob.id)),
+          ),
+        );
+      }
+      return PhotoViewGalleryPageOptions(
+        imageProvider: NetworkImage(u),
+        // 与网格缩略图 Hero tag 一致 → 共享元素过渡（从小放大飞入）
+        heroAttributes: PhotoViewHeroAttributes(tag: 'blob-${a.blob.id}'),
+        // covered：初始铺满全屏无黑边；minScale contained：可捏合缩回看全图
+        initialScale: PhotoViewScale.covered,
+        minScale: PhotoViewScale.contained,
+        maxScale: PhotoViewComputedScale.contained * 4,
+        onTapUp: _onTapUp,
+        errorBuilder: (_, _, _) => const Icon(
+            Icons.broken_image_outlined,
+            color: Colors.white54,
+            size: 48),
+      );
+    }
+    if (a.isVideo) {
+      return PhotoViewGalleryPageOptions.customChild(
+        disableGestures: true,
+        onTapUp: _onTapUp,
+        child: u == null
+            ? _LoadError(
+                onRetry: () =>
+                    ref.invalidate(blobAccessUrlProvider(a.blob.id)))
+            : VideoPlayerView(url: u),
+      );
+    }
+    if (a.isAudio) {
+      return PhotoViewGalleryPageOptions.customChild(
+        disableGestures: true,
+        onTapUp: _onTapUp,
+        child: u == null
+            ? _LoadError(
+                onRetry: () =>
+                    ref.invalidate(blobAccessUrlProvider(a.blob.id)))
+            : AudioPlayerBar(url: u, title: a.displayLabel),
+      );
+    }
+    return PhotoViewGalleryPageOptions.customChild(
+      disableGestures: true,
+      onTapUp: _onTapUp,
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Colors.white54, size: 40),
+            const Icon(Icons.insert_drive_file_outlined,
+                color: Colors.white54, size: 48),
             const SizedBox(height: 8),
-            const Text('加载失败', style: TextStyle(color: Colors.white70)),
-            TextButton(
-              onPressed: () => ref.invalidate(blobAccessUrlProvider(attachment.blob.id)),
-              child: const Text('重试', style: TextStyle(color: Colors.white)),
-            ),
+            Text(a.displayLabel,
+                style: const TextStyle(color: Colors.white70)),
           ],
         ),
       ),
-      data: (u) {
-        if (attachment.isImage) {
-          // 铺满全屏（cover，无黑边）+ Hero 共享元素过渡（缩略图放大飞入）；
-          // minScale 1.0 保持全屏铺满，捏合放大看细节。
-          return InteractiveViewer(
-            maxScale: 4,
-            minScale: 1.0,
-            child: SizedBox.expand(
-              child: Hero(
-                tag: 'blob-${attachment.blob.id}',
-                child: Image.network(
-                  u,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const Icon(
-                      Icons.broken_image_outlined,
-                      color: Colors.white54,
-                      size: 48),
-                ),
-              ),
-            ),
-          );
-        }
-        if (attachment.isVideo) {
-          return VideoPlayerView(url: u);
-        }
-        if (attachment.isAudio) {
-          return Center(
-            child: AudioPlayerBar(url: u, title: attachment.displayLabel),
-          );
-        }
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.insert_drive_file_outlined,
-                  color: Colors.white54, size: 48),
-              const SizedBox(height: 8),
-              Text(attachment.displayLabel,
-                  style: const TextStyle(color: Colors.white70)),
-            ],
+    );
+  }
+}
+
+class _LoadError extends StatelessWidget {
+  const _LoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.white54, size: 40),
+          const SizedBox(height: 8),
+          const Text('加载失败', style: TextStyle(color: Colors.white70)),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('重试', style: TextStyle(color: Colors.white)),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
