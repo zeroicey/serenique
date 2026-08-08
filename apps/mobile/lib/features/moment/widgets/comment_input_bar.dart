@@ -66,7 +66,7 @@ class _CommentInputBarState extends ConsumerState<CommentInputBar> {
                 hintText: '写评论…',
                 isDense: true,
                 filled: true,
-                fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                fillColor: scheme.surfaceContainerHighest,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
                   borderSide: BorderSide.none,

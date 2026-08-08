@@ -197,8 +197,7 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                         hintText: '写评论…',
                         isDense: true,
                         filled: true,
-                        fillColor:
-                            scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                        fillColor: scheme.surfaceContainerHighest,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(20),
                           borderSide: BorderSide.none,
@@ -215,6 +214,8 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                   ),
                 ],
               ),
+              // 输入框与下方分割线之间留呼吸空间，避免贴住分隔符。
+              const SizedBox(height: 8),
             ],
             // 有评论时：评论块与下方分割符之间留稍大的呼吸空间；无评论则紧贴时间行。
             if (moment.comments.isNotEmpty) const SizedBox(height: 8),
