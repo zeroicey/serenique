@@ -66,7 +66,7 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
         Positioned(
           left: 0,
           right: 0,
-          bottom: MediaQuery.of(context).padding.bottom + 16,
+          bottom: MediaQuery.of(context).padding.bottom + 32,
           child: Center(
             child: Text(
               '${_current + 1} / ${attachments.length}',
