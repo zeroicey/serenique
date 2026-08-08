@@ -87,6 +87,25 @@ class MomentActions {
 final momentActionsProvider =
     Provider<MomentActions>((ref) => MomentActions(ref));
 
+/// 已选附件（未上传）的本地状态：编辑页展示缩略图、提交后清空。
+class PickedAttachments extends Notifier<List<PickedAttachment>> {
+  PickedAttachments({List<PickedAttachment>? initial})
+      : _initial = initial ?? const [];
+
+  final List<PickedAttachment> _initial;
+  @override
+  List<PickedAttachment> build() => _initial;
+
+  void set(List<PickedAttachment> value) => state = value;
+  void addAll(List<PickedAttachment> value) => state = [...state, ...value];
+  void removeAt(int index) => state = [...state]..removeAt(index);
+  void clear() => state = const [];
+}
+
+final pickedAttachmentsProvider =
+    NotifierProvider<PickedAttachments, List<PickedAttachment>>(
+        PickedAttachments.new);
+
 /// 签名链接缓存服务：内存缓存 + 过期刷新 + 失败回退直链。
 final blobAccessServiceProvider = Provider<BlobAccessService>((ref) {
   final api = ref.watch(momentApiProvider);

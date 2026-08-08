@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 class MomentComment {
   const MomentComment({
     required this.id,
@@ -172,4 +174,29 @@ class Moment {
         createdAt: json['createdAt'] as String,
         updatedAt: json['updatedAt'] as String,
       );
+}
+
+/// 已选附件：bytes 供上传，localPath 供本地缩略图预览。
+class PickedAttachment {
+  const PickedAttachment({
+    required this.bytes,
+    required this.filename,
+    required this.mimeType,
+    this.localPath,
+    this.durationMs,
+  });
+
+  final Uint8List bytes;
+  final String filename;
+  final String mimeType;
+
+  /// 本地文件路径（image_picker/file_picker 返回的临时路径），供缩略图直接显示。
+  final String? localPath;
+
+  /// 时长（毫秒），仅音视频有。
+  final int? durationMs;
+
+  bool get isImage => mimeType.startsWith('image/');
+  bool get isVideo => mimeType.startsWith('video/');
+  bool get isAudio => mimeType.startsWith('audio/');
 }
