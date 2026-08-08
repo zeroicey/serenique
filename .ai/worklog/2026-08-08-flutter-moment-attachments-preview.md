@@ -50,6 +50,16 @@
   - Riverpod 3 无 `valueOrNull`，用 `.value`（可空）。
 - 108/108 全绿；release 已重装（生产 API）。
 
+## 第四轮：用户不满意，整体退回（commit bd9ae06）
+
+用户对 photo_view_plus 版效果仍不满意（「还是不行」），要求退回移动端功能前基线，**只动 `apps/mobile`**，其他端（API/Web/CLI/MCP）零影响。
+
+- **退回方式**：`git rm -r apps/mobile` + `git checkout 9919a1f -- apps/mobile`（9919a1f = 功能第一个提交 ed11f18 的父提交），一次提交 `bd9ae06 revert(mobile): remove moment attachments preview feature`，19 个文件、-1539 行。
+- 验证：`flutter pub get`（pubspec.lock 已回退）+ `flutter analyze` No issues + `flutter test` 91/91（功能前原套件）。
+- **保留**：设计文档（`.ai/architecture/2026-08-08-flutter-moment-attachments-design.md`）、需求文档（状态改 ⏳待实施）、本 worklog、实现计划（`docs/superpowers/plans/`）——为下次重做留参考。
+- 手机已重装退回后的 release（生产 API）。
+- **给下次的提示**：用户要的是微信/小红书式体验——点缩略图从小放大飞入铺满全屏、无黑边、无多余 chrome。自研（Hero+cover）与 photo_view_plus 两版都被否。下次动手前先跟用户对齐一个可接受的最小验收标准（例如：打开动画形式、黑边是否可接受、裁切策略），避免再次返工。测试环境两个坑已在上面记录（runAsync 解码、300ms 双击竞技场）。
+
 ## 坑 / 对下一次会话的提示
 
 - **SDD 评审抓出两个 plan 笔误**，均已修正 plan 后修复：① 视频控制条被 `IgnorePointer` 整条包裹 → Slider/全屏按钮不可点（控制条必须可交互，只能让空白区透传）；② 音频重试 `_load()` 未取消旧 stream 订阅 → 每次 retry 泄漏 3 个订阅。**教训：控制条这类"部分区域可点、部分区域透传"的组件，写代码前先想清楚 hit-test 行为；重试路径的资源释放要在计划里写死。**

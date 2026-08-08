@@ -10,7 +10,7 @@
 | `2026-08-06-auth.md` | 认证 | ✅已实施 |
 | `2026-08-08-audit-module.md` | 审计模块 | ✅已实施 |
 | `2026-08-08-push-module.md` | 推送模块 | 🔶设计中 |
-| `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | 🔶设计中（预览已定稿，上传待定） |
+| `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | ⏳待实施（2026-08-08 退回，效果未达预期） |
 
 ## 约定
 
