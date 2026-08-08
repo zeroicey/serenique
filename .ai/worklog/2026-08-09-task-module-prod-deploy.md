@@ -32,3 +32,14 @@
 4. 手机上的 app 登录要用生产 `AUTH_TOKEN`（登录页输入密钥）；免费签名 7 天过期需重签重装。
 5. 本地 `localhost:3000` 的 docker 镜像是旧的（无 auth 模块），模拟器/调试链路要用 `bun run dev` 起本地 API 或重建镜像。
 6. 冒烟测试的价值被验证：勾选竞态 bug 是真实且可确定性复现的（GET 先于 PUT 完成），修复 = onToggle 里先 await 写操作再 invalidate。
+
+## 追加：任务条目勾选图标对齐修复（commit 5148a11、ab3e879）
+
+用户真机反馈任务条目里勾选按钮与内容不在一条线上，两轮修复：
+
+1. **5148a11**（错误方向）：ListTile 有副标题时 leading 与「标题+副标题」整体居中，图标比标题低 8px（实测 icon 36 vs title 28）。改用 Row 顶部对齐、图标对齐标题首行——结果今日/周/月视图反而图标偏上，组详情对齐。
+2. **ab3e879**（最终正确）：用户澄清要的是**图标中心 = 内容块竖直中心**。改用 `IntrinsicHeight + Row(stretch)`：图标区宽度 40、高度自适应内容、`Center` 图标；副标题条件渲染（空组名不渲染空行）。带组名时图标对「标题+组名」整体居中，组详情无组名时对标题行居中——两种场景严格一条线。
+
+**坑**：ListTile 的 leading 对齐（titleHeight 模式）既不等于内容块中心也不等于标题行中心，且会随副标题有无而变；自绘 Row + IntrinsicHeight 是确定解。对齐用 widget 测试锁定（`test/features/task/task_tile_align_test.dart`：图标中心与 tile 竖直中心差 <1px，覆盖有/无副标题/done 三态）。
+
+修复后已重建 release 包并装机（hcyj 后端），用户确认「这下好了」。
