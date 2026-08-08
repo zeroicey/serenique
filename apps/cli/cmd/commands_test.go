@@ -333,7 +333,7 @@ func TestMomentGetDecodesBlobSubObject(t *testing.T) {
 	}, true, func(srv *httptest.Server) {
 		// Decode into the CLI structs exactly as the command does, so the blob
 		// sub-object the API returns is not dropped.
-		var result MomentEntry
+		var result client.MomentEntry
 		if err := apiClient.Get(context.Background(), "/api/moments/m1", nil, &result); err != nil {
 			t.Fatal(err)
 		}
@@ -640,7 +640,7 @@ func TestMomentGetKeepsAttachmentMetadata(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"hi","createdAt":"x","updatedAt":"x","attachments":[{"id":"a1","blobId":"b1","role":"cover","sortOrder":0,"metadata":{"tag":"cover-photo"},"createdAt":"x","updatedAt":"x"}]}}`))
 	}, true, func(srv *httptest.Server) {
-		var result MomentEntry
+		var result client.MomentEntry
 		if err := apiClient.Get(context.Background(), "/api/moments/m1", nil, &result); err != nil {
 			t.Fatal(err)
 		}

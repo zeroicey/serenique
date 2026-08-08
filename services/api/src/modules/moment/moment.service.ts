@@ -27,6 +27,7 @@ import type {
   ListMomentInput,
   MomentAttachmentEntry,
   MomentEntry,
+  UpdateMomentInput,
 } from "@/modules/moment/moment.types";
 
 // ---------------------------------------------------------------------------
@@ -234,6 +235,17 @@ export const momentService = {
       comments,
       comments.length,
     );
+  },
+
+  async update(input: UpdateMomentInput): Promise<MomentEntry> {
+    const { id, ...data } = input;
+    const [row] = await db
+      .update(moments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(moments.id, id))
+      .returning();
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "闪念不存在", 404);
+    return momentService.get({ id });
   },
 
   async addAttachment(

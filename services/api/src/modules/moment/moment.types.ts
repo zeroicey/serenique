@@ -19,6 +19,11 @@ export const CreateMomentSchema = z.object({
   attachments: z.array(MomentAttachmentInputSchema).default([]),
 });
 
+/** PUT partial update — text is the only updatable field. */
+export const UpdateMomentSchema = z.object({
+  text: z.string().min(1).max(500),
+});
+
 export const ListMomentSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(10),
@@ -28,8 +33,10 @@ export const AddMomentAttachmentSchema = MomentAttachmentInputSchema;
 
 export type CreateMomentInput = z.input<typeof CreateMomentSchema>;
 export type ListMomentInput = z.infer<typeof ListMomentSchema>;
+export type UpdateMomentBody = z.infer<typeof UpdateMomentSchema>;
 export type DeleteMomentInput = { id: string };
 export type GetMomentInput = { id: string };
+export type UpdateMomentInput = { id: string } & UpdateMomentBody;
 export type AddMomentAttachmentInput = z.input<typeof AddMomentAttachmentSchema>;
 export type DeleteMomentAttachmentInput = {
   momentId: string;

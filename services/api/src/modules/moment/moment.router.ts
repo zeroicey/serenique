@@ -18,4 +18,5 @@ export const momentRouter = new Hono()
     momentHandler.deleteAttachment,
   )
   .get("/moments/:id", momentHandler.get)
+  .put("/moments/:id", momentHandler.update)
   .delete("/moments/:id", momentHandler.delete);

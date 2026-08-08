@@ -208,6 +208,20 @@ describe("moment schemas", () => {
     expect(CreateMomentSchema.parse({ text: "hello" }).attachments).toEqual([]);
   });
 
+  test("UpdateMomentSchema requires text 1-500 and rejects unknown body fields", async () => {
+    setTestEnv();
+    const { UpdateMomentSchema } = await import("./moment.types");
+
+    expect(UpdateMomentSchema.safeParse({ text: "新内容" }).success).toBe(true);
+    expect(UpdateMomentSchema.safeParse({ text: "" }).success).toBe(false);
+    expect(UpdateMomentSchema.safeParse({ text: "x".repeat(501) }).success).toBe(
+      false,
+    );
+    expect(UpdateMomentSchema.safeParse({ content: "hello" }).success).toBe(
+      false,
+    );
+  });
+
   test("MomentAttachmentInputSchema defaults role/metadata and rejects non-uuid blobId", async () => {
     setTestEnv();
     const { MomentAttachmentInputSchema } = await import("./moment.types");

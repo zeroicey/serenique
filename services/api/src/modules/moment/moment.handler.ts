@@ -9,6 +9,7 @@ import {
   AddMomentAttachmentSchema,
   CreateMomentSchema,
   ListMomentSchema,
+  UpdateMomentSchema,
 } from "@/modules/moment/moment.types";
 import { handleError, uuidParam } from "@/shared/handler";
 import { Res } from "@/shared/response";
@@ -74,6 +75,19 @@ export const momentHandler = {
       const id = uuidParam(c, "id");
       await momentService.delete({ id });
       return Res.noContent("闪念删除成功").build(c);
+    } catch (e) {
+      return handleError(e, c, "moment");
+    }
+  },
+
+  async update(c: Context) {
+    try {
+      const body = UpdateMomentSchema.parse(await c.req.json());
+      const result = await momentService.update({
+        id: uuidParam(c, "id"),
+        ...body,
+      });
+      return Res.ok("闪念更新成功", result).build(c);
     } catch (e) {
       return handleError(e, c, "moment");
     }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 )
 
 // momentCommentCmd is the parent moment comment command, nested under momentCmd.
@@ -27,7 +28,7 @@ var momentCommentListCmd = &cobra.Command{
   serenique moment comment list a1b2c3d4 --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var result []MomentCommentEntry
+		var result []client.MomentCommentEntry
 		if err := apiClient.Get(commandContext(cmd), "/api/moments/"+args[0]+"/comments", nil, &result); err != nil {
 			return err
 		}
@@ -70,7 +71,7 @@ var momentCommentAddCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		body := map[string]string{"content": momentCommentAddContent}
 
-		var result MomentCommentEntry
+		var result client.MomentCommentEntry
 		if err := apiClient.Post(commandContext(cmd), "/api/moments/"+args[0]+"/comments", body, &result); err != nil {
 			return err
 		}
@@ -99,7 +100,7 @@ var momentCommentUpdateCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		body := map[string]string{"content": momentCommentUpdateContent}
 
-		var result MomentCommentEntry
+		var result client.MomentCommentEntry
 		if err := apiClient.Put(commandContext(cmd), "/api/moments/"+args[0]+"/comments/"+args[1], body, &result); err != nil {
 			return err
 		}

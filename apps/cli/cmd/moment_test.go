@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 )
 
 // =============================================================================
@@ -82,9 +83,9 @@ func TestMomentCommentListFetchesComments(t *testing.T) {
 		if err := momentCommentListCmd.RunE(momentCommentListCmd, []string{"m1"}); err != nil {
 			t.Fatal(err)
 		}
-		comments, ok := rec.lastSuccess.data.([]MomentCommentEntry)
+		comments, ok := rec.lastSuccess.data.([]client.MomentCommentEntry)
 		if !ok {
-			t.Fatalf("data is %T, want []MomentCommentEntry", rec.lastSuccess.data)
+			t.Fatalf("data is %T, want []client.MomentCommentEntry", rec.lastSuccess.data)
 		}
 		if len(comments) != 2 {
 			t.Fatalf("comments = %d, want 2", len(comments))
@@ -219,6 +220,192 @@ func TestMomentCommentDeleteRequiresConfirmation(t *testing.T) {
 }
 
 // =============================================================================
+// moment edit
+// =============================================================================
+
+// TestMomentEditCommandRegistered verifies `moment edit` hangs under momentCmd.
+func TestMomentEditCommandRegistered(t *testing.T) {
+	found, _, err := momentCmd.Find([]string{"edit"})
+	if err != nil {
+		t.Fatalf("moment edit not found: %v", err)
+	}
+	if found != momentEditCmd {
+		t.Fatalf("moment edit = %v, want momentEditCmd", found)
+	}
+}
+
+// TestMomentEditTextShorthandIsM guards the flag contract: the edit --text
+// shorthand must be -m (never -c, claimed by the root --config persistent
+// flag), and the flag must be marked required so an empty value fails before
+// any network call.
+func TestMomentEditTextShorthandIsM(t *testing.T) {
+	f := momentEditCmd.Flags().Lookup("text")
+	if f == nil {
+		t.Fatal("moment edit missing --text flag")
+	}
+	if f.Shorthand != "m" {
+		t.Fatalf("moment edit --text shorthand = %q, want m", f.Shorthand)
+	}
+	ann := f.Annotations[cobra.BashCompOneRequiredFlag]
+	if len(ann) == 0 {
+		t.Error("moment edit --text should be marked required")
+	}
+}
+
+// TestMomentEditShowsCurrentAndSendsPutAfterConfirm verifies the edit flow:
+// GET the current moment and print its text to stderr, then — after a
+// confirmed prompt — PUT the new text, and render the updated moment.
+func TestMomentEditShowsCurrentAndSendsPutAfterConfirm(t *testing.T) {
+	var hits []string
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		hits = append(hits, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"旧内容","createdAt":"2026-08-08T01:00:00Z","updatedAt":"2026-08-08T01:00:00Z","attachments":[],"comments":[],"commentCount":0}}`))
+			return
+		}
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Write([]byte(`{"success":true,"message":"闪念更新成功","data":{"id":"m1","text":"改后","createdAt":"2026-08-08T01:00:00Z","updatedAt":"2026-08-08T02:00:00Z","attachments":[],"comments":[],"commentCount":0}}`))
+	}, false, func(srv *httptest.Server) {
+		withStdin(t, "y\n")
+		momentEditText = "改后"
+		t.Cleanup(func() { momentEditText = "" })
+
+		var stderr, stdout string
+		stderr = captureStderr(t, func() {
+			stdout = captureStdout(t, func() {
+				if err := momentEditCmd.RunE(momentEditCmd, []string{"m1"}); err != nil {
+					t.Fatal(err)
+				}
+			})
+		})
+		if !strings.Contains(stderr, "当前内容: 旧内容") {
+			t.Fatalf("stderr should show the current text, got %q", stderr)
+		}
+		if !strings.Contains(stdout, "✓ 闪念更新成功") {
+			t.Fatalf("stdout should render the success line, got %q", stdout)
+		}
+	})
+
+	want := []string{"GET /api/moments/m1", "PUT /api/moments/m1"}
+	if len(hits) != len(want) {
+		t.Fatalf("hits = %v, want %v", hits, want)
+	}
+	for i, w := range want {
+		if hits[i] != w {
+			t.Fatalf("hit[%d] = %q, want %q (all hits: %v)", i, hits[i], w, hits)
+		}
+	}
+	if gotBody["text"] != "改后" {
+		t.Fatalf("text = %v, want 改后", gotBody["text"])
+	}
+}
+
+// TestMomentEditJSONModeRendersUpdatedMoment verifies --json mode emits the
+// updated moment entry (the full API payload, attachments/comments included)
+// as the single JSON document.
+func TestMomentEditJSONModeRendersUpdatedMoment(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"旧内容","createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+			return
+		}
+		w.Write([]byte(`{"success":true,"message":"闪念更新成功","data":{"id":"m1","text":"改后","createdAt":"x","updatedAt":"y","attachments":[],"comments":[{"id":"c1","momentId":"m1","content":"第一条","createdAt":"x","updatedAt":"x"}],"commentCount":1}}`))
+	}, true, func(srv *httptest.Server) {
+		rec := &recordingPrinter{}
+		printer = rec
+		withStdin(t, "y\n")
+		momentEditText = "改后"
+		t.Cleanup(func() { momentEditText = "" })
+		if err := momentEditCmd.RunE(momentEditCmd, []string{"m1"}); err != nil {
+			t.Fatal(err)
+		}
+		moment, ok := rec.lastSuccess.data.(*client.MomentEntry)
+		if !ok {
+			t.Fatalf("data is %T, want *client.MomentEntry", rec.lastSuccess.data)
+		}
+		if moment.Text != "改后" || moment.UpdatedAt != "y" {
+			t.Fatalf("moment = %+v", moment)
+		}
+		if moment.CommentCount != 1 || len(moment.Comments) != 1 {
+			t.Fatalf("comments should round-trip in JSON mode, got %+v", moment)
+		}
+	})
+}
+
+// TestMomentEditRequiresConfirmation guards the edit contract: without a
+// confirmation on stdin (EOF — the pipe/CI/AI-agent case), the edit must fail
+// with a non-nil error and never reach the server with a PUT.
+func TestMomentEditRequiresConfirmation(t *testing.T) {
+	var putHit bool
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			putHit = true
+			t.Error("server should not receive PUT when confirmation is declined")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"旧内容","createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+	}, true, func(srv *httptest.Server) {
+		withStdin(t, "") // immediate EOF — the non-interactive case
+		momentEditText = "改后"
+		t.Cleanup(func() { momentEditText = "" })
+		if err := momentEditCmd.RunE(momentEditCmd, []string{"m1"}); err == nil {
+			t.Fatal("expected error when confirmation is not provided")
+		}
+	})
+	if putHit {
+		t.Fatal("PUT should not be sent when confirmation is declined")
+	}
+}
+
+// TestMomentEditMissingMomentFails verifies a 404 on the initial GET fails the
+// edit before any confirmation is requested (the server's 「闪念不存在」).
+func TestMomentEditMissingMomentFails(t *testing.T) {
+	var putHit bool
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			putHit = true
+		}
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"success":false,"message":"闪念不存在","error":{"code":"NOT_FOUND"}}`))
+	}, true, func(srv *httptest.Server) {
+		withStdin(t, "y\n")
+		momentEditText = "改后"
+		t.Cleanup(func() { momentEditText = "" })
+		if err := momentEditCmd.RunE(momentEditCmd, []string{"nope"}); err == nil {
+			t.Fatal("expected error for missing moment")
+		}
+	})
+	if putHit {
+		t.Fatal("PUT should not be sent when the moment does not exist")
+	}
+}
+
+// TestMomentEditServerErrorFails verifies a failed PUT (HTTP 500) surfaces as
+// an error so the process exits non-zero.
+func TestMomentEditServerErrorFails(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "GET" {
+			w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"旧内容","createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"success":false,"message":"服务器内部错误","error":{"code":"INTERNAL"}}`))
+	}, true, func(srv *httptest.Server) {
+		withStdin(t, "y\n")
+		momentEditText = "改后"
+		t.Cleanup(func() { momentEditText = "" })
+		if err := momentEditCmd.RunE(momentEditCmd, []string{"m1"}); err == nil {
+			t.Fatal("expected error when the PUT fails")
+		}
+	})
+}
+
+// =============================================================================
 // MomentEntry comment fields round-trip
 // =============================================================================
 
@@ -230,7 +417,7 @@ func TestMomentEntryDecodesCommentsAndCount(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"hi","createdAt":"x","updatedAt":"x","attachments":[],"comments":[{"id":"c1","momentId":"m1","content":"第一条","createdAt":"x","updatedAt":"x"}],"commentCount":1}}`))
 	}, true, func(srv *httptest.Server) {
-		var result MomentEntry
+		var result client.MomentEntry
 		if err := apiClient.Get(commandContext(momentGetCmd), "/api/moments/m1", nil, &result); err != nil {
 			t.Fatal(err)
 		}

@@ -29,6 +29,7 @@ const createdBlobIds: string[] = [];
 
 describe.skipIf(!RUN_DB_TESTS)("moment service DB integration", () => {
   let momentService: typeof import("./moment.service").momentService;
+  let momentCommentService: typeof import("./comment.service").momentCommentService;
   let blobService: typeof import("@/modules/blob/blob.service").blobService;
   let db: typeof import("@/db/connection").db;
   let momentsTable: typeof import("./moment.schema").moments;
@@ -51,6 +52,7 @@ describe.skipIf(!RUN_DB_TESTS)("moment service DB integration", () => {
   beforeAll(async () => {
     setTestEnv();
     momentService = (await import("./moment.service")).momentService;
+    momentCommentService = (await import("./comment.service")).momentCommentService;
     blobService = (await import("@/modules/blob/blob.service")).blobService;
     db = (await import("@/db/connection")).db;
     momentsTable = (await import("./moment.schema")).moments;
@@ -184,6 +186,35 @@ describe.skipIf(!RUN_DB_TESTS)("moment service DB integration", () => {
       (m) => m.id === a.id || m.id === b.id || m.id === c.id,
     );
     expect(ours.map((m) => m.id)).toEqual([c.id, b.id, a.id]); // newest first
+  });
+
+  test("update modifies text and bumps updatedAt while keeping comments", async () => {
+    const created = await momentService.create({
+      text: uniqueTitle("moment-待更新"),
+    });
+    createdMomentIds.push(created.id);
+    const comment = await momentCommentService.add(created.id, {
+      content: "评论保留",
+    });
+
+    const updated = await momentService.update({
+      id: created.id,
+      text: "更新后的闪念",
+    });
+
+    expect(updated.text).toBe("更新后的闪念");
+    expect(updated.updatedAt).not.toBe(created.updatedAt);
+    expect(updated.comments.map((c) => c.id)).toEqual([comment.id]);
+    expect(updated.commentCount).toBe(1);
+
+    const got = await momentService.get({ id: created.id });
+    expect(got.text).toBe("更新后的闪念");
+  });
+
+  test("update rejects a missing moment", async () => {
+    await expect(
+      momentService.update({ id: randomUUID(), text: "不存在" }),
+    ).rejects.toThrow(/闪念不存在/);
   });
 
   test("addAttachment appends with the next sort order", async () => {

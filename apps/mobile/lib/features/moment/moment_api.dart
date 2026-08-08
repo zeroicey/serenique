@@ -33,6 +33,12 @@ class MomentApi {
     return Moment.fromJson(data as Map<String, dynamic>);
   }
 
+  Future<Moment> update(String id, String text) async {
+    final data =
+        await _client.putData('/api/moments/$id', body: {'text': text});
+    return Moment.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<void> delete(String id) async {
     await _client.deleteData('/api/moments/$id');
   }

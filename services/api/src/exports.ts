@@ -36,6 +36,7 @@ export type {
   CreateMomentInput,
   ListMomentInput,
   GetMomentInput,
+  UpdateMomentInput,
   DeleteMomentInput,
 } from "@/modules/moment/moment.types";
 export {
@@ -43,6 +44,7 @@ export {
   CreateMomentSchema,
   ListMomentSchema,
   MomentAttachmentInputSchema,
+  UpdateMomentSchema,
 } from "@/modules/moment/moment.types";
 export type {
   MomentCommentEntry,

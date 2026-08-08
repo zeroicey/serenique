@@ -2,64 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 
 	"github.com/spf13/cobra"
+	"github.com/zeroicey/serenique-cli/internal/client"
 )
-
-// Moment types matching the API response.
-type MomentEntry struct {
-	ID           string                  `json:"id"`
-	Text         string                  `json:"text"`
-	CreatedAt    string                  `json:"createdAt"`
-	UpdatedAt    string                  `json:"updatedAt"`
-	Attachments  []MomentAttachmentEntry `json:"attachments"`
-	Comments     []MomentCommentEntry    `json:"comments"`
-	CommentCount int                     `json:"commentCount"`
-}
-
-// MomentBlobEntry matches the API's nested blob object inside a moment
-// attachment (moment.types.ts MomentBlobEntry). The API always includes it, so
-// JSON mode round-trips the full payload including the ready fileUrl.
-type MomentBlobEntry struct {
-	ID           string         `json:"id"`
-	OriginalName string         `json:"originalName"`
-	MimeType     string         `json:"mimeType"`
-	Size         int64          `json:"size"`
-	Metadata     map[string]any `json:"metadata"`
-	Width        *int           `json:"width"`
-	Height       *int           `json:"height"`
-	Duration     *float64       `json:"duration"`
-	CreatedAt    string         `json:"createdAt"`
-	FileURL      string         `json:"fileUrl"`
-}
-
-// MomentAttachmentEntry matches the API's moment attachment record
-// (moment.types.ts MomentAttachmentEntry), which always carries metadata —
-// mirroring BlobAttachmentEntry in blob.go so attachment-level metadata created
-// via the API is not dropped from `moment get --json` output.
-type MomentAttachmentEntry struct {
-	ID          string           `json:"id"`
-	BlobID      string           `json:"blobId"`
-	Role        string           `json:"role"`
-	DisplayName *string          `json:"displayName"`
-	SortOrder   int              `json:"sortOrder"`
-	Metadata    map[string]any   `json:"metadata"`
-	CreatedAt   string           `json:"createdAt"`
-	UpdatedAt   string           `json:"updatedAt"`
-	Blob        *MomentBlobEntry `json:"blob,omitempty"`
-}
-
-// MomentCommentEntry matches the API's moment comment object
-// (comment.types.ts MomentCommentEntry). Comments are a sub-resource nested under
-// /api/moments/:id/comments.
-type MomentCommentEntry struct {
-	ID        string `json:"id"`
-	MomentID  string `json:"momentId"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-}
 
 // momentCmd is the parent moment command.
 var momentCmd = &cobra.Command{
@@ -100,7 +48,7 @@ var momentCreateCmd = &cobra.Command{
 				momentCreateSortOrder, cmd.Flags().Changed("sort-order"))
 		}
 
-		var result MomentEntry
+		var result client.MomentEntry
 		if err := apiClient.Post(commandContext(cmd), "/api/moments", body, &result); err != nil {
 			return err
 		}
@@ -156,7 +104,7 @@ var momentGetCmd = &cobra.Command{
   serenique moment get a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var result MomentEntry
+		var result client.MomentEntry
 		if err := apiClient.Get(commandContext(cmd), "/api/moments/"+args[0], nil, &result); err != nil {
 			return err
 		}
@@ -232,7 +180,7 @@ var momentAttachCmd = &cobra.Command{
 		body := attachmentBody(momentAttachBlobID, momentAttachRole, momentAttachDisplayName,
 			momentAttachSortOrder, cmd.Flags().Changed("sort-order"), nil)
 
-		var result MomentAttachmentEntry
+		var result client.MomentAttachmentEntry
 		if err := apiClient.Post(commandContext(cmd), "/api/moments/"+args[0]+"/attachments", body, &result); err != nil {
 			return err
 		}
@@ -284,9 +232,56 @@ var momentDetachCmd = &cobra.Command{
 
 var momentDetachForce bool
 
+// moment edit
+var momentEditCmd = &cobra.Command{
+	Use:   "edit <id>",
+	Short: "编辑闪念正文",
+	Long: `修改指定闪念的正文（1..500 字）。命令先读取当前内容供你确认，
+提交前必须经过确认交互（非交互 stdin 视为取消）。
+
+示例:
+  serenique moment edit a1b2c3d4-e5f6-7890-abcd-ef1234567890 --text "修改后的内容"
+  serenique moment edit a1b2c3d4 -m "修改后的内容"`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := commandContext(cmd)
+
+		// Read the current moment first: the user sees the existing text before
+		// editing, and a missing moment (404 「闪念不存在」) fails here, before
+		// any confirmation is requested.
+		var current client.MomentEntry
+		if err := apiClient.Get(ctx, "/api/moments/"+args[0], nil, &current); err != nil {
+			return err
+		}
+		// Context for the edit goes to stderr — stdout carries only the result.
+		fmt.Fprintf(os.Stderr, "当前内容: %s\n", current.Text)
+
+		// Editing text is a state-changing action: confirmation is mandatory
+		// (helpers.confirm(); EOF on non-interactive stdin cancels with error).
+		if err := confirm("确认更新闪念正文", false); err != nil {
+			return err
+		}
+
+		result, err := apiClient.UpdateMoment(ctx, args[0], momentEditText)
+		if err != nil {
+			return err
+		}
+
+		printCreateResult("闪念更新成功", result, "闪念更新成功", map[string]string{
+			"ID":   result.ID,
+			"内容":   result.Text,
+			"创建时间": result.CreatedAt,
+			"更新时间": result.UpdatedAt,
+		})
+		return nil
+	},
+}
+
+var momentEditText string
+
 func init() {
 	// moment list
-	momentListCmd = paginatedListCommand[MomentEntry](listSpec[MomentEntry]{
+	momentListCmd = paginatedListCommand[client.MomentEntry](listSpec[client.MomentEntry]{
 		use:   "list",
 		short: "列出闪念",
 		long: `分页查询闪念列表。使用 --all 一次返回全部记录。
@@ -299,7 +294,7 @@ func init() {
 		path:     "/api/moments",
 		emptyMsg: "暂无闪念记录",
 		headers:  []string{"ID", "内容", "创建时间", "评论"},
-		row: func(m MomentEntry) map[string]string {
+		row: func(m client.MomentEntry) map[string]string {
 			return map[string]string{
 				"ID":   shortID(m.ID),
 				"内容":   truncateRunes(m.Text, 50),
@@ -319,6 +314,10 @@ func init() {
 	momentCreateCmd.Flags().StringVarP(&momentCreateDisplayName, "display-name", "n", "", "附件显示名称")
 	momentCreateCmd.Flags().IntVar(&momentCreateSortOrder, "sort-order", 0, "附件排序起始值（指定多个附件时依次递增）")
 	momentCreateCmd.MarkFlagRequired("text")
+
+	// moment edit flags
+	momentEditCmd.Flags().StringVarP(&momentEditText, "text", "m", "", "新的闪念正文，最长 500 字 (必填)")
+	momentEditCmd.MarkFlagRequired("text")
 
 	// moment delete
 	momentDeleteCmd = deleteCommand("delete <id>", "删除闪念", `删除指定的闪念。此操作不可撤销，默认需要确认。
@@ -342,6 +341,7 @@ func init() {
 	momentCmd.AddCommand(momentListCmd)
 	momentCmd.AddCommand(momentCreateCmd)
 	momentCmd.AddCommand(momentGetCmd)
+	momentCmd.AddCommand(momentEditCmd)
 	momentCmd.AddCommand(momentDeleteCmd)
 	momentCmd.AddCommand(momentAttachCmd)
 	momentCmd.AddCommand(momentDetachCmd)

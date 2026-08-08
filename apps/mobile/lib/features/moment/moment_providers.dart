@@ -30,6 +30,13 @@ class MomentActions {
     return created;
   }
 
+  Future<Moment> update(String id, String text) async {
+    final updated = await _api.update(id, text);
+    _ref.invalidate(momentDetailProvider(id));
+    _ref.invalidate(momentListProvider);
+    return updated;
+  }
+
   Future<void> delete(String id) async {
     await _api.delete(id);
     _ref.invalidate(momentListProvider);
