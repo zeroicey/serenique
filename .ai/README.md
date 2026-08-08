@@ -23,7 +23,7 @@ Serenique 的项目记忆，正式文档。进 `.ai/` 前先读本文件。
 
 ## 索引
 
-- runbooks：`hpcore-deploy.md`、`web-cloudflare-deploy.md`、`ios-device-install.md`、`docker-local-build.md`、`release-process.md`
+- runbooks：`hpcore-deploy.md`、`web-cloudflare-deploy.md`、`ios-device-install.md`、`docker-local-build.md`、`release-process.md`、`cn-access-hcyj.md`（国内加速入口）
 - requirements 状态：见 `requirements/README.md`
 - 最新决策：`decisions/`（按日期倒序）
 - 最近工作：`worklog/`（按日期倒序）

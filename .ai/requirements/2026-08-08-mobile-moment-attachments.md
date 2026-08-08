@@ -1,7 +1,7 @@
 # Moment 移动端附件需求文档
 
 - 日期：2026-08-08
-- 状态：⏳待实施（2026-08-08 移动端已退回：自研 + photo_view_plus 两版预览效果均未达用户预期，代码退回功能前基线 `bd9ae06`，仅退回 `apps/mobile`；API/Web/CLI/MCP 不受影响）
+- 状态：✅已实施（2026-08-08 显示/预览 MVP 已上线真机验收通过；上传下阶段。实现记录：`.ai/worklog/2026-08-08-flutter-moment-attachments-ui-mvp.md`；重做经历：首版被退回 `bd9ae06`，见本文件历次尝试记录）
 - 范围：`apps/mobile`（Flutter，iOS 优先）—— Moment 附件**显示与播放**（已退回）、**上传**（下阶段）
 - 前置记录：`2026-08-06-flutter-mobile-tech-stack.md`（移动端技术栈）、`2026-08-05-web-moment-feature-design.md`（Web 端参考实现）
 - 历次尝试与坑：`.ai/worklog/2026-08-08-flutter-moment-attachments-preview.md`
