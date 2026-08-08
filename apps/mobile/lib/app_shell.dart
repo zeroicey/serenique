@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'core/network/api_exception.dart';
 import 'features/audit/audit_providers.dart';
+import 'features/moment/moment_providers.dart';
+import 'features/moment/widgets/attachment_picker_sheet.dart';
 import 'providers.dart';
 
 /// 主壳：AppBar + Drawer 侧栏，包住各模块页面。
@@ -39,6 +41,14 @@ class AppShell extends ConsumerWidget {
         SnackBar(content: Text(humanizeError(e))),
       );
     }
+  }
+
+  /// 短按 +：弹附件选择框 → 选完带附件进入发布页；取消不跳转。
+  Future<void> _addMomentWithAttachment(BuildContext context, WidgetRef ref) async {
+    final picked = await showAttachmentPickerSheet(context);
+    if (picked == null || !context.mounted) return;
+    ref.read(pickedAttachmentsProvider.notifier).set(picked);
+    context.push('/moments/create');
   }
 
   @override
@@ -80,10 +90,17 @@ class AppShell extends ConsumerWidget {
         // 添加按钮放右上角（不用右下角 FAB，避免挡住评论发送）。
         actions: [
           if (location == '/moments')
-            IconButton(
-              icon: const Icon(Icons.add),
-              tooltip: '新建闪记',
-              onPressed: () => context.push('/moments/create'),
+            Tooltip(
+              message: '新建闪记',
+              child: GestureDetector(
+                // 短按弹选择框；长按直进发布页（微信同款：长按 = 纯文字）。
+                onTap: () => _addMomentWithAttachment(context, ref),
+                onLongPress: () => context.push('/moments/create'),
+                child: const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Icon(Icons.add),
+                ),
+              ),
             ),
           if (location == '/diary')
             IconButton(

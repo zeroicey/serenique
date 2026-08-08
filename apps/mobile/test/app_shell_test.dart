@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:serenique_mobile/app_shell.dart';
+import 'package:serenique_mobile/features/moment/moment_create_page.dart';
 import 'package:serenique_mobile/providers.dart';
 
 void main() {
@@ -17,6 +18,8 @@ void main() {
               GoRoute(path: '/settings', builder: (_, _) => const Scaffold(body: Text('设置页'))),
             ],
           ),
+          // 与真实 router.dart 一致：发布页在 ShellRoute 之外，自持 Scaffold/AppBar。
+          GoRoute(path: '/moments/create', builder: (_, _) => const MomentCreatePage()),
         ],
       );
 
@@ -68,5 +71,36 @@ void main() {
 
     expect(find.text('设置页'), findsOneWidget);
     expect(shellScaffoldState(tester).isDrawerOpen, isFalse);
+  });
+
+  testWidgets('短按 + 弹出附件选择弹层', (tester) async {
+    await tester.pumpWidget(ProviderScope(overrides: [countsProvider.overrideWith((ref) async => (moments: 3, diaries: 5))], child: MaterialApp.router(routerConfig: shellRouter())));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('新建闪记'));
+    await tester.pumpAndSettle();
+    expect(find.text('拍照'), findsOneWidget);
+    expect(find.text('选文件'), findsOneWidget);
+    expect(find.text('从手机相册选择'), findsOneWidget);
+    expect(find.text('取消'), findsOneWidget);
+  });
+
+  testWidgets('弹层点取消：不跳转发布页', (tester) async {
+    await tester.pumpWidget(ProviderScope(overrides: [countsProvider.overrideWith((ref) async => (moments: 3, diaries: 5))], child: MaterialApp.router(routerConfig: shellRouter())));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('新建闪记'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('发表'), findsNothing); // 未进入发布页
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('闪记')), findsOneWidget);
+  });
+
+  testWidgets('长按 + 直接进入发布页', (tester) async {
+    await tester.pumpWidget(ProviderScope(overrides: [countsProvider.overrideWith((ref) async => (moments: 3, diaries: 5))], child: MaterialApp.router(routerConfig: shellRouter())));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.byTooltip('新建闪记'));
+    await tester.pumpAndSettle();
+    expect(find.text('发表'), findsOneWidget); // 发布页按钮，真正确认已跳转
+    expect(find.text('新建闪记'), findsWidgets); // 发布页 AppBar 标题
   });
 }
