@@ -117,6 +117,32 @@ void main() {
     expect(reset.getMaxScaleOnAxis(), closeTo(1.0, 0.01));
   });
 
+  testWidgets('双击以手指位置为中心放大（焦点矩阵）', (tester) async {
+    await open(tester, [att(0)]);
+    final iv = find.byType(InteractiveViewer);
+    // 在图片右下方（相对中心偏移）双击
+    final target = tester.getCenter(iv);
+    final focal = target + const Offset(120, 80);
+    await tester.tapAt(focal);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(focal);
+    await tester.pumpAndSettle();
+    final matrix = tester
+        .widget<InteractiveViewer>(iv)
+        .transformationController!
+        .value;
+    // 焦点缩放矩阵：translate(focal)·scale·translate(-focal)，
+    // 应用后焦点位置保持不动 —— 校验平移量与 focal 的关系。
+    final scale = matrix.getMaxScaleOnAxis();
+    expect(scale, closeTo(2.5, 0.01));
+    // M 的平移列 = focal - scale * focal = (1-scale)*focal（在 InteractiveViewer
+    // 坐标空间下，视图围绕 focal 缩放时 focal 屏幕位置不变）
+    final tx = matrix.getTranslation().x;
+    final ty = matrix.getTranslation().y;
+    expect(tx, closeTo((1 - scale) * focal.dx, 1.0));
+    expect(ty, closeTo((1 - scale) * focal.dy, 1.0));
+  });
+
   testWidgets('视频/音频页显示占位（▶ + 时长 / 图标 + 文件名）', (tester) async {
     final video = MomentAttachment(
       id: 'v', blobId: 'bv', role: 'attachment', sortOrder: 0,

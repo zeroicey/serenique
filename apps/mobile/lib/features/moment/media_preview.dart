@@ -75,7 +75,10 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
         Positioned(
           left: 0,
           right: 0,
-          bottom: MediaQuery.of(context).padding.bottom + 32,
+          // 沉浸式模式下 MediaQuery.padding.bottom 为 0（系统 UI 已隐藏），
+          // 但用户滑动时 iOS 会临时唤出 Home Indicator——用固定安全距离
+          // 让计数文字始终与屏幕底部系统横条保持间距。
+          bottom: 48,
           child: Center(
             child: Text(
               '${_current + 1} / ${attachments.length}',
@@ -110,13 +113,11 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     duration: const Duration(milliseconds: 200),
   );
   // 单一 animation：toggle 只改 tween 端点再 forward，避免重复 addListener 互相覆盖。
-  late final _zoomTween = Matrix4Tween(
-    begin: Matrix4.identity(),
-    end: Matrix4.diagonal3Values(_doubleTapScale, _doubleTapScale, 1),
-  );
+  late final _zoomTween = Matrix4Tween(begin: Matrix4.identity(), end: Matrix4.identity());
   late final Animation<Matrix4> _zoomAnim = _zoomTween.animate(
       CurvedAnimation(parent: _zoomController, curve: Curves.easeOut));
   bool _zoomed = false;
+  Offset _doubleTapFocal = Offset.zero;
 
   MomentAttachment get _attachment => widget.attachment;
 
@@ -133,11 +134,19 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     super.dispose();
   }
 
-  /// 双击：1x ↔ 2.5x 平滑缩放（重新以当前变换为起点）。
+  /// 以 focal 为中心的缩放矩阵：translate(focal) · scale · translate(-focal)。
+  static Matrix4 _focalScaleMatrix(Offset focal, double scale) {
+    return Matrix4.identity()
+      ..translateByDouble(focal.dx, focal.dy, 0, 1)
+      ..scaleByDouble(scale, scale, 1, 1)
+      ..translateByDouble(-focal.dx, -focal.dy, 0, 1);
+  }
+
+  /// 双击：以手指位置为中心 1x ↔ 2.5x 平滑缩放（重新以当前变换为起点）。
   void _toggleZoom() {
     final target = _zoomed
         ? Matrix4.identity()
-        : Matrix4.diagonal3Values(_doubleTapScale, _doubleTapScale, 1);
+        : _focalScaleMatrix(_doubleTapFocal, _doubleTapScale);
     _zoomTween
       ..begin = _transformation.value
       ..end = target;
@@ -153,6 +162,8 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => Navigator.of(context).pop(),
+      onDoubleTapDown: (details) =>
+          _doubleTapFocal = details.localPosition,
       onDoubleTap: _toggleZoom,
       child: url.when(
         loading: () => const Center(child: CircularProgressIndicator()),
