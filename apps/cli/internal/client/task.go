@@ -27,7 +27,8 @@ func IsTaskStatus(s string) bool {
 }
 
 // TaskEntry mirrors the API's TaskEntry response (task.types.ts). Times are ISO
-// 8601 strings; CompletedAt is null until the task is completed (status "done").
+// 8601 strings; CompletedAt is null until the task is completed (status "done");
+// DueDate is null when no due date is set.
 type TaskEntry struct {
 	ID          string  `json:"id"`
 	GroupID     string  `json:"groupId"`
@@ -36,6 +37,7 @@ type TaskEntry struct {
 	CreatedAt   string  `json:"createdAt"`
 	UpdatedAt   string  `json:"updatedAt"`
 	CompletedAt *string `json:"completedAt"`
+	DueDate     *string `json:"dueDate"`
 }
 
 // TaskGroupEntry mirrors the API's TaskGroupEntry response (task.types.ts).
@@ -95,20 +97,24 @@ func (c *Client) DeleteTaskGroup(ctx context.Context, id string) error {
 
 // CreateTaskInput mirrors the API's CreateTaskSchema. Status is optional; an
 // empty value is omitted from the body and the server defaults it to "todo".
+// DueDate is an ISO 8601 date (YYYY-MM-DD); empty is omitted from the body.
 type CreateTaskInput struct {
 	Title   string `json:"title"`
 	GroupID string `json:"groupId"`
 	Status  string `json:"status,omitempty"`
+	DueDate string `json:"dueDate,omitempty"`
 }
 
 // UpdateTaskInput mirrors the API's UpdateTaskSchema: every field is optional,
 // and a nil field leaves the existing value unchanged. Title's min length is 1,
 // so an empty string is never a legitimate value — nil is used to mean
-// "not provided".
+// "not provided". DueDate follows the same nil convention, except that a
+// non-nil empty string clears the due date (the API normalizes "" to null).
 type UpdateTaskInput struct {
 	Title   *string `json:"title,omitempty"`
 	GroupID *string `json:"groupId,omitempty"`
 	Status  *string `json:"status,omitempty"`
+	DueDate *string `json:"dueDate,omitempty"`
 }
 
 // ListTasks fetches a page of tasks (created_at DESC). Set groupId/status in
