@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
 import 'media_preview.dart';
+import 'moment_models.dart';
 import 'moment_providers.dart';
 import 'moment_time.dart';
 import 'widgets/attachment_grid.dart';
@@ -119,7 +120,10 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => AsyncErrorView(
             error: err, onRetry: () => ref.invalidate(momentDetailProvider(widget.id))),
-        data: (moment) => SafeArea(
+        data: (moment) {
+          // 网格与全屏预览共用同一有序列表，保证索引一致。
+          final attachments = sortedAttachments(moment.attachments);
+          return SafeArea(
           top: false,
           // 曲面屏/手势条：评论输入框不能贴屏幕底边，保底留 12 逻辑像素。
           minimum: const EdgeInsets.only(bottom: 12),
@@ -142,10 +146,10 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
               if (moment.attachments.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 AttachmentGrid(
-                  attachments: moment.attachments,
+                  attachments: attachments,
                   onTapTile: (index) => showMediaPreview(
                     context,
-                    attachments: moment.attachments,
+                    attachments: attachments,
                     initialIndex: index,
                   ),
                 ),
@@ -158,7 +162,8 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
               CommentSection(momentId: moment.id),
             ],
           ),
-        ),
+        );
+        },
       ),
     );
   }

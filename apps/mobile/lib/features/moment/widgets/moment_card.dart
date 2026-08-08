@@ -103,6 +103,9 @@ class _MomentCardState extends ConsumerState<MomentCard> {
         )..layout(maxWidth: constraints.maxWidth);
         final overflows = painter.didExceedMaxLines;
 
+        // 网格与全屏预览共用同一有序列表，保证索引一致。
+        final attachments = sortedAttachments(moment.attachments);
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -133,10 +136,10 @@ class _MomentCardState extends ConsumerState<MomentCard> {
             if (moment.attachments.isNotEmpty) ...[
               const SizedBox(height: 8),
               AttachmentGrid(
-                attachments: moment.attachments,
+                attachments: attachments,
                 onTapTile: (index) => showMediaPreview(
                   context,
-                  attachments: moment.attachments,
+                  attachments: attachments,
                   initialIndex: index,
                 ),
               ),

@@ -109,4 +109,54 @@ void main() {
       expect(find.text('p1.jpg'), findsOneWidget); // audio 瓦片显示文件名
     });
   });
+
+  test('formatDurationMs 补零与进位', () {
+    expect(formatDurationMs(60000), '01:00'); // 60s 整分钟补零
+    expect(formatDurationMs(3661000), '1:01:01'); // 1h1m1s 进位
+  });
+
+  test('sortedAttachments 按 (sortOrder, createdAt, id) 排序且不改原列表', () {
+    MomentAttachment mk(String id, int sortOrder, String createdAt) =>
+        MomentAttachment(
+          id: id,
+          blobId: id,
+          role: 'attachment',
+          sortOrder: sortOrder,
+          createdAt: createdAt,
+          blob: MomentBlob(
+            id: id,
+            originalName: '$id.jpg',
+            mimeType: 'image/jpeg',
+            size: 1,
+            fileUrl: '/api/blobs/$id/file',
+            createdAt: 't',
+          ),
+        );
+    final input = [
+      mk('c', 0, 't3'),
+      mk('a', 0, 't1'),
+      mk('b', 0, 't1'),
+      mk('e', 1, 't5'),
+      mk('d', 2, 't9'),
+    ];
+    final sorted = sortedAttachments(input);
+    expect(sorted.map((a) => a.id).toList(), ['a', 'b', 'c', 'e', 'd']);
+    expect(input.map((a) => a.id).toList(), ['c', 'a', 'b', 'e', 'd']); // 未改原列表
+  });
+
+  testWidgets('折叠态点击第 4 瓦片回调 index=3', (tester) async {
+    // 加高视口让折叠态 3 行瓦片全部可见（参考上方 >9 测试）。
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await mockNetworkImages(() async {
+      final tapped = <int>[];
+      await tester.pumpWidget(wrap(AttachmentGrid(
+          attachments: List.generate(12, att), onTapTile: tapped.add)));
+      await settle(tester);
+      expect(find.byType(Image), findsNWidgets(8)); // 确认折叠态
+      await tester.tap(find.byType(Image).at(3));
+      expect(tapped, [3]);
+    });
+  });
 }

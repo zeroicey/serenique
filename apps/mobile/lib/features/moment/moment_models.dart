@@ -77,6 +77,7 @@ class MomentAttachment {
     required this.role,
     this.displayName,
     required this.sortOrder,
+    this.createdAt = '',
     required this.blob,
   });
 
@@ -85,6 +86,9 @@ class MomentAttachment {
   final String role;
   final String? displayName;
   final int sortOrder;
+
+  /// ISO 时间串，仅用于与 API 一致的附件排序；无值时排最前（'' < 任何值）。
+  final String createdAt;
   final MomentBlob blob;
 
   bool get isImage => blob.isImage;
@@ -100,8 +104,21 @@ class MomentAttachment {
         role: json['role'] as String? ?? 'attachment',
         displayName: json['displayName'] as String?,
         sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+        createdAt: json['createdAt'] as String? ?? '',
         blob: MomentBlob.fromJson(json['blob'] as Map<String, dynamic>),
       );
+}
+
+/// 与 API 同款比较器 (sortOrder, createdAt, id) 稳定排序，返回新列表、不改原列表。
+/// 网格与全屏预览必须共用本函数的结果，保证「网格第 i 格 == 预览 initialIndex=i」。
+List<MomentAttachment> sortedAttachments(List<MomentAttachment> attachments) {
+  return [...attachments]..sort((a, b) {
+      final order = a.sortOrder.compareTo(b.sortOrder);
+      if (order != 0) return order;
+      final created = a.createdAt.compareTo(b.createdAt);
+      if (created != 0) return created;
+      return a.id.compareTo(b.id);
+    });
 }
 
 class Moment {

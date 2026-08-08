@@ -22,8 +22,7 @@ class _AttachmentGridState extends ConsumerState<AttachmentGrid> {
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...widget.attachments]
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final sorted = sortedAttachments(widget.attachments);
     final needsExpand = sorted.length > _previewCount + 1;
     final display =
         needsExpand && !_expanded ? sorted.sublist(0, _previewCount) : sorted;

@@ -91,7 +91,6 @@ class _MediaPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final blob = attachment.blob;
     final url = ref.watch(blobAccessUrlProvider(blob.id));
-    final scheme = Theme.of(context).colorScheme;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -124,7 +123,7 @@ class _MediaPage extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.play_circle_outline,
-                            size: 72, color: scheme.onSurfaceVariant),
+                            size: 72, color: Colors.white70),
                         const SizedBox(height: 8),
                         Text(
                           formatDurationMs(blob.duration),
@@ -138,7 +137,7 @@ class _MediaPage extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.audio_file,
-                            size: 72, color: scheme.onSurfaceVariant),
+                            size: 72, color: Colors.white70),
                         const SizedBox(height: 8),
                         Text(
                           attachment.displayLabel,
