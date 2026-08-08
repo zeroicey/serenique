@@ -30,7 +30,7 @@ var (
 var momentCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "创建闪念",
-	Long: `创建一条闪念笔记。内容最长 500 字，可同时关联已上传的文件（用 --blob-id，可重复指定多个）。
+	Long: `创建一条闪念笔记。内容最长 10000 字，可同时关联已上传的文件（用 --blob-id，可重复指定多个）。
 
 示例:
   serenique moment create --text "突然想到一个好主意..."
@@ -236,7 +236,7 @@ var momentDetachForce bool
 var momentEditCmd = &cobra.Command{
 	Use:   "edit <id>",
 	Short: "编辑闪念正文",
-	Long: `修改指定闪念的正文（1..500 字）。命令先读取当前内容供你确认，
+	Long: `修改指定闪念的正文（1..10000 字）。命令先读取当前内容供你确认，
 提交前必须经过确认交互（非交互 stdin 视为取消）。
 
 示例:
@@ -308,7 +308,7 @@ func init() {
 	momentListCmd.Flags().BoolVar(&momentListAll, "all", false, "一次返回全部记录（自动翻页）")
 
 	// moment create flags
-	momentCreateCmd.Flags().StringVarP(&momentCreateText, "text", "m", "", "闪念内容，最长 500 字 (必填)")
+	momentCreateCmd.Flags().StringVarP(&momentCreateText, "text", "m", "", "闪念内容，最长 10000 字 (必填)")
 	momentCreateCmd.Flags().StringArrayVar(&momentCreateBlobIDs, "blob-id", nil, "要关联的文件 ID，可重复指定多个")
 	momentCreateCmd.Flags().StringVarP(&momentCreateRole, "role", "r", "attachment", "附件角色")
 	momentCreateCmd.Flags().StringVarP(&momentCreateDisplayName, "display-name", "n", "", "附件显示名称")
@@ -316,7 +316,7 @@ func init() {
 	momentCreateCmd.MarkFlagRequired("text")
 
 	// moment edit flags
-	momentEditCmd.Flags().StringVarP(&momentEditText, "text", "m", "", "新的闪念正文，最长 500 字 (必填)")
+	momentEditCmd.Flags().StringVarP(&momentEditText, "text", "m", "", "新的闪念正文，最长 10000 字 (必填)")
 	momentEditCmd.MarkFlagRequired("text")
 
 	// moment delete

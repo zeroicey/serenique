@@ -63,7 +63,7 @@ type MomentCommentEntry struct {
 // =============================================================================
 
 // UpdateMoment replaces a moment's text — its only updatable field (the API's
-// UpdateMomentSchema requires 1..500 chars). The API answers with the full
+// UpdateMomentSchema requires 1..10000 chars). The API answers with the full
 // updated moment (attachments/comments included), mirroring PUT
 // /api/moments/:id.
 func (c *Client) UpdateMoment(ctx context.Context, id, text string) (*MomentEntry, error) {

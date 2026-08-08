@@ -65,7 +65,7 @@ class _MomentCreatePageState extends ConsumerState<MomentCreatePage> {
         padding: const EdgeInsets.all(16),
         child: TextField(
           controller: _controller,
-          maxLength: 500,
+          maxLength: 10000,
           maxLines: null,
           expands: true,
           textAlignVertical: TextAlignVertical.top,

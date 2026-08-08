@@ -7,8 +7,8 @@ describe('momentCreateSchema', () => {
     expect(r.success).toBe(false)
   })
 
-  it('超过 500 字校验失败', () => {
-    const r = momentCreateSchema.safeParse({ text: 'a'.repeat(501) })
+  it('超过 10000 字校验失败', () => {
+    const r = momentCreateSchema.safeParse({ text: 'a'.repeat(10001) })
     expect(r.success).toBe(false)
   })
 

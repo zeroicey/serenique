@@ -15,13 +15,13 @@ export const MomentAttachmentInputSchema = z.object({
 });
 
 export const CreateMomentSchema = z.object({
-  text: z.string().min(1).max(500),
+  text: z.string().min(1).max(10000),
   attachments: z.array(MomentAttachmentInputSchema).default([]),
 });
 
 /** PUT partial update — text is the only updatable field. */
 export const UpdateMomentSchema = z.object({
-  text: z.string().min(1).max(500),
+  text: z.string().min(1).max(10000),
 });
 
 export const ListMomentSchema = z.object({

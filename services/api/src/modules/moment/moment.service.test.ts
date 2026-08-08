@@ -195,26 +195,26 @@ describe("moment mappers", () => {
 });
 
 describe("moment schemas", () => {
-  test("CreateMomentSchema requires text ≤500 and defaults attachments to []", async () => {
+  test("CreateMomentSchema requires text ≤10000 and defaults attachments to []", async () => {
     setTestEnv();
     const { CreateMomentSchema } = await import("./moment.types");
 
     expect(CreateMomentSchema.safeParse({ text: "hello" }).success).toBe(true);
     expect(CreateMomentSchema.safeParse({ content: "hello" }).success).toBe(false);
     expect(CreateMomentSchema.safeParse({ text: "" }).success).toBe(false);
-    expect(CreateMomentSchema.safeParse({ text: "x".repeat(501) }).success).toBe(
+    expect(CreateMomentSchema.safeParse({ text: "x".repeat(10001) }).success).toBe(
       false,
     );
     expect(CreateMomentSchema.parse({ text: "hello" }).attachments).toEqual([]);
   });
 
-  test("UpdateMomentSchema requires text 1-500 and rejects unknown body fields", async () => {
+  test("UpdateMomentSchema requires text 1-10000 and rejects unknown body fields", async () => {
     setTestEnv();
     const { UpdateMomentSchema } = await import("./moment.types");
 
     expect(UpdateMomentSchema.safeParse({ text: "新内容" }).success).toBe(true);
     expect(UpdateMomentSchema.safeParse({ text: "" }).success).toBe(false);
-    expect(UpdateMomentSchema.safeParse({ text: "x".repeat(501) }).success).toBe(
+    expect(UpdateMomentSchema.safeParse({ text: "x".repeat(10001) }).success).toBe(
       false,
     );
     expect(UpdateMomentSchema.safeParse({ content: "hello" }).success).toBe(
