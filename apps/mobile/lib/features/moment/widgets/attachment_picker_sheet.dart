@@ -27,7 +27,12 @@ Future<List<PickedAttachment>?> showAttachmentPickerSheet(BuildContext context) 
     ),
   );
   if (source == null || !context.mounted) return null;
-  return _pickFromSource(source);
+  try {
+    return await _pickFromSource(source);
+  } catch (_) {
+    // 权限被拒等任何选择异常都视为取消，不把 PlatformException 冒泡出去。
+    return null;
+  }
 }
 
 Future<List<PickedAttachment>?> _pickFromSource(AttachmentPickSource source) async {
