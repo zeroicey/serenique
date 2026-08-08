@@ -107,7 +107,8 @@ const UpdateTaskToolSchema = z
     (v) =>
       v.title !== undefined ||
       v.groupId !== undefined ||
-      v.status !== undefined,
+      v.status !== undefined ||
+      v.dueDate !== undefined,
     "至少需要提供一个待更新字段",
   );
 
