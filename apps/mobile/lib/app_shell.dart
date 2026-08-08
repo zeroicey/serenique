@@ -6,6 +6,7 @@ import 'core/network/api_exception.dart';
 import 'features/audit/audit_providers.dart';
 import 'features/moment/moment_providers.dart';
 import 'features/moment/widgets/attachment_picker_sheet.dart';
+import 'features/task/task_providers.dart';
 import 'providers.dart';
 
 /// 主壳：AppBar + Drawer 侧栏，包住各模块页面。
@@ -54,11 +55,14 @@ class AppShell extends ConsumerWidget {
     final location = GoRouterState.of(context).uri.path;
     final counts = ref.watch(countsProvider);
     final auditUnread = ref.watch(auditUnreadCountProvider);
+    final taskTodo = ref.watch(taskTodoCountProvider);
 
-    // 右侧 badge：闪记走真实计数，任务/日历/习惯先写死占位，日志走未读数。
+    // 右侧 badge：闪记/任务/日志走真实计数，日历/习惯先写死占位。
     String? badgeFor(String path) => switch (path) {
           '/moments' => counts.hasValue ? '${counts.value}' : null,
-          '/task' => '3',
+          '/task' => taskTodo.hasValue && taskTodo.value! > 0
+              ? '${taskTodo.value}'
+              : null,
           '/event' => '2',
           '/habit' => '5',
           '/audit' => auditUnread.hasValue && auditUnread.value! > 0
@@ -79,6 +83,7 @@ class AppShell extends ConsumerWidget {
             tooltip: '菜单',
             onPressed: () {
               ref.invalidate(countsProvider); // 打开抽屉时刷新计数
+              ref.invalidate(taskTodoCountProvider);
               Scaffold.of(context).openDrawer();
             },
           ),

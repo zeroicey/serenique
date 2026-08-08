@@ -11,6 +11,7 @@ import 'package:serenique_mobile/features/moment/moment_list_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
 import 'package:serenique_mobile/features/settings/settings_page.dart';
+import 'package:serenique_mobile/features/task/task_providers.dart';
 import 'package:serenique_mobile/providers.dart';
 import 'package:serenique_mobile/router.dart';
 import 'helpers.dart';
@@ -32,6 +33,7 @@ void main() {
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -45,6 +47,7 @@ void main() {
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -65,6 +68,7 @@ void main() {
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -88,6 +92,7 @@ void main() {
       auditListProvider.overrideWith(
           (ref) async => const AuditLogPage(items: [], total: 0)),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -109,6 +114,7 @@ void main() {
       momentListProvider.overrideWith((ref) async => const <Moment>[]),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));

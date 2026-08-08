@@ -11,6 +11,8 @@ import 'features/moment/moment_detail_page.dart';
 import 'features/moment/moment_list_page.dart';
 import 'features/placeholder/placeholder_page.dart';
 import 'features/settings/settings_page.dart';
+import 'features/task/task_group_detail_page.dart';
+import 'features/task/task_page.dart';
 import 'providers.dart';
 
 /// 声明式路由。未认证 → /login；启动读 Keychain → /splash；认证通过进 /moments。
@@ -33,7 +35,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(path: '/moments', builder: (context, state) => const MomentListPage()),
-          GoRoute(path: '/task', builder: (context, state) => const PlaceholderPage(title: '任务', icon: Icons.check_circle_outline)),
+          GoRoute(path: '/task', builder: (context, state) => const TaskPage()),
           GoRoute(path: '/event', builder: (context, state) => const PlaceholderPage(title: '日历', icon: Icons.calendar_today_outlined)),
           GoRoute(path: '/habit', builder: (context, state) => const PlaceholderPage(title: '习惯', icon: Icons.repeat)),
           GoRoute(path: '/files', builder: (context, state) => const PlaceholderPage(title: '素材库', icon: Icons.photo_library_outlined)),
@@ -46,6 +48,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/moments/:id',
         builder: (context, state) => MomentDetailPage(id: state.pathParameters['id']!),
+      ),
+      // 任务组详情全屏页：与 /moments/:id 同模型（ShellRoute 之外，自持 AppBar/返回）。
+      GoRoute(
+        path: '/task/groups/:id',
+        builder: (context, state) => TaskGroupDetailPage(groupId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
     ],
