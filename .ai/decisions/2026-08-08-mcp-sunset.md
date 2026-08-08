@@ -25,3 +25,11 @@
 - **运维**：生产 `ssh -J hpazure hpcore` → `cd /srv/compose/serenique && docker compose stop mcp`；本地 `docker stop <mcp 容器名>`（仓库根 docker-compose.yml 已于 2026-08-08 删除）。
 - **发布**：手动构建镜像时只构建 `serenique-api`；不触碰 `serenique-mcp` 构建步骤（`docker-publish.yml` 停更后不主动触发）。
 - **记忆**：后续会话不要为 MCP 安排需求/修复；涉及「AI 工具暴露」的需求改为「CLI 或 API 层」。
+
+## 例外记录（2026-08-09，一次性豁免）
+
+2026-08-09，任务模块（Task Module Mobile + dueDate）计划 Task 4 修改了 `services/mcp/src/tools/task.tools.ts`（提交 94c8ef8、99e25d5），作为对上述冻结的**一次性已接受例外**（由所有者接受）。
+
+原因：该修改使冻结服务的工具 schema 与精化后的 API schema 保持兼容——zod v4 对精化（refined）schema 调用 `.extend()` 会抛错；同时为 task 工具补充 dueDate 参数。
+
+该改动已提交但**未构建、未部署**；除此之外冻结继续有效。
