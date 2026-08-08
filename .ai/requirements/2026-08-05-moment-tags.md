@@ -1,7 +1,7 @@
 # Moment 标签需求文档
 
 - 日期：2026-08-05
-- 状态：**方案已确认，待实施**（API 先行；MCP / CLI 后续同步）
+- 状态：⏳待实施（方案已确认，待实施；API 先行；MCP / CLI 后续同步）
 - 范围：`services/api` 新增独立 **tags 模块**（标签 + 通用关联），Moment 接入
 - 前置记录：`2026-08-05-service-layer-architecture.md`（分层架构约定）
 

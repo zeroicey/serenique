@@ -1,7 +1,7 @@
 # 服务端日志（Server Audit Log）模块需求文档
 
 - 日期：2026-08-08
-- 状态：**设计中**（方案已确认，实施未开始）
+- 状态：✅已实施（2026-08-08；API / CLI / Web / 移动端 + 生产部署完成，见 `.ai/worklog/2026-08-08-audit-module-{api,cli}.md`、`2026-08-08-audit-deploy.md`）
 - 范围：`services/api` 新增 `audit` 模块（同级别独立模块）；写方钩入 auth / blob / diary / moment / task / event；读方先服务 Web（轮询角标 + 日志页），CLI / 移动端后补
 - 前置记录：`2026-08-06-auth.md`（登录 / 登出事件来源）、`2026-08-04-blob-storage-module.md`（上传 / 删除事件来源）、`2026-08-08-mcp-sunset.md`（MCP 停更，不接入）
 

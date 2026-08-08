@@ -1,7 +1,7 @@
 # Task 模块需求文档
 
 - 日期：2026-08-05
-- 状态：**已实施完成**（API + MCP + CLI 全部落地并评估通过；实施记录见 `.ai/worklog/2026-08-05-task-module-implementation.md`）
+- 状态：✅已实施（API + MCP + CLI 全部落地并评估通过；实施记录见 `.ai/worklog/2026-08-05-task-module-implementation.md`）
 - 范围：API 服务 `services/api` 新增 Task 模块；MCP / CLI 已同步完成
 
 ---

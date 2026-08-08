@@ -1,7 +1,7 @@
 # Event 模块需求文档
 
 - 日期：2026-08-05
-- 状态：**已实施完成**（API + MCP + CLI 全部落地；实施记录见 `.ai/worklog/2026-08-05-event-module-implementation.md`）
+- 状态：✅已实施（API + MCP + CLI 全部落地；实施记录见 `.ai/worklog/2026-08-05-event-module-implementation.md`）
 - 范围：API 服务 `services/api` 新增 Event 模块；MCP / CLI 已同步完成
 - 业务参考：Go 参考项目 `serenique-test2/services/api/internal/modules/event`（handler / service / repository / model）；**规范按本项目约定**（分层架构、Zod、Drizzle、统一响应、中文文案）。
 
