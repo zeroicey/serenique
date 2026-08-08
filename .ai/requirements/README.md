@@ -11,6 +11,7 @@
 | `2026-08-08-audit-module.md` | 审计模块 | ✅已实施 |
 | `2026-08-08-push-module.md` | 推送模块 | 🔶设计中 |
 | `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | ✅已实施（显示/预览 MVP；上传下阶段） |
+| `2026-08-08-moment-location.md` | Moment 位置信息 | ✅已实施 |
 
 ## 约定
 

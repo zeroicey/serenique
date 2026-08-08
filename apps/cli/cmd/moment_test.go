@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -336,9 +337,257 @@ func TestMomentEditJSONModeRendersUpdatedMoment(t *testing.T) {
 	})
 }
 
+// TestMomentCreateSendsLocation verifies `moment create --location ...` posts
+// the location object and renders it in the result, while a bare create omits
+// the field entirely (old-server compatible).
+func TestMomentCreateSendsLocation(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		location   string
+		lat        float64
+		lng        float64
+		latSet     bool
+		lngSet     bool
+		wantField  bool
+		wantObject map[string]any
+	}{
+		{
+			name:      "no location flag omits the field",
+			wantField: false,
+		},
+		{
+			name:       "name only",
+			location:   "北京·三里屯",
+			wantField:  true,
+			wantObject: map[string]any{"name": "北京·三里屯"},
+		},
+		{
+			name:       "name and coordinates",
+			location:   "北京·三里屯",
+			lat:        39.9,
+			lng:        116.4,
+			latSet:     true,
+			lngSet:     true,
+			wantField:  true,
+			wantObject: map[string]any{"name": "北京·三里屯", "latitude": 39.9, "longitude": 116.4},
+		},
+		{
+			name:       "coordinates only",
+			lat:        39.9,
+			lng:        116.4,
+			latSet:     true,
+			lngSet:     true,
+			wantField:  true,
+			wantObject: map[string]any{"latitude": 39.9, "longitude": 116.4},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotBody map[string]any
+			runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+				b, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(b, &gotBody)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
+				w.Write([]byte(`{"success":true,"message":"闪念创建成功","data":{"id":"m1","text":"hi","location":{"name":"北京·三里屯","latitude":39.9,"longitude":116.4},"createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+			}, false, func(srv *httptest.Server) {
+				momentCreateText = "hi"
+				momentCreateLocation = tc.location
+				momentCreateLat = tc.lat
+				momentCreateLng = tc.lng
+				t.Cleanup(func() {
+					momentCreateText = ""
+					momentCreateLocation = ""
+					momentCreateLat = 0
+					momentCreateLng = 0
+				})
+				// Flags().Set() permanently marks a flag as Changed, which leaks
+				// across subtests sharing the global command — reset explicitly.
+				momentCreateCmd.Flags().Lookup("lat").Changed = false
+				momentCreateCmd.Flags().Lookup("lng").Changed = false
+				if tc.latSet {
+					momentCreateCmd.Flags().Set("lat", formatFloat(tc.lat))
+				}
+				if tc.lngSet {
+					momentCreateCmd.Flags().Set("lng", formatFloat(tc.lng))
+				}
+				if err := momentCreateCmd.RunE(momentCreateCmd, nil); err != nil {
+					t.Fatal(err)
+				}
+			})
+
+			loc, ok := gotBody["location"]
+			if !tc.wantField {
+				if ok {
+					t.Fatalf("body = %v, want no location field", gotBody)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("body = %v, want a location field", gotBody)
+			}
+			obj := loc.(map[string]any)
+			if len(obj) != len(tc.wantObject) {
+				t.Fatalf("location = %v, want %v", obj, tc.wantObject)
+			}
+			for k, v := range tc.wantObject {
+				if obj[k] != v {
+					t.Fatalf("location[%s] = %v, want %v", k, obj[k], v)
+				}
+			}
+		})
+	}
+}
+
+func formatFloat(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
+// TestMomentEditSendsLocationChange verifies `moment edit --location` sets and
+// `moment edit --no-location` clears the location on PUT.
+func TestMomentEditSendsLocationChange(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		location  string
+		noLoc     bool
+		latSet    bool
+		lngSet    bool
+		wantClear bool
+		wantBody  map[string]any
+	}{
+		{
+			name:     "text only omits location",
+			wantBody: nil,
+		},
+		{
+			name:     "set location",
+			location: "公司",
+			latSet:   true,
+			lngSet:   true,
+			wantBody: map[string]any{"name": "公司", "latitude": 39.9, "longitude": 116.3},
+		},
+		{
+			name:      "no-location clears",
+			noLoc:     true,
+			wantClear: true,
+			wantBody:  nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotBody map[string]any
+			runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.Method == "GET" {
+					w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"旧内容","location":{"name":"旧位置"},"createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+					return
+				}
+				b, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(b, &gotBody)
+				w.Write([]byte(`{"success":true,"message":"闪念更新成功","data":{"id":"m1","text":"改后","createdAt":"x","updatedAt":"y","attachments":[],"comments":[],"commentCount":0}}`))
+			}, false, func(srv *httptest.Server) {
+				withStdin(t, "y\n")
+				momentEditText = "改后"
+				momentEditLocation = tc.location
+				momentEditLat = 39.9
+				momentEditLng = 116.3
+				momentEditNoLocation = tc.noLoc
+				t.Cleanup(func() {
+					momentEditText = ""
+					momentEditLocation = ""
+					momentEditLat = 0
+					momentEditLng = 0
+					momentEditNoLocation = false
+				})
+				// Flags().Set() permanently marks a flag as Changed, which leaks
+				// across subtests sharing the global command — reset explicitly.
+				momentEditCmd.Flags().Lookup("lat").Changed = false
+				momentEditCmd.Flags().Lookup("lng").Changed = false
+				if tc.latSet {
+					momentEditCmd.Flags().Set("lat", "39.9")
+				}
+				if tc.lngSet {
+					momentEditCmd.Flags().Set("lng", "116.3")
+				}
+				if err := momentEditCmd.RunE(momentEditCmd, []string{"m1"}); err != nil {
+					t.Fatal(err)
+				}
+			})
+
+			if tc.wantClear {
+				loc, ok := gotBody["location"]
+				if !ok || loc != nil {
+					t.Fatalf("body = %v, want location: null", gotBody)
+				}
+				return
+			}
+			loc, ok := gotBody["location"]
+			if tc.wantBody == nil {
+				if ok {
+					t.Fatalf("body = %v, want no location field", gotBody)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("body = %v, want a location field", gotBody)
+			}
+			obj := loc.(map[string]any)
+			if len(obj) != len(tc.wantBody) {
+				t.Fatalf("location = %v, want %v", obj, tc.wantBody)
+			}
+			for k, v := range tc.wantBody {
+				if obj[k] != v {
+					t.Fatalf("location[%s] = %v, want %v", k, obj[k], v)
+				}
+			}
+		})
+	}
+}
+
+// TestMomentEditNoLocationConflictRejects guards against the ambiguous combo:
+// --no-location together with --location/--lat/--lng must fail before PUT.
+func TestMomentEditNoLocationConflictRejects(t *testing.T) {
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			t.Error("server should not receive PUT for a conflicting flag combo")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"旧内容","createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+	}, true, func(srv *httptest.Server) {
+		withStdin(t, "y\n")
+		momentEditText = "改后"
+		momentEditLocation = "公司"
+		momentEditNoLocation = true
+		t.Cleanup(func() {
+			momentEditText = ""
+			momentEditLocation = ""
+			momentEditNoLocation = false
+		})
+		if err := momentEditCmd.RunE(momentEditCmd, []string{"m1"}); err == nil {
+			t.Fatal("expected error for --no-location + --location conflict")
+		}
+	})
+}
+
+// TestFormatMomentLocation verifies the display helper: name preferred, coords
+// fallback, nil renders "-".
+func TestFormatMomentLocation(t *testing.T) {
+	name := "北京·三里屯"
+	lat := 39.9
+	lng := 116.4
+	if got := formatMomentLocation(nil); got != "-" {
+		t.Fatalf("nil = %q, want -", got)
+	}
+	if got := formatMomentLocation(&client.MomentLocation{Name: &name, Latitude: &lat, Longitude: &lng}); got != "北京·三里屯" {
+		t.Fatalf("named = %q, want 北京·三里屯", got)
+	}
+	if got := formatMomentLocation(&client.MomentLocation{Latitude: &lat, Longitude: &lng}); got != "39.9,116.4" {
+		t.Fatalf("coords = %q, want 39.9,116.4", got)
+	}
+	if got := formatMomentLocation(&client.MomentLocation{Latitude: &lat}); got != "39.9" {
+		t.Fatalf("lat only = %q, want 39.9", got)
+	}
+}
+
 // TestMomentEditRequiresConfirmation guards the edit contract: without a
-// confirmation on stdin (EOF — the pipe/CI/AI-agent case), the edit must fail
-// with a non-nil error and never reach the server with a PUT.
 func TestMomentEditRequiresConfirmation(t *testing.T) {
 	var putHit bool
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {

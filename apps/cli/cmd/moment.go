@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/zeroicey/serenique-cli/internal/client"
@@ -32,13 +34,15 @@ var (
 var momentCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "创建闪念",
-	Long: `创建一条闪念笔记。内容最长 10000 字，可同时关联已上传的文件（用 --blob-id，可重复指定多个）。
+	Long: `创建一条闪念笔记。内容最长 10000 字，可同时关联已上传的文件（用 --blob-id，可重复指定多个），
+可附带可选的位置信息（--location 位置名，--lat/--lng 坐标，均为可选）。
 
 示例:
   serenique moment create --text "突然想到一个好主意..."
   serenique moment create -m "记录一个灵感"
   serenique moment create -m "好想法" --blob-id e5f6a1b2 --role cover --display-name "配图"
-  serenique moment create -m "好想法" --blob-id e5f6a1b2 --blob-id a1b2c3d4`,
+  serenique moment create -m "好想法" --blob-id e5f6a1b2 --blob-id a1b2c3d4
+  serenique moment create -m "在咖啡馆" --location "北京·三里屯" --lat 39.9 --lng 116.4`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		body := map[string]any{"text": momentCreateText}
 		if len(momentCreateBlobIDs) > 0 {
@@ -49,6 +53,10 @@ var momentCreateCmd = &cobra.Command{
 				momentCreateBlobIDs, momentCreateRole, momentCreateDisplayName,
 				momentCreateSortOrder, cmd.Flags().Changed("sort-order"))
 		}
+		if loc := buildMomentLocation(momentCreateLocation, momentCreateLat,
+			momentCreateLng, cmd.Flags().Changed("lat"), cmd.Flags().Changed("lng")); loc != nil {
+			body["location"] = loc
+		}
 
 		var result client.MomentEntry
 		if err := apiClient.Post(commandContext(cmd), "/api/moments", body, &result); err != nil {
@@ -58,6 +66,7 @@ var momentCreateCmd = &cobra.Command{
 		printCreateResult("闪念创建成功", result, "闪念创建成功", map[string]string{
 			"ID":   result.ID,
 			"内容":   result.Text,
+			"位置":   formatMomentLocation(result.Location),
 			"创建时间": result.CreatedAt,
 		})
 		return nil
@@ -70,7 +79,53 @@ var (
 	momentCreateRole        string
 	momentCreateDisplayName string
 	momentCreateSortOrder   int
+	momentCreateLocation    string
+	momentCreateLat         float64
+	momentCreateLng         float64
 )
+
+// buildMomentLocation assembles the API's location object from the --location /
+// --lat / --lng flag state. Returns nil when none was provided (the API then
+// stores no location). latSet/lngSet distinguish "flag absent" from an explicit
+// 0 coordinate.
+func buildMomentLocation(name string, lat, lng float64, latSet, lngSet bool) map[string]any {
+	if name == "" && !latSet && !lngSet {
+		return nil
+	}
+	loc := map[string]any{}
+	if name != "" {
+		loc["name"] = name
+	}
+	if latSet {
+		loc["latitude"] = lat
+	}
+	if lngSet {
+		loc["longitude"] = lng
+	}
+	return loc
+}
+
+// formatMomentLocation renders a location for tables/key-values: the name, or
+// "lat,lng" when the moment only carries coordinates, or "-" when absent.
+func formatMomentLocation(loc *client.MomentLocation) string {
+	if loc == nil {
+		return "-"
+	}
+	if loc.Name != nil && *loc.Name != "" {
+		return *loc.Name
+	}
+	if loc.Latitude != nil || loc.Longitude != nil {
+		var lat, lng string
+		if loc.Latitude != nil {
+			lat = strconv.FormatFloat(*loc.Latitude, 'f', -1, 64)
+		}
+		if loc.Longitude != nil {
+			lng = strconv.FormatFloat(*loc.Longitude, 'f', -1, 64)
+		}
+		return strings.TrimSuffix(lat+","+lng, ",")
+	}
+	return "-"
+}
 
 // momentAttachments builds the attachments array for moment create from the
 // create command's flag state, mirroring the API's MomentAttachmentInputSchema
@@ -119,6 +174,7 @@ var momentGetCmd = &cobra.Command{
 		printer.PrintKeyValue(map[string]string{
 			"ID":   result.ID,
 			"内容":   result.Text,
+			"位置":   formatMomentLocation(result.Location),
 			"创建时间": result.CreatedAt,
 			"更新时间": result.UpdatedAt,
 			"评论数":  strconv.Itoa(result.CommentCount),
@@ -240,10 +296,14 @@ var momentEditCmd = &cobra.Command{
 	Short: "编辑闪念正文",
 	Long: `修改指定闪念的正文（1..10000 字）。命令先读取当前内容供你确认，
 提交前必须经过确认交互（非交互 stdin 视为取消）。
+位置信息三态：--location 设置/覆盖（配合 --lat/--lng），--no-location 清除；
+不带位置参数则保持原位置不变。
 
 示例:
   serenique moment edit a1b2c3d4-e5f6-7890-abcd-ef1234567890 --text "修改后的内容"
-  serenique moment edit a1b2c3d4 -m "修改后的内容"`,
+  serenique moment edit a1b2c3d4 -m "修改后的内容"
+  serenique moment edit a1b2c3d4 -m "新内容" --location "公司" --lat 39.9 --lng 116.3
+  serenique moment edit a1b2c3d4 -m "新内容" --no-location`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := commandContext(cmd)
@@ -264,7 +324,32 @@ var momentEditCmd = &cobra.Command{
 			return err
 		}
 
-		result, err := apiClient.UpdateMoment(ctx, args[0], momentEditText)
+		input := client.UpdateMomentInput{
+			Text: momentEditText,
+		}
+		latSet, lngSet := cmd.Flags().Changed("lat"), cmd.Flags().Changed("lng")
+		if momentEditNoLocation {
+			if momentEditLocation != "" || latSet || lngSet {
+				return errors.New("--no-location 不能与 --location/--lat/--lng 同时使用")
+			}
+			input.ClearLocation = true
+		} else if loc := buildMomentLocation(momentEditLocation, momentEditLat,
+			momentEditLng, latSet, lngSet); loc != nil {
+			loc := &client.MomentLocation{}
+			if momentEditLocation != "" {
+				name := momentEditLocation
+				loc.Name = &name
+			}
+			if latSet {
+				loc.Latitude = &momentEditLat
+			}
+			if lngSet {
+				loc.Longitude = &momentEditLng
+			}
+			input.Location = loc
+		}
+
+		result, err := apiClient.UpdateMoment(ctx, args[0], input)
 		if err != nil {
 			return err
 		}
@@ -272,6 +357,7 @@ var momentEditCmd = &cobra.Command{
 		printCreateResult("闪念更新成功", result, "闪念更新成功", map[string]string{
 			"ID":   result.ID,
 			"内容":   result.Text,
+			"位置":   formatMomentLocation(result.Location),
 			"创建时间": result.CreatedAt,
 			"更新时间": result.UpdatedAt,
 		})
@@ -279,7 +365,13 @@ var momentEditCmd = &cobra.Command{
 	},
 }
 
-var momentEditText string
+var (
+	momentEditText       string
+	momentEditLocation   string
+	momentEditLat        float64
+	momentEditLng        float64
+	momentEditNoLocation bool
+)
 
 func init() {
 	// moment list
@@ -296,11 +388,12 @@ func init() {
   serenique moment list --json`,
 		path:     "/api/moments",
 		emptyMsg: "暂无闪念记录",
-		headers:  []string{"ID", "内容", "创建时间", "评论"},
+		headers:  []string{"ID", "内容", "位置", "创建时间", "评论"},
 		row: func(m client.MomentEntry) map[string]string {
 			return map[string]string{
 				"ID":   shortID(m.ID),
 				"内容":   truncateRunes(m.Text, 50),
+				"位置":   truncateRunes(formatMomentLocation(m.Location), 20),
 				"创建时间": prefix(m.CreatedAt, 19),
 				"评论":   strconv.Itoa(m.CommentCount),
 			}
@@ -322,10 +415,17 @@ func init() {
 	momentCreateCmd.Flags().StringVarP(&momentCreateRole, "role", "r", "attachment", "附件角色")
 	momentCreateCmd.Flags().StringVarP(&momentCreateDisplayName, "display-name", "n", "", "附件显示名称")
 	momentCreateCmd.Flags().IntVar(&momentCreateSortOrder, "sort-order", 0, "附件排序起始值（指定多个附件时依次递增）")
+	momentCreateCmd.Flags().StringVar(&momentCreateLocation, "location", "", "位置名称（可选，如「北京·三里屯」）")
+	momentCreateCmd.Flags().Float64Var(&momentCreateLat, "lat", 0, "纬度（可选，-90..90）")
+	momentCreateCmd.Flags().Float64Var(&momentCreateLng, "lng", 0, "经度（可选，-180..180）")
 	momentCreateCmd.MarkFlagRequired("text")
 
 	// moment edit flags
 	momentEditCmd.Flags().StringVarP(&momentEditText, "text", "m", "", "新的闪念正文，最长 10000 字 (必填)")
+	momentEditCmd.Flags().StringVar(&momentEditLocation, "location", "", "设置/覆盖位置名称（不带 --location/--lat/--lng 则保持原位置）")
+	momentEditCmd.Flags().Float64Var(&momentEditLat, "lat", 0, "纬度（可选，-90..90）")
+	momentEditCmd.Flags().Float64Var(&momentEditLng, "lng", 0, "经度（可选，-180..180）")
+	momentEditCmd.Flags().BoolVar(&momentEditNoLocation, "no-location", false, "清除位置信息")
 	momentEditCmd.MarkFlagRequired("text")
 
 	// moment delete

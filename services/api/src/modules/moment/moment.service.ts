@@ -176,7 +176,7 @@ export const momentService = {
       const blobById = await resolveAttachmentBlobs(tx, requestedAttachments);
       const [row] = await tx
         .insert(moments)
-        .values({ text: input.text })
+        .values({ text: input.text, location: input.location ?? null })
         .returning();
 
       const attachments: MomentAttachmentEntry[] = [];

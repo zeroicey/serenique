@@ -78,6 +78,13 @@
       "when": 1786190313079,
       "tag": "0010_add_tags",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786201871105,
+      "tag": "0011_strange_maggott",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import (
 type MomentEntry struct {
 	ID           string                  `json:"id"`
 	Text         string                  `json:"text"`
+	Location     *MomentLocation         `json:"location"`
 	CreatedAt    string                  `json:"createdAt"`
 	UpdatedAt    string                  `json:"updatedAt"`
 	Attachments  []MomentAttachmentEntry `json:"attachments"`
@@ -19,6 +20,16 @@ type MomentEntry struct {
 	// `moment get/list --json` round-trips tags instead of silently dropping
 	// them (Go's json decoder ignores unknown fields).
 	Tags []TagEntry `json:"tags"`
+}
+
+// MomentLocation mirrors the API's optional location object (moment.types.ts
+// MomentLocation): name + optional latitude/longitude, all optional — the
+// frontend decides what it collected. A nil Location on MomentEntry means the
+// moment has no location.
+type MomentLocation struct {
+	Name      *string  `json:"name,omitempty"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
 }
 
 // MomentBlobEntry mirrors the API's nested blob object inside a moment
@@ -75,13 +86,29 @@ func (c *Client) ListMoments(ctx context.Context, query url.Values) ([]MomentEnt
 	return List[MomentEntry](c, ctx, "/api/moments", query)
 }
 
-// UpdateMoment replaces a moment's text — its only updatable field (the API's
-// UpdateMomentSchema requires 1..10000 chars). The API answers with the full
-// updated moment (attachments/comments included), mirroring PUT
+// UpdateMomentInput mirrors the API's UpdateMomentSchema (PUT
+// /api/moments/:id): Text is required, Location is three-state — nil = leave
+// unchanged (old text-only edits keep the location), non-nil = set/overwrite,
+// ClearLocation = send an explicit null to remove the location.
+type UpdateMomentInput struct {
+	Text          string
+	Location      *MomentLocation
+	ClearLocation bool
+}
+
+// UpdateMoment replaces a moment's text and optionally its location (the API's
+// UpdateMomentSchema requires text 1..10000 chars). The API answers with the
+// full updated moment (attachments/comments included), mirroring PUT
 // /api/moments/:id.
-func (c *Client) UpdateMoment(ctx context.Context, id, text string) (*MomentEntry, error) {
+func (c *Client) UpdateMoment(ctx context.Context, id string, input UpdateMomentInput) (*MomentEntry, error) {
+	body := map[string]any{"text": input.Text}
+	if input.ClearLocation {
+		body["location"] = nil
+	} else if input.Location != nil {
+		body["location"] = input.Location
+	}
 	var result MomentEntry
-	if err := c.Put(ctx, "/api/moments/"+id, map[string]string{"text": text}, &result); err != nil {
+	if err := c.Put(ctx, "/api/moments/"+id, body, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

@@ -7,6 +7,25 @@ import type { TagEntry } from "@/modules/tag/tag.types";
 // Moment module — request/response types
 // ---------------------------------------------------------------------------
 
+/**
+ * Optional location attached to a moment (WeChat-style). All fields are
+ * optional — the frontend decides what it collected; at least one field must
+ * be present so an empty object is rejected.
+ */
+export const MomentLocationSchema = z
+  .object({
+    name: z.string().trim().min(1).max(128).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+  })
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.latitude !== undefined ||
+      v.longitude !== undefined,
+    { message: "位置对象至少需要 name、latitude、longitude 中的一个" },
+  );
+
 export const MomentAttachmentInputSchema = z.object({
   blobId: z.string().uuid(),
   role: z.string().min(1).max(64).default("attachment"),
@@ -20,11 +39,17 @@ export const CreateMomentSchema = z.object({
   attachments: z.array(MomentAttachmentInputSchema).default([]),
   /** Inline tag ids, bound in the same transaction (tag must exist). */
   tags: z.array(z.string().uuid()).default([]),
+  /** Optional location; absent = no location. */
+  location: MomentLocationSchema.optional(),
 });
 
-/** PUT partial update — text is the only updatable field. */
+/**
+ * PUT partial update — text is required, location is three-state:
+ * absent = unchanged, null = clear, object = set/overwrite.
+ */
 export const UpdateMomentSchema = z.object({
   text: z.string().min(1).max(10000),
+  location: MomentLocationSchema.nullable().optional(),
 });
 
 export const ListMomentSchema = z.object({
@@ -42,6 +67,7 @@ export const AddMomentTagSchema = z.object({
 });
 
 export type CreateMomentInput = z.input<typeof CreateMomentSchema>;
+export type MomentLocation = z.infer<typeof MomentLocationSchema>;
 export type ListMomentInput = z.infer<typeof ListMomentSchema>;
 export type UpdateMomentBody = z.infer<typeof UpdateMomentSchema>;
 export type DeleteMomentInput = { id: string };
@@ -85,6 +111,7 @@ export type MomentAttachmentEntry = {
 export type MomentEntry = {
   id: string;
   text: string;
+  location: MomentLocation | null;
   attachments: MomentAttachmentEntry[];
   comments: MomentCommentEntry[];
   commentCount: number;

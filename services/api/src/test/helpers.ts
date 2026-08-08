@@ -95,6 +95,7 @@ export function fakeMomentRow(
   return {
     id: "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001",
     text: "一条测试闪念",
+    location: null,
     createdAt: new Date("2026-08-05T12:00:00.000Z"),
     updatedAt: new Date("2026-08-05T12:00:00.000Z"),
     ...overrides,

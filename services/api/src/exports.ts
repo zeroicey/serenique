@@ -33,6 +33,7 @@ export type {
   AddMomentTagInput,
   RemoveMomentTagInput,
   MomentEntry,
+  MomentLocation,
   MomentAttachmentEntry,
   MomentBlobEntry,
   CreateMomentInput,
@@ -47,6 +48,7 @@ export {
   CreateMomentSchema,
   ListMomentSchema,
   MomentAttachmentInputSchema,
+  MomentLocationSchema,
   UpdateMomentSchema,
 } from "@/modules/moment/moment.types";
 export type {

@@ -211,6 +211,65 @@ describe.skipIf(!RUN_DB_TESTS)("moment service DB integration", () => {
     expect(got.text).toBe("更新后的闪念");
   });
 
+  test("create/update round-trip location: set, keep on text-only update, clear", async () => {
+    const created = await momentService.create({
+      text: uniqueTitle("moment-带位置"),
+      location: { name: "北京·三里屯", latitude: 39.9, longitude: 116.4 },
+    });
+    createdMomentIds.push(created.id);
+    expect(created.location).toEqual({
+      name: "北京·三里屯",
+      latitude: 39.9,
+      longitude: 116.4,
+    });
+
+    // Text-only PUT (old clients) keeps the location untouched.
+    const textOnly = await momentService.update({
+      id: created.id,
+      text: "更新文本但保留位置",
+    });
+    expect(textOnly.location).toEqual({
+      name: "北京·三里屯",
+      latitude: 39.9,
+      longitude: 116.4,
+    });
+
+    // Explicit null clears it.
+    const cleared = await momentService.update({
+      id: created.id,
+      text: "清除位置",
+      location: null,
+    });
+    expect(cleared.location).toBeNull();
+
+    // Overwrite with a new object.
+    const moved = await momentService.update({
+      id: created.id,
+      text: "新位置",
+      location: { name: "上海·陆家嘴", latitude: 31.2, longitude: 121.5 },
+    });
+    expect(moved.location).toEqual({
+      name: "上海·陆家嘴",
+      latitude: 31.2,
+      longitude: 121.5,
+    });
+
+    const got = await momentService.get({ id: created.id });
+    expect(got.location).toEqual({
+      name: "上海·陆家嘴",
+      latitude: 31.2,
+      longitude: 121.5,
+    });
+  });
+
+  test("create without location defaults to null", async () => {
+    const created = await momentService.create({
+      text: uniqueTitle("moment-无位置"),
+    });
+    createdMomentIds.push(created.id);
+    expect(created.location).toBeNull();
+  });
+
   test("update rejects a missing moment", async () => {
     await expect(
       momentService.update({ id: randomUUID(), text: "不存在" }),

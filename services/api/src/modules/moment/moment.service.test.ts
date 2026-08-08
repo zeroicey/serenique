@@ -161,6 +161,25 @@ describe("moment mappers", () => {
     expect(listEntry.commentCount).toBe(3);
   });
 
+  test("toMomentEntry carries the location through", async () => {
+    setTestEnv();
+    const { toMomentEntry } = await import("./moment.mappers");
+
+    const located = toMomentEntry(
+      fakeMomentRow({
+        location: { name: "北京·三里屯", latitude: 39.9, longitude: 116.4 },
+      }),
+    );
+    expect(located.location).toEqual({
+      name: "北京·三里屯",
+      latitude: 39.9,
+      longitude: 116.4,
+    });
+
+    const plain = toMomentEntry(fakeMomentRow());
+    expect(plain.location).toBeNull();
+  });
+
   test("groupAttachmentsByMomentId groups by ownerId and sorts each group", async () => {
     setTestEnv();
     const { groupAttachmentsByMomentId } = await import("./moment.mappers");
@@ -208,6 +227,50 @@ describe("moment schemas", () => {
     expect(CreateMomentSchema.parse({ text: "hello" }).attachments).toEqual([]);
   });
 
+  test("CreateMomentSchema accepts an optional location object", async () => {
+    setTestEnv();
+    const { CreateMomentSchema } = await import("./moment.types");
+
+    expect(
+      CreateMomentSchema.safeParse({
+        text: "hello",
+        location: { name: "北京·三里屯", latitude: 39.9, longitude: 116.4 },
+      }).success,
+    ).toBe(true);
+    // Coordinates alone are fine (frontend may only have a pin).
+    expect(
+      CreateMomentSchema.safeParse({
+        text: "hello",
+        location: { latitude: 39.9, longitude: 116.4 },
+      }).success,
+    ).toBe(true);
+    // Name-only is fine too (frontend may not expose coordinates).
+    expect(
+      CreateMomentSchema.safeParse({
+        text: "hello",
+        location: { name: "北京·三里屯" },
+      }).success,
+    ).toBe(true);
+    // Old clients simply omit the field.
+    expect(CreateMomentSchema.parse({ text: "hello" }).location).toBeUndefined();
+  });
+
+  test("CreateMomentSchema rejects empty/invalid location objects", async () => {
+    setTestEnv();
+    const { CreateMomentSchema } = await import("./moment.types");
+
+    const withLocation = (location: unknown) =>
+      CreateMomentSchema.safeParse({ text: "hello", location });
+
+    expect(withLocation({}).success).toBe(false);
+    expect(withLocation({ name: "" }).success).toBe(false);
+    expect(withLocation({ name: "x".repeat(129) }).success).toBe(false);
+    expect(withLocation({ latitude: 91 }).success).toBe(false);
+    expect(withLocation({ latitude: -91 }).success).toBe(false);
+    expect(withLocation({ longitude: 181 }).success).toBe(false);
+    expect(withLocation({ longitude: "116.4" }).success).toBe(false);
+  });
+
   test("UpdateMomentSchema requires text 1-10000 and rejects unknown body fields", async () => {
     setTestEnv();
     const { UpdateMomentSchema } = await import("./moment.types");
@@ -220,6 +283,29 @@ describe("moment schemas", () => {
     expect(UpdateMomentSchema.safeParse({ content: "hello" }).success).toBe(
       false,
     );
+  });
+
+  test("UpdateMomentSchema location is three-state: absent / null / object", async () => {
+    setTestEnv();
+    const { UpdateMomentSchema } = await import("./moment.types");
+
+    // absent = unchanged (old clients PUT text only and keep the location)
+    expect(
+      UpdateMomentSchema.parse({ text: "新内容" }).location,
+    ).toBeUndefined();
+    // null = clear
+    expect(UpdateMomentSchema.parse({ text: "新内容", location: null }).location).toBeNull();
+    // object = set/overwrite
+    expect(
+      UpdateMomentSchema.parse({
+        text: "新内容",
+        location: { name: "公司" },
+      }).location,
+    ).toEqual({ name: "公司" });
+    // invalid location still rejected
+    expect(
+      UpdateMomentSchema.safeParse({ text: "新内容", location: {} }).success,
+    ).toBe(false);
   });
 
   test("MomentAttachmentInputSchema defaults role/metadata and rejects non-uuid blobId", async () => {

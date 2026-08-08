@@ -10,8 +10,9 @@ import (
 )
 
 // TestUpdateMomentSendsPutPathAndBody verifies UpdateMoment issues PUT
-// /api/moments/:id with a JSON body of {"text": ...} (the only updatable
-// field, per the API's UpdateMomentSchema) and decodes the full entry.
+// /api/moments/:id with a JSON body of {"text": ...} when no location is given
+// (old text-only edits must keep the location unchanged) and decodes the full
+// entry.
 func TestUpdateMomentSendsPutPathAndBody(t *testing.T) {
 	var gotMethod, gotPath string
 	var gotBody map[string]any
@@ -23,7 +24,7 @@ func TestUpdateMomentSendsPutPathAndBody(t *testing.T) {
 		w.Write([]byte(`{"success":true,"message":"闪念更新成功","data":{"id":"m1","text":"改后","createdAt":"x","updatedAt":"y","attachments":[],"comments":[],"commentCount":0}}`))
 	})
 
-	moment, err := c.UpdateMoment(context.Background(), "m1", "改后")
+	moment, err := c.UpdateMoment(context.Background(), "m1", UpdateMomentInput{Text: "改后"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,6 +39,125 @@ func TestUpdateMomentSendsPutPathAndBody(t *testing.T) {
 	}
 }
 
+// TestUpdateMomentLocationThreeState verifies the location body contract:
+// non-nil Location sends an object, ClearLocation sends an explicit null, and
+// neither (plain text edit) omits the field entirely.
+func TestUpdateMomentLocationThreeState(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		input     UpdateMomentInput
+		wantField bool
+		wantBody  any
+	}{
+		{
+			name:      "text only omits location",
+			input:     UpdateMomentInput{Text: "t"},
+			wantField: false,
+		},
+		{
+			name: "set location object",
+			input: UpdateMomentInput{
+				Text:     "t",
+				Location: &MomentLocation{Name: ptr("北京·三里屯"), Latitude: ptr(39.9), Longitude: ptr(116.4)},
+			},
+			wantField: true,
+			wantBody:  map[string]any{"name": "北京·三里屯", "latitude": 39.9, "longitude": 116.4},
+		},
+		{
+			name:      "coordinates only",
+			input:     UpdateMomentInput{Text: "t", Location: &MomentLocation{Latitude: ptr(31.2)}},
+			wantField: true,
+			wantBody:  map[string]any{"latitude": 31.2},
+		},
+		{
+			name:      "clear sends explicit null",
+			input:     UpdateMomentInput{Text: "t", ClearLocation: true},
+			wantField: true,
+			wantBody:  nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotBody map[string]any
+			_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				b, _ := io.ReadAll(r.Body)
+				_ = json.Unmarshal(b, &gotBody)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"t","createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+			})
+			if _, err := c.UpdateMoment(context.Background(), "m1", tc.input); err != nil {
+				t.Fatal(err)
+			}
+			loc, ok := gotBody["location"]
+			if !tc.wantField {
+				if ok {
+					t.Fatalf("body = %v, want no location field", gotBody)
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("body = %v, want a location field", gotBody)
+			}
+			if loc == nil {
+				if tc.wantBody != nil {
+					t.Fatalf("location = null, want %v", tc.wantBody)
+				}
+				return
+			}
+			obj := loc.(map[string]any)
+			want := tc.wantBody.(map[string]any)
+			if len(obj) != len(want) {
+				t.Fatalf("location = %v, want %v", obj, want)
+			}
+			for k, v := range want {
+				if obj[k] != v {
+					t.Fatalf("location[%s] = %v, want %v", k, obj[k], v)
+				}
+			}
+		})
+	}
+}
+
+// TestMomentEntryDecodesLocation guards the round-trip contract: the API's
+// optional location object must survive decode into MomentEntry so
+// `moment get/list --json` never drops it, and a missing/null location decodes
+// to nil.
+func TestMomentEntryDecodesLocation(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"hi","location":{"name":"北京·三里屯","latitude":39.9,"longitude":116.4},"createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+	})
+
+	var m MomentEntry
+	if err := c.Get(context.Background(), "/api/moments/m1", nil, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Location == nil || m.Location.Name == nil || *m.Location.Name != "北京·三里屯" {
+		t.Fatalf("location = %+v, want name 北京·三里屯", m.Location)
+	}
+	if m.Location.Latitude == nil || *m.Location.Latitude != 39.9 || m.Location.Longitude == nil || *m.Location.Longitude != 116.4 {
+		t.Fatalf("location = %+v, want 39.9/116.4", m.Location)
+	}
+}
+
+// TestMomentEntryNullLocationDecodesToNil verifies `"location": null` and a
+// missing field both decode to a nil Location (old servers never sent it).
+func TestMomentEntryNullLocationDecodesToNil(t *testing.T) {
+	_, c := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"m1","text":"hi","location":null,"createdAt":"x","updatedAt":"x","attachments":[],"comments":[],"commentCount":0}}`))
+	})
+
+	var m MomentEntry
+	if err := c.Get(context.Background(), "/api/moments/m1", nil, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Location != nil {
+		t.Fatalf("location = %+v, want nil", m.Location)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
 // TestUpdateMomentMapsNotFound verifies a 404 (闪念不存在) surfaces as an
 // *APIError instead of being swallowed.
 func TestUpdateMomentMapsNotFound(t *testing.T) {
@@ -46,7 +166,7 @@ func TestUpdateMomentMapsNotFound(t *testing.T) {
 		w.Write([]byte(`{"success":false,"message":"闪念不存在","error":{"code":"NOT_FOUND"}}`))
 	})
 
-	_, err := c.UpdateMoment(context.Background(), "nope", "x")
+	_, err := c.UpdateMoment(context.Background(), "nope", UpdateMomentInput{Text: "x"})
 	if err == nil {
 		t.Fatal("expected error for missing moment")
 	}

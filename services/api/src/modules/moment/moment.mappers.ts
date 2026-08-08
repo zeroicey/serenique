@@ -2,6 +2,7 @@ import type { blobs, blobAttachments } from "@/modules/blob/blob.schema";
 import type { moments } from "@/modules/moment/moment.schema";
 import type { MomentCommentEntry } from "@/modules/moment/comment.types";
 import type { TagEntry } from "@/modules/tag/tag.types";
+import type { MomentLocation } from "@/modules/moment/moment.types";
 import type {
   MomentAttachmentEntry,
   MomentBlobEntry,
@@ -93,6 +94,7 @@ export function toMomentEntry(
   return {
     id: row.id,
     text: row.text,
+    location: row.location as MomentLocation | null,
     attachments,
     comments,
     commentCount,
