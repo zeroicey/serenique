@@ -107,4 +107,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget); // 点「评论」后出现
   });
+
+  testWidgets('再点一次「评论」关闭输入框', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [momentListProvider.overrideWith((ref) async => [sample])],
+      child: const MaterialApp(home: MomentListPage()),
+    ));
+    await tester.pumpAndSettle();
+
+    // 打开
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('评论'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget);
+
+    // 再点 ⋮ →「评论」→ 关闭
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('评论'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+  });
 }

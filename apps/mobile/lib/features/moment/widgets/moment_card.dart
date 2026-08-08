@@ -164,8 +164,9 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                     tooltip: '更多',
                     onSelected: (value) {
                       if (value == 'comment') {
-                        setState(() => _showCommentInput = true);
-                        _commentFocus.requestFocus();
+                        // 再点一次「评论」= 关闭输入框（不想评论了）。
+                        setState(() => _showCommentInput = !_showCommentInput);
+                        if (_showCommentInput) _commentFocus.requestFocus();
                       } else if (value == 'delete') {
                         _delete();
                       }
