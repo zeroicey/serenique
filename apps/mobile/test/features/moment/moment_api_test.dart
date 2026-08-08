@@ -12,10 +12,17 @@ class _FakeAdapter implements HttpClientAdapter {
   final String body;
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options,
-          Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async =>
-      ResponseBody.fromString(body, 200,
-          headers: {Headers.contentTypeHeader: ['application/json']});
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async => ResponseBody.fromString(
+    body,
+    200,
+    headers: {
+      Headers.contentTypeHeader: ['application/json'],
+    },
+  );
 
   @override
   void close({bool force = false}) {}
@@ -29,14 +36,22 @@ class _RecordingAdapter implements HttpClientAdapter {
   String? lastBody;
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options,
-      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
     final data = options.data;
     if (data is Map<String, dynamic>) {
       lastBody = jsonEncode(data);
     }
-    return ResponseBody.fromString(onRequest(options), 200,
-        headers: {Headers.contentTypeHeader: ['application/json']});
+    return ResponseBody.fromString(
+      onRequest(options),
+      200,
+      headers: {
+        Headers.contentTypeHeader: ['application/json'],
+      },
+    );
   }
 
   @override
@@ -44,110 +59,163 @@ class _RecordingAdapter implements HttpClientAdapter {
 }
 
 ApiClient _client(String baseUrl, String body) => ApiClient(
-      baseUrl: baseUrl,
-      tokenReader: () => null,
-      dio: Dio(BaseOptions(baseUrl: baseUrl))
-        ..httpClientAdapter = _FakeAdapter(body),
-    );
+  baseUrl: baseUrl,
+  tokenReader: () => null,
+  dio: Dio(BaseOptions(baseUrl: baseUrl))
+    ..httpClientAdapter = _FakeAdapter(body),
+);
 
 void main() {
   test('createBlobAccessLink 用相对 path + apiBase 拼接（路由反代前缀保留）', () async {
-    final client = _client('https://api.hcyj.xyz/serenique/', jsonEncode({
-      'success': true,
-      'message': '生成成功',
-      'data': {
-        'path': '/api/blobs/b1/file?expires=2100000000&signature=sig',
-        'url':
-            'https://api.hcyj.xyz/api/blobs/b1/file?expires=2100000000&signature=sig',
-        'expires': 2100000000,
-        'expiresAt': 't',
-        'signature': 'sig',
-      },
-    }));
+    final client = _client(
+      'https://api.hcyj.xyz/serenique/',
+      jsonEncode({
+        'success': true,
+        'message': '生成成功',
+        'data': {
+          'path': '/api/blobs/b1/file?expires=2100000000&signature=sig',
+          'url':
+              'https://api.hcyj.xyz/api/blobs/b1/file?expires=2100000000&signature=sig',
+          'expires': 2100000000,
+          'expiresAt': 't',
+          'signature': 'sig',
+        },
+      }),
+    );
 
     final api = MomentApi(client);
     final link = await api.createBlobAccessLink('b1');
 
     // 路由反代下必须带 /serenique 前缀，不能直接用后端返回的 url（丢前缀）
-    expect(link.url,
-        'https://api.hcyj.xyz/serenique/api/blobs/b1/file?expires=2100000000&signature=sig');
+    expect(
+      link.url,
+      'https://api.hcyj.xyz/serenique/api/blobs/b1/file?expires=2100000000&signature=sig',
+    );
     expect(link.expiresAt.millisecondsSinceEpoch, 2100000000 * 1000);
     expect(link.isExpired, isFalse);
   });
 
   test('createBlobAccessLink 无前缀 baseUrl 时拼接正确', () async {
-    final client = _client('https://api.zeroicey.me', jsonEncode({
-      'success': true,
-      'message': '生成成功',
-      'data': {
-        'path': '/api/blobs/b2/file?expires=2100000000&signature=sig2',
-        'url':
-            'https://api.zeroicey.me/api/blobs/b2/file?expires=2100000000&signature=sig2',
-        'expires': 2100000000,
-        'expiresAt': 't',
-        'signature': 'sig2',
-      },
-    }));
+    final client = _client(
+      'https://api.zeroicey.me',
+      jsonEncode({
+        'success': true,
+        'message': '生成成功',
+        'data': {
+          'path': '/api/blobs/b2/file?expires=2100000000&signature=sig2',
+          'url':
+              'https://api.zeroicey.me/api/blobs/b2/file?expires=2100000000&signature=sig2',
+          'expires': 2100000000,
+          'expiresAt': 't',
+          'signature': 'sig2',
+        },
+      }),
+    );
 
     final api = MomentApi(client);
     final link = await api.createBlobAccessLink('b2');
-    expect(link.url,
-        'https://api.zeroicey.me/api/blobs/b2/file?expires=2100000000&signature=sig2');
+    expect(
+      link.url,
+      'https://api.zeroicey.me/api/blobs/b2/file?expires=2100000000&signature=sig2',
+    );
   });
 
   test('uploadBlob 走 multipart 并解析 BlobEntry', () async {
-    final adapter = _RecordingAdapter((options) => jsonEncode({
-          'success': true,
-          'message': 'ok',
-          'data': {
-            'id': 'b1',
-            'originalName': 'a.jpg',
-            'mimeType': 'image/jpeg',
-            'size': 3,
-            'checksum': 'x',
-            'metadata': {},
-            'width': 1,
-            'height': 1,
-            'duration': null,
-            'createdAt': 't',
-          },
-        }));
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {
+          'id': 'b1',
+          'originalName': 'a.jpg',
+          'mimeType': 'image/jpeg',
+          'size': 3,
+          'checksum': 'x',
+          'metadata': {},
+          'width': 1,
+          'height': 1,
+          'duration': null,
+          'createdAt': 't',
+        },
+      }),
+    );
     final client = ApiClient(
-        baseUrl: 'https://api.test',
-        tokenReader: () => null,
-        dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
-          ..httpClientAdapter = adapter);
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
     final blob = await MomentApi(client).uploadBlob(
-        Uint8List.fromList([1, 2, 3]), filename: 'a.jpg', mimeType: 'image/jpeg');
+      Uint8List.fromList([1, 2, 3]),
+      filename: 'a.jpg',
+      mimeType: 'image/jpeg',
+    );
     expect(blob.id, 'b1');
     expect(blob.mimeType, 'image/jpeg');
   });
 
   test('create 带 attachments 时请求体包含 blobId/displayName/sortOrder', () async {
-    final adapter = _RecordingAdapter((options) => jsonEncode({
-          'success': true,
-          'message': 'ok',
-          'data': {
-            'id': 'm1',
-            'text': '看图',
-            'attachments': [],
-            'comments': [],
-            'commentCount': 0,
-            'createdAt': 't',
-            'updatedAt': 't',
-          },
-        }));
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {
+          'id': 'm1',
+          'text': '看图',
+          'attachments': [],
+          'comments': [],
+          'commentCount': 0,
+          'createdAt': 't',
+          'updatedAt': 't',
+        },
+      }),
+    );
     final client = ApiClient(
-        baseUrl: 'https://api.test',
-        tokenReader: () => null,
-        dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
-          ..httpClientAdapter = adapter);
-    await MomentApi(client).create('看图', attachments: [
-      MomentAttachmentInput(blobId: 'b1', displayName: 'a.jpg', sortOrder: 0),
-    ]);
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    await MomentApi(client).create(
+      '看图',
+      attachments: [
+        MomentAttachmentInput(blobId: 'b1', displayName: 'a.jpg', sortOrder: 0),
+      ],
+    );
     final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
     expect(body['text'], '看图');
-    expect((body['attachments'] as List).single,
-        {'blobId': 'b1', 'displayName': 'a.jpg', 'sortOrder': 0});
+    expect((body['attachments'] as List).single, {
+      'blobId': 'b1',
+      'displayName': 'a.jpg',
+      'sortOrder': 0,
+    });
+  });
+
+  test('create 无附件时请求体不含 attachments 键', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {
+          'id': 'm2',
+          'text': '纯文字',
+          'attachments': [],
+          'comments': [],
+          'commentCount': 0,
+          'createdAt': 't',
+          'updatedAt': 't',
+        },
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    await MomentApi(client).create('纯文字');
+    final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
+    expect(body['text'], '纯文字');
+    expect(body.containsKey('attachments'), isFalse);
   });
 }
