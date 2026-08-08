@@ -91,6 +91,43 @@ void main() {
     expect(find.text('1 / 1'), findsNothing);
   });
 
+  testWidgets('双击后摇：连点 3 下不误退（第三次单击被后摇忽略）', (tester) async {
+    await open(tester, [att(0)]);
+    expect(find.text('1 / 1'), findsOneWidget);
+    // 模拟用户快速连点 3 下：前两下 = 双击（放大），第三下 = 单击（应被后摇拦下）
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester);
+    // 预览未被关闭
+    expect(find.text('1 / 1'), findsOneWidget);
+    // 缩放已生效（双击成功）
+    final matrix = tester
+        .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+        .transformationController!
+        .value;
+    expect(matrix.getMaxScaleOnAxis(), closeTo(2.5, 0.01));
+  });
+
+  testWidgets('后摇结束后单击正常关闭', (tester) async {
+    await open(tester, [att(0)]);
+    expect(find.text('1 / 1'), findsOneWidget);
+    // 双击进入后摇
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 400));
+    // 后摇（1.5s）结束后单击关闭
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester);
+    expect(find.text('1 / 1'), findsNothing);
+  });
+
   testWidgets('双击图片放大，再双击缩回', (tester) async {
     await open(tester, [att(0)]);
     // 双击放大：缩放比例变为 2.5

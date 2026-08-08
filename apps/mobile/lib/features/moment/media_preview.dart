@@ -1,5 +1,6 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'moment_models.dart';
 import 'moment_providers.dart';
@@ -47,16 +48,8 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
   late int _current = widget.initialIndex;
 
   @override
-  void initState() {
-    super.initState();
-    // 沉浸式全屏：隐藏状态栏与 Home Indicator（黑底上的系统横条），退出时恢复。
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-  }
-
-  @override
   void dispose() {
     _controller.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -75,10 +68,7 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
         Positioned(
           left: 0,
           right: 0,
-          // 沉浸式模式下 MediaQuery.padding.bottom 为 0（系统 UI 已隐藏），
-          // 但用户滑动时 iOS 会临时唤出 Home Indicator——用固定安全距离
-          // 让计数文字始终与屏幕底部系统横条保持间距。
-          bottom: 48,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
           child: Center(
             child: Text(
               '${_current + 1} / ${attachments.length}',
@@ -107,6 +97,9 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     with SingleTickerProviderStateMixin {
   static const _doubleTapScale = 2.5;
 
+  /// 双击后摇：此时间内的单击被忽略（防快速连点误触发退出，对齐微信体验）。
+  static const _doubleTapCooldown = Duration(milliseconds: 1500);
+
   final _transformation = TransformationController();
   late final AnimationController _zoomController = AnimationController(
     vsync: this,
@@ -118,6 +111,8 @@ class _MediaPageState extends ConsumerState<_MediaPage>
       CurvedAnimation(parent: _zoomController, curve: Curves.easeOut));
   bool _zoomed = false;
   Offset _doubleTapFocal = Offset.zero;
+  bool _inDoubleTapCooldown = false;
+  Timer? _cooldownTimer;
 
   MomentAttachment get _attachment => widget.attachment;
 
@@ -129,6 +124,7 @@ class _MediaPageState extends ConsumerState<_MediaPage>
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     _zoomController.dispose();
     _transformation.dispose();
     super.dispose();
@@ -154,6 +150,22 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     setState(() => _zoomed = !_zoomed);
   }
 
+  /// 单击关闭：双击后摇期间忽略（狂按连点不误退）。
+  void _handleTap() {
+    if (_inDoubleTapCooldown) return;
+    Navigator.of(context).pop();
+  }
+
+  /// 双击入口：缩放 + 进入后摇。
+  void _handleDoubleTap() {
+    _toggleZoom();
+    _inDoubleTapCooldown = true;
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer(_doubleTapCooldown, () {
+      if (mounted) setState(() => _inDoubleTapCooldown = false);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final blob = _attachment.blob;
@@ -161,10 +173,10 @@ class _MediaPageState extends ConsumerState<_MediaPage>
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => Navigator.of(context).pop(),
+      onTap: _handleTap,
       onDoubleTapDown: (details) =>
           _doubleTapFocal = details.localPosition,
-      onDoubleTap: _toggleZoom,
+      onDoubleTap: _handleDoubleTap,
       child: url.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
