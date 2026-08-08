@@ -81,12 +81,40 @@ void main() {
     expect(find.text('3 / 3'), findsOneWidget);
   });
 
-  testWidgets('点图片关闭遮罩', (tester) async {
+  testWidgets('点图片关闭遮罩（单击需等双击判定超时）', (tester) async {
     await open(tester, [att(0)]);
     expect(find.text('1 / 1'), findsOneWidget);
     await tester.tap(find.byType(InteractiveViewer));
+    // onTap 与 onDoubleTap 并存：单击要等双击判定窗口（约 350ms）才触发关闭。
+    await tester.pump(const Duration(milliseconds: 400));
     await settle(tester);
     expect(find.text('1 / 1'), findsNothing);
+  });
+
+  testWidgets('双击图片放大，再双击缩回', (tester) async {
+    await open(tester, [att(0)]);
+    // 双击放大：缩放比例变为 2.5
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pumpAndSettle();
+    final zoomed = tester
+        .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+        .transformationController!
+        .value;
+    expect(zoomed.getMaxScaleOnAxis(), closeTo(2.5, 0.01));
+    // 预览未关闭（双击不触发关闭）
+    expect(find.text('1 / 1'), findsOneWidget);
+    // 再双击缩回 1.0
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pumpAndSettle();
+    final reset = tester
+        .widget<InteractiveViewer>(find.byType(InteractiveViewer))
+        .transformationController!
+        .value;
+    expect(reset.getMaxScaleOnAxis(), closeTo(1.0, 0.01));
   });
 
   testWidgets('视频/音频页显示占位（▶ + 时长 / 图标 + 文件名）', (tester) async {

@@ -91,19 +91,69 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
   }
 }
 
-class _MediaPage extends ConsumerWidget {
+class _MediaPage extends ConsumerStatefulWidget {
   const _MediaPage({required this.attachment});
 
   final MomentAttachment attachment;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final blob = attachment.blob;
+  ConsumerState<_MediaPage> createState() => _MediaPageState();
+}
+
+class _MediaPageState extends ConsumerState<_MediaPage>
+    with SingleTickerProviderStateMixin {
+  static const _doubleTapScale = 2.5;
+
+  final _transformation = TransformationController();
+  late final AnimationController _zoomController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+  );
+  // 单一 animation：toggle 只改 tween 端点再 forward，避免重复 addListener 互相覆盖。
+  late final _zoomTween = Matrix4Tween(
+    begin: Matrix4.identity(),
+    end: Matrix4.identity()..scale(_doubleTapScale),
+  );
+  late final Animation<Matrix4> _zoomAnim = _zoomTween.animate(
+      CurvedAnimation(parent: _zoomController, curve: Curves.easeOut));
+  bool _zoomed = false;
+
+  MomentAttachment get _attachment => widget.attachment;
+
+  @override
+  void initState() {
+    super.initState();
+    _zoomAnim.addListener(() => _transformation.value = _zoomAnim.value);
+  }
+
+  @override
+  void dispose() {
+    _zoomController.dispose();
+    _transformation.dispose();
+    super.dispose();
+  }
+
+  /// 双击：1x ↔ 2.5x 平滑缩放（重新以当前变换为起点）。
+  void _toggleZoom() {
+    final target = _zoomed
+        ? Matrix4.identity()
+        : (Matrix4.identity()..scale(_doubleTapScale));
+    _zoomTween
+      ..begin = _transformation.value
+      ..end = target;
+    _zoomController.forward(from: 0);
+    setState(() => _zoomed = !_zoomed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final blob = _attachment.blob;
     final url = ref.watch(blobAccessUrlProvider(blob.id));
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => Navigator.of(context).pop(),
+      onDoubleTap: _toggleZoom,
       child: url.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
@@ -111,6 +161,7 @@ class _MediaPage extends ConsumerWidget {
         ),
         data: (u) => blob.isImage
             ? InteractiveViewer(
+                transformationController: _transformation,
                 minScale: 1,
                 maxScale: 4,
                 child: SizedBox.expand(
@@ -149,7 +200,7 @@ class _MediaPage extends ConsumerWidget {
                             size: 72, color: Colors.white70),
                         const SizedBox(height: 8),
                         Text(
-                          attachment.displayLabel,
+                          _attachment.displayLabel,
                           style: const TextStyle(color: Colors.white70),
                         ),
                       ],
