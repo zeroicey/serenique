@@ -112,7 +112,7 @@ class _MediaPageState extends ConsumerState<_MediaPage>
   // 单一 animation：toggle 只改 tween 端点再 forward，避免重复 addListener 互相覆盖。
   late final _zoomTween = Matrix4Tween(
     begin: Matrix4.identity(),
-    end: Matrix4.identity()..scaleByDouble(_doubleTapScale),
+    end: Matrix4.diagonal3Values(_doubleTapScale, _doubleTapScale, 1),
   );
   late final Animation<Matrix4> _zoomAnim = _zoomTween.animate(
       CurvedAnimation(parent: _zoomController, curve: Curves.easeOut));
@@ -137,7 +137,7 @@ class _MediaPageState extends ConsumerState<_MediaPage>
   void _toggleZoom() {
     final target = _zoomed
         ? Matrix4.identity()
-        : (Matrix4.identity()..scaleByDouble(_doubleTapScale));
+        : Matrix4.diagonal3Values(_doubleTapScale, _doubleTapScale, 1);
     _zoomTween
       ..begin = _transformation.value
       ..end = target;
