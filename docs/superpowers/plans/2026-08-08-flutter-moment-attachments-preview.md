@@ -1208,6 +1208,10 @@ class _AudioPlayerBarState extends State<AudioPlayerBar> {
       _loading = true;
       _loadFailed = false;
     });
+    // 重试时先取消旧订阅，避免每次 retry 泄漏 3 个 live stream 订阅。
+    await _positionSub?.cancel();
+    await _durationSub?.cancel();
+    await _stateSub?.cancel();
     _positionSub = _player.positionStream.listen((_) {
       if (mounted && !_dragging) setState(() {});
     });
