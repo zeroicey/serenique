@@ -94,6 +94,9 @@ class AppShell extends ConsumerWidget {
               message: '新建闪记',
               child: GestureDetector(
                 // 短按弹选择框；长按直进发布页（微信同款：长按 = 纯文字）。
+                // opaque：让含 Padding 的整片区域都参与命中，恢复约 48×48 触摸目标，
+                // 否则只有 24×24 的 Icon 本体可点、长按稍偏即失效。
+                behavior: HitTestBehavior.opaque,
                 onTap: () => _addMomentWithAttachment(context, ref),
                 onLongPress: () => context.push('/moments/create'),
                 child: const Padding(
