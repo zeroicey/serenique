@@ -43,7 +43,7 @@ Future<List<PickedAttachment>?> _pickFromSource(AttachmentPickSource source) asy
       if (x == null) return null;
       return [await _fromXFile(x)];
     case AttachmentPickSource.gallery:
-      final xs = await ImagePicker().pickMultiImage();
+      final xs = await ImagePicker().pickMultipleMedia();
       if (xs.isEmpty) return null;
       return [for (final x in xs) await _fromXFile(x)];
   }
