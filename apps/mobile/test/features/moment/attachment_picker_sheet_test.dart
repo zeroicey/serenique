@@ -4,7 +4,7 @@ import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/widgets/attachment_picker_sheet.dart';
 
 void main() {
-  testWidgets('弹层渲染四个选项', (tester) async {
+  testWidgets('弹层渲染五个选项', (tester) async {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Builder(
@@ -19,7 +19,8 @@ void main() {
     ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    expect(find.text('拍摄'), findsOneWidget);
+    expect(find.text('拍照'), findsOneWidget);
+    expect(find.text('录像'), findsOneWidget);
     expect(find.text('选文件'), findsOneWidget);
     expect(find.text('从手机相册选择'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
@@ -46,6 +47,6 @@ void main() {
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(result, isNull);
-    expect(find.text('拍摄'), findsNothing);
+    expect(find.text('拍照'), findsNothing);
   });
 }

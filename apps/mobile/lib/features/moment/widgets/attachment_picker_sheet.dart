@@ -6,7 +6,7 @@ import 'package:mime/mime.dart';
 
 import '../moment_models.dart';
 
-enum AttachmentPickSource { camera, file, gallery }
+enum AttachmentPickSource { photo, video, file, gallery }
 
 /// 弹出底部选择框（微信样式）。返回选中的附件；取消返回 null。
 Future<List<PickedAttachment>?> showAttachmentPickerSheet(BuildContext context) async {
@@ -16,7 +16,8 @@ Future<List<PickedAttachment>?> showAttachmentPickerSheet(BuildContext context) 
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('拍摄'), onTap: () => Navigator.pop(ctx, AttachmentPickSource.camera)),
+          ListTile(leading: const Icon(Icons.photo_camera_outlined), title: const Text('拍照'), onTap: () => Navigator.pop(ctx, AttachmentPickSource.photo)),
+          ListTile(leading: const Icon(Icons.videocam_outlined), title: const Text('录像'), onTap: () => Navigator.pop(ctx, AttachmentPickSource.video)),
           ListTile(leading: const Icon(Icons.folder_open), title: const Text('选文件'), onTap: () => Navigator.pop(ctx, AttachmentPickSource.file)),
           ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('从手机相册选择'), onTap: () => Navigator.pop(ctx, AttachmentPickSource.gallery)),
           const Divider(height: 1),
@@ -31,8 +32,12 @@ Future<List<PickedAttachment>?> showAttachmentPickerSheet(BuildContext context) 
 
 Future<List<PickedAttachment>?> _pickFromSource(AttachmentPickSource source) async {
   switch (source) {
-    case AttachmentPickSource.camera:
+    case AttachmentPickSource.photo:
       final x = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (x == null) return null;
+      return [await _fromXFile(x)];
+    case AttachmentPickSource.video:
+      final x = await ImagePicker().pickVideo(source: ImageSource.camera);
       if (x == null) return null;
       return [await _fromXFile(x)];
     case AttachmentPickSource.gallery:
