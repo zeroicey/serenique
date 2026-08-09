@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createBunWebSocket } from "hono/bun";
 import { setTestEnv } from "@/test/helpers";
 
 // ---------------------------------------------------------------------------
@@ -24,18 +25,21 @@ describe("REST contract smoke", () => {
       import("@/app"),
       import("@/modules/auth/auth.service"),
     ]);
-    const app = createApp({
-      DATABASE_URL:
-        "postgresql://serenique:serenique@127.0.0.1:5432/serenique",
-      BLOB_ROOT: "/tmp/serenique-app-test",
-      BLOB_MAX_SIZE: 104857600,
-      BLOB_SIGNING_SECRET: "test-signing-secret-0123456789abcdef",
-      SESSION_SECRET: "test-session-secret-0123456789abcdef",
-      WEBAUTHN_RP_NAME: "Serenique",
-      WEBAUTHN_ORIGINS: ["http://localhost:5173"],
-      PORT: 3000,
-      NODE_ENV: "test",
-    });
+    const app = createApp(
+      {
+        DATABASE_URL:
+          "postgresql://serenique:serenique@127.0.0.1:5432/serenique",
+        BLOB_ROOT: "/tmp/serenique-app-test",
+        BLOB_MAX_SIZE: 104857600,
+        BLOB_SIGNING_SECRET: "test-signing-secret-0123456789abcdef",
+        SESSION_SECRET: "test-session-secret-0123456789abcdef",
+        WEBAUTHN_RP_NAME: "Serenique",
+        WEBAUTHN_ORIGINS: ["http://localhost:5173"],
+        PORT: 3000,
+        NODE_ENV: "test",
+      },
+      { upgradeWebSocket: createBunWebSocket().upgradeWebSocket },
+    );
     // 纯 HMAC 会话 cookie（无 DB）：中间件 cookie 分支只验签。
     const value = authService.createSessionCookie(
       "0198f6d0-9e7c-71d7-8214-2a0f7f5f9001",

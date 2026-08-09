@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
+import { createBunWebSocket } from "hono/bun";
 import { createTestAuthenticator, simulateAuthentication, simulateRegistration, type TestAuthenticator } from "@/test/webauthn";
 import { RUN_DB_TESTS, RUN_TOKEN, setTestEnv, TEST_SETUP_TOKEN } from "@/test/helpers";
 
@@ -71,19 +72,22 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
   }
 
   function makeApp() {
-    return createApp({
-      DATABASE_URL: process.env.DATABASE_URL!,
-      BLOB_ROOT: process.env.BLOB_ROOT!,
-      BLOB_MAX_SIZE: 104857600,
-      BLOB_SIGNING_SECRET: process.env.BLOB_SIGNING_SECRET!,
-      SESSION_SECRET: process.env.SESSION_SECRET!,
-      SETUP_TOKEN: process.env.SETUP_TOKEN!,
-      WEBAUTHN_RP_ID: RP_ID,
-      WEBAUTHN_RP_NAME: "Serenique",
-      WEBAUTHN_ORIGINS: [ORIGIN, "http://localhost:3000"],
-      PORT: 3000,
-      NODE_ENV: "test",
-    });
+    return createApp(
+      {
+        DATABASE_URL: process.env.DATABASE_URL!,
+        BLOB_ROOT: process.env.BLOB_ROOT!,
+        BLOB_MAX_SIZE: 104857600,
+        BLOB_SIGNING_SECRET: process.env.BLOB_SIGNING_SECRET!,
+        SESSION_SECRET: process.env.SESSION_SECRET!,
+        SETUP_TOKEN: process.env.SETUP_TOKEN!,
+        WEBAUTHN_RP_ID: RP_ID,
+        WEBAUTHN_RP_NAME: "Serenique",
+        WEBAUTHN_ORIGINS: [ORIGIN, "http://localhost:3000"],
+        PORT: 3000,
+        NODE_ENV: "test",
+      },
+      { upgradeWebSocket: createBunWebSocket().upgradeWebSocket },
+    );
   }
 
   const json = (body: unknown, headers: Record<string, string> = {}) => ({
