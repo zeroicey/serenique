@@ -1,20 +1,22 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import { createTestAuthenticator, simulateAuthentication, simulateRegistration, type TestAuthenticator } from "@/test/webauthn";
 import { RUN_DB_TESTS, RUN_TOKEN, setTestEnv, TEST_SETUP_TOKEN } from "@/test/helpers";
 
 // ---------------------------------------------------------------------------
 // Auth + tokens integration — real PostgreSQL (RUN_DB_TESTS=1).
 //
-// 完整 WebAuthn ceremony 通过 HTTP 跑：首次引导注册（SETUP_TOKEN 门禁）→
+// 完整 WebAuthn ceremony 通过 HTTP 跑：引导期注册（SETUP_TOKEN 门禁，users
+// 行由 beforeAll 预置——模拟引导脚本产物，决策⑨ 后 register 不再建用户）→
 // 自动登录 cookie → users/me → 登录态添加第二把凭证 → login/start+finish
 // （含 counter 严格校验）→ API token 创建/Bearer 访问/撤销 → 签名 blob 链接
 // 仍公开 → logout。
 //
-// users 表是单行语义，本文件用固定 marker 名（it-auth-e2e）自清理，保证
-// 每次运行 users 表为空 → 引导注册门禁可稳定通过（本仓库其他集成测试不
-// 创建用户行，避免并行竞态）。审计行断言用带 RUN_TOKEN 的 marker IP，
-// 崩溃残留的旧行不会污染计数。
+// 门禁按「凭证计数」判定（需求 ⑦⑨）：credentials 空 → 引导期（SETUP_TOKEN）；
+// ≥1 → 需已登录会话。users 表是单行语义：beforeAll 清空全表后预置 marker
+// 用户行，本仓库其他集成测试不创建用户行，无并行竞态。审计行断言用带
+// RUN_TOKEN 的 marker IP，崩溃残留的旧行不会污染计数。
 // ---------------------------------------------------------------------------
 
 setTestEnv({ WEBAUTHN_RP_ID: "localhost", WEBAUTHN_ORIGINS: "http://localhost:5173,http://localhost:3000" });
@@ -96,8 +98,14 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
     passkeyCredentials = (await import("@/modules/auth/auth.schema")).passkeyCredentials;
     apiTokens = (await import("@/modules/tokens/token.schema")).apiTokens;
     auditLogs = (await import("@/modules/audit/audit.schema")).auditLogs;
-    // 清理上次中断运行可能残留的测试数据，保证 users 表为空 → 引导注册门禁通过
-    await db.delete(users).where(eq(users.name, USER_MARKER)); // credentials 级联删除
+    // users 表单行语义：清空全表（credentials 级联）后预置 marker 用户行，
+    // 模拟引导脚本的产物——决策⑨ 后 register/start|finish 不再创建用户。
+    await db.delete(users);
+    const [seeded] = await db
+      .insert(users)
+      .values({ name: USER_MARKER, email: "e2e@example.com" })
+      .returning();
+    userId = seeded.id;
     await db.delete(apiTokens).where(sql`${apiTokens.name} LIKE ${TOKEN_MARKER + "-%"}`);
     app = makeApp();
     device1 = await createTestAuthenticator();
@@ -115,20 +123,27 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
     }
   });
 
-  test("引导注册：错误 SETUP_TOKEN → 403；正确 → 注册成功 + 自动登录", async () => {
-    // users 表为空时，错误令牌必须被拒（门禁）
+  test("引导期（凭证 0）：错误 SETUP_TOKEN → 403；正确 → 注册成功 + 自动登录", async () => {
+    // 启动 fail-closed 检查（决策⑨）：users 已有行 → 放行
+    const { authService } = await import("@/modules/auth/auth.service");
+    await expect(authService.assertUsersSeeded()).resolves.toBeUndefined();
+
+    // 凭证计数为 0 时，错误令牌必须被拒（门禁）
     const bad = await app.request("/api/auth/register/start", json({ setupToken: "wrong-token-0123456789abcdef" }));
     expect(bad.status).toBe(403);
 
+    // 引导期注册：带 setupToken、不带 userInfo（决策⑨：users 由引导脚本创建）
     const start = await app.request(
       "/api/auth/register/start",
-      json({ setupToken: TEST_SETUP_TOKEN, userInfo: { name: USER_MARKER, email: "e2e@example.com" } }),
+      json({ setupToken: TEST_SETUP_TOKEN }),
     );
     expect(start.status).toBe(200);
     const startBody = await start.json();
     expect(startBody.data.challengeId).toBeTruthy();
     expect(startBody.data.options.rp.id).toBe(RP_ID);
-    expect(startBody.data.options.user.id).toBeTruthy();
+    // options 的 user 实体取现有单用户行（name/displayName 来自 users.name）
+    expect(startBody.data.options.user.id).toBe(isoBase64URL.fromUTF8String(userId));
+    expect(startBody.data.options.user.name).toBe(USER_MARKER);
     const challenge: string = startBody.data.options.challenge;
 
     const credential = await simulateRegistration({
@@ -144,14 +159,15 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
     expect(finish.status).toBe(200);
     const finishBody = await finish.json();
     expect(finishBody.data.authenticated).toBe(true);
+    // 用户行是预置的：返回的 user 就是 seeded 行（不新建）
+    expect(finishBody.data.user.id).toBe(userId);
     expect(finishBody.data.user.name).toBe(USER_MARKER);
-    userId = finishBody.data.user.id as string;
     credentialId1 = device1.credentialId;
     cookie1 = (finish.headers.get("set-cookie") ?? "").split(";")[0];
     expect(cookie1).toContain("serenique_session=");
 
-    // DB：users 1 行 + credentials 1 行
-    const [userRow] = await db.select().from(users).where(eq(users.name, USER_MARKER));
+    // DB：users 1 行（预置行不变）+ credentials 1 行
+    const [userRow] = await db.select().from(users).where(eq(users.id, userId));
     expect(userRow).toBeDefined();
     const credRows = await db
       .select()
@@ -216,8 +232,8 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
     expect(empty.status).toBe(400);
   });
 
-  test("已有用户后：无会话注册 → 401；带会话添加第二把凭证 → 成功", async () => {
-    // 门禁：users 非空 + 未登录 → 401（即使 SETUP_TOKEN 正确）
+  test("已有凭证后：无会话注册 → 401（即使带 SETUP_TOKEN）；带会话添加第二把凭证 → 成功", async () => {
+    // 门禁：凭证 ≥1 + 未登录 → 401（决策⑦⑨：加设备必须已登录）
     const unauth = await app.request(
       "/api/auth/register/start",
       json({ setupToken: TEST_SETUP_TOKEN }),
@@ -481,5 +497,22 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
 
   test("未认证 /auth/me → 401（中间件拦截）", async () => {
     expect((await app.request("/api/auth/me")).status).toBe(401);
+  });
+
+  test("启动 fail-closed（决策⑨）：users 空表 → assertUsersSeeded 抛错", async () => {
+    // 本用例必须是最后一个：删掉预置用户行后，整个测试文件的其余流程已跑完。
+    const { authService } = await import("@/modules/auth/auth.service");
+    await db.delete(users).where(eq(users.id, userId)); // 级联删除凭证
+
+    let error: unknown;
+    try {
+      await authService.assertUsersSeeded();
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeDefined();
+    const err = error as { status?: number; message?: string };
+    expect(err.status).toBe(500);
+    expect(err.message).toContain("bun scripts/bootstrap-user.ts");
   });
 });

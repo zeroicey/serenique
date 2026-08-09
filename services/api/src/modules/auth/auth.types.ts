@@ -28,16 +28,9 @@ export const DateOnlySchema = z
 // ---- Registration ceremony ------------------------------------------------
 
 export const RegisterStartSchema = z.object({
-  // users 表为空（引导注册）时必填；已有用户时忽略（走登录会话门禁）。
+  // 引导期（凭证计数 0）必填；已有凭证时忽略（走登录会话门禁）。
+  // users 行由引导脚本创建，ceremony 不再携带/创建用户信息（决策⑨）。
   setupToken: z.string().trim().min(1).max(200).optional(),
-  // 引导注册时可选携带的初始个人信息。
-  userInfo: z
-    .object({
-      name: z.string().trim().min(1).max(100).optional(),
-      email: z.string().trim().min(1).max(200).optional(),
-      birthday: DateOnlySchema.optional(),
-    })
-    .optional(),
 });
 
 export const RegistrationCredentialSchema = z.object({
@@ -113,12 +106,6 @@ export type RegisterStartInput = z.infer<typeof RegisterStartSchema>;
 export type RegisterFinishInput = z.infer<typeof RegisterFinishSchema>;
 export type LoginFinishInput = z.infer<typeof LoginFinishSchema>;
 export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>;
-
-export type RegisterUserInfo = {
-  name?: string;
-  email?: string;
-  birthday?: string;
-};
 
 export type LoginFinishOutcome =
   | { status: "ok"; user: UserEntry }

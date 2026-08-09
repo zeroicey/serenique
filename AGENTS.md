@@ -210,8 +210,8 @@ The blob module serves as a **shared storage layer** for other modules (diary, m
 |--------|------|--------|
 | GET | `/health` | Health check |
 | GET | `/` | API info |
-| POST | `/api/auth/register/start` | WebAuthn 注册开始（body: `{ setupToken?, userInfo? }`；users 空表=引导注册需 SETUP_TOKEN，已有用户=需会话添加新设备） |
-| POST | `/api/auth/register/finish` | 注册完成（校验 attestation → 建 user/凭证 → 自动登录发 cookie） |
+| POST | `/api/auth/register/start` | WebAuthn 注册开始（body: `{ setupToken? }`；凭证计数 0=引导期需 SETUP_TOKEN，≥1=需会话添加新设备；users 行须已由引导脚本创建） |
+| POST | `/api/auth/register/finish` | 注册完成（校验 attestation → 建凭证 → 自动登录发 cookie） |
 | POST | `/api/auth/login/start` | WebAuthn 登录开始（返回 challenge + allowCredentials） |
 | POST | `/api/auth/login/finish` | 登录完成（校验签名 + counter → 发会话 cookie） |
 | POST | `/api/auth/logout` | Logout (clears the cookie) |
@@ -251,15 +251,15 @@ User-visible messages must be in Chinese.
 
 Standard **WebAuthn (Passkey)** authentication with manageable API tokens for CLI/scripts (see `.ai/requirements/2026-08-09-passkey-auth.md`). Single-user design (部署者本人), multi-device via multiple passkey credentials.
 
-- **Browser (Web):** `navigator.credentials` ceremony against `/api/auth/register/*` (bootstrap registration requires `SETUP_TOKEN`) and `/api/auth/login/*` → HttpOnly **HMAC-signed cookie** (`serenique_session`, stateless, signed with `SESSION_SECRET`, payload carries `userId`; no session table)
+- **Browser (Web):** `navigator.credentials` ceremony against `/api/auth/register/*` (bootstrap-phase registration requires `SETUP_TOKEN`) and `/api/auth/login/*` → HttpOnly **HMAC-signed cookie** (`serenique_session`, stateless, signed with `SESSION_SECRET`, payload carries `userId`; no session table). **No public first registration** — the `users` row is created by the bootstrap script (`bun scripts/bootstrap-user.ts`, idempotent, args/env `FIRST_USER_*`; only needs `DATABASE_URL`); auth enabled + empty `users` table → API refuses to start (fail-closed). Frontend has no registration form, only the hidden `/setup?setupToken=` page for the first passkey
 - **CLI / scripts / mobile:** `Authorization: Bearer <API token>` — tokens created via `POST /api/tokens` (GitHub PAT mode: plaintext shown once, only SHA-256 hash stored, `revoked_at` soft-revoke)
-- **env:** `SESSION_SECRET` (cookie signing), `SETUP_TOKEN` (bootstrap registration; removable after first registration), `WEBAUTHN_RP_ID` (RP ID = **front-end domain**, not the API domain; changing it invalidates all passkeys), `WEBAUTHN_RP_NAME`, `WEBAUTHN_ORIGINS` (comma-separated ceremony origin allowlist)
+- **env:** `SESSION_SECRET` (cookie signing), `SETUP_TOKEN` (bootstrap registration; removable after first registration), `FIRST_USER_NAME/FIRST_USER_EMAIL/FIRST_USER_BIRTHDAY` (bootstrap script), `WEBAUTHN_RP_ID` (RP ID = **front-end domain**, not the API domain; changing it invalidates all passkeys), `WEBAUTHN_RP_NAME`, `WEBAUTHN_ORIGINS` (comma-separated ceremony origin allowlist)
 - **Middleware allowlist:** `/health`, `/`, `/api/auth/register/start|finish`, `/api/auth/login/start|finish`, `/api/auth/logout`, signed blob file links (`/api/blobs/:id/file?expires=&signature=`). Ceremony endpoints still resolve session vars best-effort (add-device flow needs the logged-in userId)
 - **Challenges:** single-process in-memory Map, 5-minute TTL, one-time consume
 - **Key rotation = sessions invalidated:** changing `SESSION_SECRET` and restarting invalidates all old cookies; revoking a token kills that Bearer immediately
-- **Registration gate:** users table empty → `SETUP_TOKEN` constant-time compare required; users exist → session required (same endpoint adds a new device credential). Deleting the last credential → 409
+- **Registration gate (credential-count based):** `passkey_credentials` count == 0 → `SETUP_TOKEN` constant-time compare required (bootstrap phase; the `users` row must already exist via the bootstrap script, else 500 with a script hint); count ≥ 1 → session required (same endpoint adds a new device credential). Deleting the last credential → 409
 - **Login counter:** strict monotonic check (new counter > stored counter) — regression = clone suspicion, audited
-- **Fail-closed:** production refuses to start without `SESSION_SECRET` + `WEBAUTHN_RP_ID`; dev skips auth entirely when `WEBAUTHN_RP_ID` is unset (zero friction)
+- **Fail-closed:** production refuses to start without `SESSION_SECRET` + `WEBAUTHN_RP_ID`, and with auth enabled + empty `users` table (hint: run `bun scripts/bootstrap-user.ts` first); dev skips auth entirely when `WEBAUTHN_RP_ID` is unset (zero friction)
 - Session cookies default to 30 days (`SESSION_TTL`, in seconds). Production cross-origin setups (e.g. pages.dev → api.zeroicey.me) need `CORS_ORIGIN` explicitly set to the web domain — credentialed cross-origin requests do not allow `*`
 - **审计:** 登录成功/失败、注册、token 创建/撤销、凭证删除 → `auditLogs`（`auth.*` / `token.*` 事件）
 
@@ -327,6 +327,6 @@ docker run -p 3000:3000 \
   serenique-api
 ```
 
-The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed at `/data/blobs` inside the container, persisted via a host volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites the localhost database host to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access link feature. Passkey auth is optional in dev (skipped when `WEBAUTHN_RP_ID` is unset), required in production (fail-closed on missing `SESSION_SECRET` / `WEBAUTHN_RP_ID`). `SETUP_TOKEN` is only needed until the first registration completes, then it can be removed from the env.
+The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed at `/data/blobs` inside the container, persisted via a host volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites the localhost database host to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access link feature. Passkey auth is optional in dev (skipped when `WEBAUTHN_RP_ID` is unset), required in production (fail-closed on missing `SESSION_SECRET` / `WEBAUTHN_RP_ID`). `SETUP_TOKEN` is only needed until the first registration completes, then it can be removed from the env. Before the first registration, the `users` row must be created via the bootstrap script (`docker compose run --rm api bun scripts/bootstrap-user.ts`, image includes `services/api/scripts/`); note `docker compose run` overrides `CMD`, so the entrypoint's localhost→`host.docker.internal` rewrite won't run — point `DATABASE_URL` at a host-reachable address.
 
 Dockerfile defaults: `NODE_ENV=production`, `BLOB_ROOT=/data/blobs`, `BLOB_MAX_SIZE=104857600` (100 MB), API `PORT=3000`, MCP `PORT=3001`, MCP `MCP_TRANSPORT=streamable-http`.

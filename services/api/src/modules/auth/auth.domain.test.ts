@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   clearSessionCookie,
   evaluateRegisterGate,
+  evaluateSeedGate,
   secretsEqual,
   signSessionCookie,
   throttleIsBlocked,
@@ -101,10 +102,10 @@ describe("session cookie (userId 载荷)", () => {
 describe("evaluateRegisterGate", () => {
   const setupToken = "setup-token-0123456789abcdef";
 
-  test("users empty + correct setup token → first-time", () => {
+  test("凭证 0 + 正确 setup token → first-time", () => {
     expect(
       evaluateRegisterGate({
-        userCount: 0,
+        credentialCount: 0,
         isAuthenticated: false,
         setupToken,
         providedSetupToken: setupToken,
@@ -112,10 +113,10 @@ describe("evaluateRegisterGate", () => {
     ).toEqual({ kind: "first-time" });
   });
 
-  test("users empty + wrong/missing setup token → rejected", () => {
+  test("凭证 0 + 错误/缺失 setup token → rejected 403", () => {
     expect(
       evaluateRegisterGate({
-        userCount: 0,
+        credentialCount: 0,
         isAuthenticated: false,
         setupToken,
         providedSetupToken: "wrong",
@@ -123,7 +124,7 @@ describe("evaluateRegisterGate", () => {
     ).toMatchObject({ kind: "rejected", status: 403 });
     expect(
       evaluateRegisterGate({
-        userCount: 0,
+        credentialCount: 0,
         isAuthenticated: false,
         setupToken,
         providedSetupToken: undefined,
@@ -131,10 +132,10 @@ describe("evaluateRegisterGate", () => {
     ).toMatchObject({ kind: "rejected", status: 403 });
   });
 
-  test("users empty + setup token not configured → rejected 500", () => {
+  test("凭证 0 + setup token 未配置 → rejected 500", () => {
     expect(
       evaluateRegisterGate({
-        userCount: 0,
+        credentialCount: 0,
         isAuthenticated: false,
         setupToken: undefined,
         providedSetupToken: "anything",
@@ -142,10 +143,10 @@ describe("evaluateRegisterGate", () => {
     ).toMatchObject({ kind: "rejected", status: 500 });
   });
 
-  test("users exist + no session → rejected 401 (添加设备需登录)", () => {
+  test("凭证 ≥1 + 无会话 → rejected 401（加设备需登录，即使带 setup token）", () => {
     expect(
       evaluateRegisterGate({
-        userCount: 1,
+        credentialCount: 1,
         isAuthenticated: false,
         setupToken,
         providedSetupToken: setupToken,
@@ -153,15 +154,31 @@ describe("evaluateRegisterGate", () => {
     ).toMatchObject({ kind: "rejected", status: 401 });
   });
 
-  test("users exist + session → authenticated (添加设备)", () => {
+  test("凭证 ≥1 + 会话 → authenticated（添加设备）", () => {
     expect(
       evaluateRegisterGate({
-        userCount: 1,
+        credentialCount: 1,
         isAuthenticated: true,
         setupToken,
         providedSetupToken: undefined,
       }),
     ).toEqual({ kind: "authenticated" });
+  });
+});
+
+describe("evaluateSeedGate（启动 fail-closed，决策⑨）", () => {
+  test("users 空表 → 拒绝启动，指明引导脚本", () => {
+    const decision = evaluateSeedGate(0);
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) {
+      expect(decision.message).toContain("bun scripts/bootstrap-user.ts");
+      expect(decision.message).toContain("docker compose run --rm api");
+    }
+  });
+
+  test("users 已有行 → 放行", () => {
+    expect(evaluateSeedGate(1)).toEqual({ ok: true });
+    expect(evaluateSeedGate(2)).toEqual({ ok: true });
   });
 });
 

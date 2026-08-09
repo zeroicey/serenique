@@ -92,9 +92,11 @@ export function clearSessionCookie(crossSite: boolean, secure: boolean): string 
 }
 
 // ---- Registration gate -----------------------------------------------------
-// 注册门禁（需求 2026-08-09-passkey-auth.md ⑦）：
-//   users 表为空 → 必须携带与 SETUP_TOKEN 常量时间比对通过的引导令牌；
-//   users 已有行 → 必须已登录（同一接口用于「添加新设备凭证」）。
+// 注册门禁（需求 2026-08-09-passkey-auth.md ⑦⑨）：按「凭证计数」判定，
+// 不再看 users 行数（users 由引导脚本创建，register 不再建用户）：
+//   passkey_credentials 计数为 0 → 引导期：必须携带与 SETUP_TOKEN 常量时间
+//   比对通过的引导令牌 → 首次凭证 ceremony；
+//   计数 ≥ 1 → 必须已登录会话 → 「添加新设备凭证」ceremony（同一接口）。
 
 export type RegisterGateDecision =
   | { kind: "first-time" }
@@ -102,12 +104,12 @@ export type RegisterGateDecision =
   | { kind: "rejected"; code: string; message: string; status: number };
 
 export function evaluateRegisterGate(opts: {
-  userCount: number;
+  credentialCount: number;
   isAuthenticated: boolean;
   setupToken: string | undefined;
   providedSetupToken: string | undefined;
 }): RegisterGateDecision {
-  if (opts.userCount === 0) {
+  if (opts.credentialCount === 0) {
     if (!opts.setupToken) {
       return {
         kind: "rejected",
@@ -138,6 +140,23 @@ export function evaluateRegisterGate(opts: {
     };
   }
   return { kind: "authenticated" };
+}
+
+// ---- Startup seed gate（决策⑨）--------------------------------------------
+// 认证启用时启动 fail-closed：users 空表（尚未运行引导脚本）→ 拒绝启动。
+
+export type SeedGateDecision = { ok: true } | { ok: false; message: string };
+
+export function evaluateSeedGate(userCount: number): SeedGateDecision {
+  if (userCount === 0) {
+    return {
+      ok: false,
+      message:
+        "请先运行引导脚本创建首个用户：bun scripts/bootstrap-user.ts" +
+        "（或 docker compose run --rm api bun scripts/bootstrap-user.ts）",
+    };
+  }
+  return { ok: true };
 }
 
 // ---- Login throttle (pure state transitions; state held in-memory at service) ----

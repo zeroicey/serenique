@@ -9,8 +9,8 @@ const envSchema = z.object({
   // 会话 Cookie 签名密钥（≥32 字符，独立于任何令牌）。生产缺失 → createApp
   // 拒绝启动（fail-closed）。cookie 载荷携带 userId，换密钥 = 全端会话失效。
   SESSION_SECRET: z.string().min(32).optional(),
-  // 引导注册令牌：users 表为空时注册必须携带（常量时间比对）。注册完成后
-  // 可从 env 移除（生产不强制，见需求 ⑦）。
+  // 引导注册令牌：凭证计数为 0（引导期）时注册必须携带（常量时间比对）。
+  // 首个凭证创建完成后可从 env 移除（生产不强制，见需求 ⑦⑨）。
   SETUP_TOKEN: z.string().min(32).optional(),
   // WebAuthn RP ID（= 前端域名，如 serenique-web.pages.dev / localhost）。
   // 未配置（dev）→ 认证整体跳过（本地零摩擦）；生产缺失 → 拒绝启动。

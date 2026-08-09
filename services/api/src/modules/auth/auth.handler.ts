@@ -79,10 +79,11 @@ export const authHandler = {
         origin: resolveExpectedOrigin(c),
         ip: clientIp(c),
       });
-      // 注册成功即自动登录（发会话 cookie）。
+      // 注册成功即自动登录（发会话 cookie）。数据载荷固定 { authenticated, user }，
+      // 不暴露引导/加设备语义（决策⑨）。
       buildSetCookie(c, result.user.id);
       return Res.ok(
-        result.isFirstUser ? "注册成功" : "登录凭证添加成功",
+        result.mode === "first-time" ? "注册成功" : "登录凭证添加成功",
         { authenticated: true, user: result.user },
       ).build(c);
     } catch (e) {

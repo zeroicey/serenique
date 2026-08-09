@@ -16,6 +16,7 @@ import {
   CHALLENGE_TTL_MS,
   DEFAULT_SESSION_TTL_SECONDS,
   evaluateRegisterGate,
+  evaluateSeedGate,
   signSessionCookie,
   throttleRecordFailure,
   throttleShouldBlock,
@@ -29,7 +30,6 @@ import type {
   LoginFinishOutcome,
   RegisterFinishInput,
   RegisterStartInput,
-  RegisterUserInfo,
   UpdateUserProfileInput,
   UserEntry,
 } from "@/modules/auth/auth.types";
@@ -47,8 +47,10 @@ type StoredChallenge =
   | {
       type: "register";
       challenge: string;
-      userId: string; // 首次注册 = 新生成的用户 id；添加设备 = 当前登录用户 id
-      userInfo?: RegisterUserInfo; // 仅首次注册携带（用于创建 users 行）
+      // users 行由引导脚本创建（决策⑨），ceremony 只把凭证挂到现有单用户行。
+      userId: string;
+      // 门禁模式：引导期（首个凭证）还是登录态加设备（决定审计/响应文案）。
+      mode: "first-time" | "authenticated";
       expiresAt: number;
     }
   | { type: "login"; challenge: string; expiresAt: number };
@@ -61,6 +63,22 @@ export const authService = {
 
   sessionTtlSeconds(): number {
     return env.SESSION_TTL ?? DEFAULT_SESSION_TTL_SECONDS;
+  },
+
+  /**
+   * 启动 fail-closed（决策⑨）：认证启用且 users 空表 → 抛错拒绝启动，
+   * 提示先运行引导脚本创建首个用户。dev（认证未启用）直接跳过；
+   * 只应在真实启动路径（index.ts）调用，不进 createApp（测试 app 不连 DB）。
+   */
+  async assertUsersSeeded(): Promise<void> {
+    if (!this.isAuthEnabled()) return;
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users);
+    const decision = evaluateSeedGate(count);
+    if (!decision.ok) {
+      throw new AppError(ErrorCode.INTERNAL, decision.message, 500);
+    }
   },
 
   // ---- Session cookie（载荷携带 userId）------------------------------------
@@ -118,9 +136,9 @@ export const authService = {
   // ---- 注册门禁 + 注册 ceremony -------------------------------------------
 
   /**
-   * 注册门禁（需求 ⑦）：users 表为空 → 校验 SETUP_TOKEN（常量时间比对）；
-   * 已有用户 → 必须已登录（同一接口用于添加新设备凭证）。
-   * 返回「首次注册 / 已登录添加设备」两种模式。
+   * 注册门禁（需求 ⑦⑨）：passkey_credentials 计数为 0 → 校验 SETUP_TOKEN
+   * （常量时间比对）；已有凭证 → 必须已登录（同一接口用于添加新设备凭证）。
+   * 返回「引导期 / 已登录添加设备」两种模式。
    */
   async evaluateGate(input: {
     sessionUserId: string | null;
@@ -128,9 +146,9 @@ export const authService = {
   }): Promise<{ mode: "first-time" } | { mode: "authenticated"; userId: string }> {
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
-      .from(users);
+      .from(passkeyCredentials);
     const decision = evaluateRegisterGate({
-      userCount: count,
+      credentialCount: count,
       isAuthenticated: Boolean(input.sessionUserId),
       setupToken: env.SETUP_TOKEN,
       providedSetupToken: input.providedSetupToken,
@@ -154,17 +172,28 @@ export const authService = {
       sessionUserId: input.sessionUserId,
       providedSetupToken: input.setupToken,
     });
+    const isFirstTime = gate.mode === "first-time";
 
-    const isFirstUser = gate.mode === "first-time";
-    const userId = isFirstUser ? randomUUID() : gate.userId;
-    const userInfo = isFirstUser ? input.userInfo : undefined;
-
-    // 已有用户：取真实资料做 options 里的 user 实体；顺带校验用户存在。
-    let displayName = "Serenique 用户";
+    // users 由引导脚本创建（决策⑨）：ceremony 的 user.name/displayName 取
+    // 现有单用户行的 name，缺省回退 serenique-user / Serenique 用户。
+    let userId: string;
+    let name: string | null = null;
     let existing: CredentialEntry[] = [];
-    if (!isFirstUser) {
+    if (isFirstTime) {
+      const user = await this.getFirstUser();
+      if (!user) {
+        throw new AppError(
+          ErrorCode.INTERNAL,
+          "未找到用户，请先运行引导脚本创建用户：bun scripts/bootstrap-user.ts",
+          500,
+        );
+      }
+      userId = user.id;
+      name = user.name;
+    } else {
+      userId = gate.userId;
       const user = await this.getProfile(userId);
-      displayName = user.name ?? displayName;
+      name = user.name;
       existing = await this.listCredentials(userId);
     }
 
@@ -173,15 +202,15 @@ export const authService = {
       type: "register",
       challenge,
       userId,
-      userInfo,
+      mode: gate.mode,
       expiresAt: 0, // _storeChallenge 会按 nowMs 重新赋值
     });
 
     const options = await generateRegistrationOptions({
       rpName: env.WEBAUTHN_RP_NAME ?? "Serenique",
       rpID: env.WEBAUTHN_RP_ID!,
-      userName: isFirstUser ? (userInfo?.name ?? "serenique-user") : displayName,
-      userDisplayName: isFirstUser ? (userInfo?.name ?? "Serenique 用户") : displayName,
+      userName: name ?? "serenique-user",
+      userDisplayName: name ?? "Serenique 用户",
       userID: isoUint8Array.fromUTF8String(userId),
       challenge,
       attestationType: "none",
@@ -200,9 +229,8 @@ export const authService = {
 
   async registerFinish(
     input: RegisterFinishInput & { origin: string; ip: string },
-  ): Promise<{ user: UserEntry; isFirstUser: boolean }> {
+  ): Promise<{ user: UserEntry; mode: "first-time" | "authenticated" }> {
     const record = this._consumeChallenge(input.challengeId, "register");
-    const isFirstUser = Boolean(record.userInfo);
 
     let verification: Awaited<ReturnType<typeof verifyRegistrationResponse>>;
     try {
@@ -245,26 +273,18 @@ export const authService = {
       .where(eq(passkeyCredentials.credentialId, credentialId));
     if (dup) throw new AppError(ErrorCode.CONFLICT, "该凭证已注册", 409);
 
-    // 首次注册 → 建 users 行（个人资料可空，之后走 /users/me 补全）。
-    let userRow: typeof users.$inferSelect;
-    if (isFirstUser) {
-      const [row] = await db
-        .insert(users)
-        .values({
-          id: record.userId,
-          name: record.userInfo?.name ?? null,
-          email: record.userInfo?.email ?? null,
-          birthday: record.userInfo?.birthday ?? null,
-        })
-        .returning();
-      userRow = row;
-    } else {
-      const [row] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, record.userId));
-      if (!row) throw new AppError(ErrorCode.NOT_FOUND, "用户不存在", 404);
-      userRow = row;
+    // users 行由引导脚本创建（决策⑨），register 只把凭证挂到现有单用户行；
+    // 找不到用户（引导脚本未跑）→ 明确报错。
+    const [userRow] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, record.userId));
+    if (!userRow) {
+      throw new AppError(
+        ErrorCode.NOT_FOUND,
+        "未找到用户，请先运行引导脚本创建用户：bun scripts/bootstrap-user.ts",
+        404,
+      );
     }
 
     await db.insert(passkeyCredentials).values({
@@ -279,12 +299,12 @@ export const authService = {
 
     fireAuditRecord({
       event: "auth.register",
-      message: isFirstUser ? "注册成功" : "已添加新的登录凭证",
+      message: record.mode === "first-time" ? "注册成功" : "已添加新的登录凭证",
       level: "info",
       ip: input.ip,
       detail: { userId: userRow.id, credentialId },
     });
-    return { user: toUserEntry(userRow), isFirstUser };
+    return { user: toUserEntry(userRow), mode: record.mode };
   },
 
   // ---- 登录 ceremony -------------------------------------------------------
