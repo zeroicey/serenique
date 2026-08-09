@@ -123,7 +123,7 @@ scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.d
 services/api/src/
 ├── index.ts          — Entry point: validates env, initializes blob root, creates app
 ├── app.ts            — App factory: wires middleware, routes, error handling, 404
-├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, SESSION_SECRET, SETUP_TOKEN, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, WEBAUTHN_ORIGINS, SESSION_TTL, PORT, NODE_ENV)
+ ├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, SESSION_SECRET, SETUP_TOKEN, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, WEBAUTHN_ORIGINS, SESSION_TTL, PORT, NODE_ENV, AI_SESSION_DIR, AI_MODEL)
 ├── exports.ts        — @serenique/api public workspace exports (service layer only, no Hono)
 ├── db/
 │   ├── connection.ts — Single Drizzle client + Postgres connection pool (shared by all modules)
@@ -137,9 +137,9 @@ services/api/src/
 │   ├── cors.ts       — CORS: permissive in dev, configurable via CORS_ORIGIN
 │   ├── index.ts      — Middleware barrel exports
 │   └── logger.ts     — Request logging (method, path, status, duration)
-└── modules/
+ └── modules/
     ├── blob/         — Generic binary storage layer (any MIME, SHA-256 dedup)
-    ├── diary/        — Diaries (one per day, by date; fields: content, diaryDate)
+    ├── ai/           — AI assistant (宁序): PI SDK agent loop, business tools (defineTool → service layer), /api/ai/ws WebSocket chat, jsonl sessions in /data/sessions (see `.ai/requirements/2026-08-09-ai-agent-module.md`)
     ├── moment/       — Flash notes (≤10000 chars; field: text; media attachments via blob refs; `comment.*` nested self-comments, ≤2000 chars)
     ├── task/         — Task groups (custom) + simple tasks (fields: groupId/title/status; completedAt synced with status)
     └── event/        — Calendar events (fields: title/startAt/endAt/isAllDay/location/note; time-window list, bare array)
@@ -242,6 +242,7 @@ The blob module serves as a **shared storage layer** for other modules (diary, m
 | GET, PUT, DELETE | `/api/tasks/:id` | Task detail / update (status syncs `completedAt`) / delete |
 | GET, POST | `/api/events` | Event list (`?from=&to=` time window, **bare array**) / create |
 | GET, PUT, DELETE | `/api/events/:id` | Event detail / partial update / delete |
+| WS | `/api/ai/ws` | AI assistant (宁序) WebSocket chat: session CRUD + prompt/steer/followUp/abort, streaming events (see `.ai/requirements/2026-08-09-ai-agent-module.md`) |
 
 Field naming pitfall: diary uses `content`/`diaryDate`, but moment uses `text` — don't mix them up. The CLI contract follows the API source: the moment body is `{ "text": ... }`. event uses `title`/`startAt`/`endAt`/`isAllDay`/`location`/`note`; its list returns a **bare array** for time-window queries (not `{ items, total }`).
 
