@@ -12,16 +12,22 @@ cd apps/web && VITE_API_BASE_URL=https://api.hcyj.xyz/serenique bun run build
 bunx wrangler pages deploy dist --project-name=serenique-web
 ```
 
-## 反代适配（切换入口前必读）
-
-- **签名链接**：`POST /api/blobs/:id/access-link` 返回的 `url` 字段是后端按自己看到的 origin 拼的绝对 URL（缺 `/serenique` 前缀），**不能用**；Web 用返回的**相对 `path`** 拼 baseUrl：`resolveApiPath(link.path)`（`apps/web/src/features/blob/access.ts`）。直链同理走 `resolveApiPath`。无前缀入口（api.zeroicey.me）同样正确。
+## 反代适配（切换入口前必读）- **签名链接**：`POST /api/blobs/:id/access-link` 返回的 `url` 字段是后端按自己看到的 origin 拼的绝对 URL（缺 `/serenique` 前缀），**不能用**；Web 用返回的**相对 `path`** 拼 baseUrl：`resolveApiPath(link.path)`（`apps/web/src/features/blob/access.ts`）。直链同理走 `resolveApiPath`。无前缀入口（api.zeroicey.me）同样正确。
 - **CORS**：浏览器 Origin 是 `https://serenique.0icey.icu`，反代原样透传，**服务端 `CORS_ORIGIN` 不用改**（已核验：hpcore 生产值即 `https://serenique.0icey.icu`，预检返回 `access-control-allow-origin` 匹配 + credentials:true）。
 - **会话 Cookie**：生产 `SameSite=None; Secure`，跨站（pages → api.hcyj.xyz）可用，服务端无感。
 - **Caddy 侧**（hcyj）：`handle_path /serenique/*` 剥离前缀 + `keepalive off`，见 `cn-access-hcyj.md`，已配置好，勿动。
 - 部署后核验线上 chunk 含新地址：旧 bundle 的 API base 在**懒加载 chunk**（如 `unwrap-*.js`）里，别在主 index bundle grep。
 
+## AASA / assetlinks（passkey 域名关联）
+
+- **必须用 Pages Functions，不能放静态文件**：`_redirects` 的 SPA 兜底（`/* /index.html 200`）无条件优先于静态资产（官方文档：redirects always followed regardless of asset match），且 redirects 先于 `_headers` 执行——静态 `.well-known/` 文件会被 rewrite 成 index.html。
+- 实现：`apps/web/functions/.well-known/apple-app-site-association.ts`（`onRequestGet` 返回 JSON + `Content-Type: application/json`）。Functions 优先于 `_redirects`，不受 SPA 兜底影响。
+- 验证：`curl -s https://serenique.0icey.icu/.well-known/apple-app-site-association` 应返回 `{"webcredentials":...}`（content-type application/json）。
+- 将来 Android assetlinks.json 同套路（`functions/.well-known/assetlinks.json.ts`）。
+
 ## 坑
 
+- **feature 分支部署 ≠ 生产**：wrangler pages deploy 默认部署到**当前 git 分支**的 preview 环境（别名 `feat-xxx.serenique-web.pages.dev`）。要更新生产（serenique.0icey.icu / serenique-web.pages.dev）必须显式 `--branch main`。部署后核验域名，别只看别名 URL。
 - **bunx wrangler 很慢**（30s–120s+）：Bash 里给足超时（≥300s）。
 - **wrangler 4.x 必须先建项目**：`wrangler pages project create serenique-web --production-branch=main`（仅首次）。
 - **SPA 路由兜底**：`apps/web/public/_redirects`（`/* /index.html 200`）会被复制进 dist，直接刷新子路径靠它回退。
