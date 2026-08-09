@@ -7,7 +7,9 @@
 | `2026-08-05-moment-comments.md` | Moment 评论 | ✅已实施 |
 | `2026-08-05-moment-tags.md` | Moment 标签 | ✅已实施 |
 | `2026-08-05-task-module.md` | 任务模块 | ✅已实施 |
-| `2026-08-06-auth.md` | 认证 | ✅已实施 |
+| `2026-08-06-auth.md` | 认证（共享密钥，旧方案） | 🪦已否决（被 Passkey 方案替换，见 08-09） |
+| `2026-08-08-diary-merge-into-moment.md` | 日记并入闪念 | ⏳待实施（暂缓） |
+| `2026-08-09-passkey-auth.md` | Passkey 认证重构 + 个人信息 + API Token | ✅已实施（API 侧；Web/CLI 接入进行中） |
 | `2026-08-08-audit-module.md` | 审计模块 | ✅已实施 |
 | `2026-08-08-push-module.md` | 推送模块 | 🔶设计中 |
 | `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | ✅已实施（显示/预览 MVP；上传下阶段） |

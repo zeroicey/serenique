@@ -10,8 +10,12 @@ import { AUDIT_LEVELS, type AuditLevel } from "@/modules/audit/audit.schema";
 export const AUDIT_EVENTS = [
   "auth.login",
   "auth.login_failed",
+  "auth.register",
+  "auth.credential_delete",
   "auth.logout",
   "auth.unauthorized",
+  "token.create",
+  "token.revoke",
   "blob.upload",
   "blob.delete",
   "moment.delete",

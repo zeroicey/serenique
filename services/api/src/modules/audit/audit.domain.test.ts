@@ -63,8 +63,12 @@ describe("event registry + message building", () => {
     expect(AUDIT_EVENTS).toEqual([
       "auth.login",
       "auth.login_failed",
+      "auth.register",
+      "auth.credential_delete",
       "auth.logout",
       "auth.unauthorized",
+      "token.create",
+      "token.revoke",
       "blob.upload",
       "blob.delete",
       "moment.delete",

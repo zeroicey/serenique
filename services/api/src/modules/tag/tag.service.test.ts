@@ -57,6 +57,7 @@ describe("ownerType registry", () => {
       assertRegisteredOwnerType,
       getOwnerValidator,
       registerOwnerValidator,
+      unregisterOwnerValidator,
     } = await import("./tag.domain");
 
     assertRegisteredOwnerType("moment");
@@ -72,6 +73,12 @@ describe("ownerType registry", () => {
     // Registration is extensible for future owner types.
     registerOwnerValidator("diary", async () => {});
     assertRegisteredOwnerType("diary");
+    // 恢复注册表：bun test 单进程共享模块状态，不清理会让后续集成测试的
+    // 「diary 应拒绝」断言失效（attach 将解析而不是 400）。
+    unregisterOwnerValidator("diary");
+    expect(() => assertRegisteredOwnerType("diary")).toThrow(
+      expect.objectContaining({ code: "VALIDATION", status: 400 }),
+    );
   });
 });
 

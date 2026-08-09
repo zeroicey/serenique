@@ -1,16 +1,19 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 // ---------------------------------------------------------------------------
-// Auth domain — pure rules: session cookie signing/verification, constant-time
-// credential compare, and login-throttle state transitions. No DB / IO imports.
+// Auth domain — pure rules: session cookie signing/verification (payload now
+// carries the userId), constant-time compare, login-throttle state transitions,
+// and the registration gate decision. No DB / IO imports.
 // ---------------------------------------------------------------------------
 
 export const SESSION_COOKIE_NAME = "serenique_session";
 export const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 3600; // 30 天
+export const CHALLENGE_TTL_MS = 5 * 60_000; // WebAuthn challenge 有效期 5 分钟
 export const LOGIN_THROTTLE_WINDOW_MS = 10 * 60_000; // 10 分钟
 export const LOGIN_THROTTLE_MAX_ATTEMPTS = 5;
 
 const SESSION_PREFIX = "serenique-session.";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Constant-time string compare (mirrors blob.domain signaturesEqual). */
 export function secretsEqual(actual: string, expected: string): boolean {
@@ -19,16 +22,25 @@ export function secretsEqual(actual: string, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/** Sign a session cookie: "<exp>.<base64url(HMAC-SHA256(secret, prefix+exp))>". */
-export function signSessionCookie(secret: string, expires: number): string {
+/**
+ * Sign a session cookie carrying the user identity:
+ * "<exp>.<userId>.<base64url(HMAC-SHA256(secret, prefix+exp.userId))>".
+ * The userId is part of the signed payload, so swapping it in a cookie
+ * invalidates the signature.
+ */
+export function signSessionCookie(
+  secret: string,
+  expires: number,
+  userId: string,
+): string {
   const sig = createHmac("sha256", secret)
-    .update(`${SESSION_PREFIX}${expires}`)
+    .update(`${SESSION_PREFIX}${expires}.${userId}`)
     .digest("base64url");
-  return `${expires}.${sig}`;
+  return `${expires}.${userId}.${sig}`;
 }
 
 export type SessionVerifyResult =
-  | { valid: true }
+  | { valid: true; userId: string }
   | { valid: false; reason: "malformed" | "tampered" | "expired" };
 
 /** Verify a session cookie value at a given unix-second clock. */
@@ -37,20 +49,20 @@ export function verifySessionCookie(
   value: string,
   nowSec: number,
 ): SessionVerifyResult {
-  const dot = value.indexOf(".");
-  if (dot <= 0) return { valid: false, reason: "malformed" };
-  const expires = Number(value.slice(0, dot));
-  if (!Number.isInteger(expires) || expires <= 0) {
+  const parts = value.split(".");
+  if (parts.length !== 3) return { valid: false, reason: "malformed" };
+  const [expStr, userId, signature] = parts;
+  const expires = Number(expStr);
+  if (!Number.isInteger(expires) || expires <= 0 || !UUID_RE.test(userId)) {
     return { valid: false, reason: "malformed" };
   }
-  const signature = value.slice(dot + 1);
-  const expected = signSessionCookie(secret, expires);
-  const expectedSignature = expected.slice(expected.indexOf(".") + 1);
+  const expected = signSessionCookie(secret, expires, userId);
+  const expectedSignature = expected.split(".")[2];
   if (!secretsEqual(signature, expectedSignature)) {
     return { valid: false, reason: "tampered" };
   }
   if (expires < nowSec) return { valid: false, reason: "expired" };
-  return { valid: true };
+  return { valid: true, userId };
 }
 
 /**
@@ -77,6 +89,55 @@ export function buildSessionCookie(
 
 export function clearSessionCookie(crossSite: boolean, secure: boolean): string {
   return buildSessionCookie("", 0, crossSite, secure);
+}
+
+// ---- Registration gate -----------------------------------------------------
+// 注册门禁（需求 2026-08-09-passkey-auth.md ⑦）：
+//   users 表为空 → 必须携带与 SETUP_TOKEN 常量时间比对通过的引导令牌；
+//   users 已有行 → 必须已登录（同一接口用于「添加新设备凭证」）。
+
+export type RegisterGateDecision =
+  | { kind: "first-time" }
+  | { kind: "authenticated" }
+  | { kind: "rejected"; code: string; message: string; status: number };
+
+export function evaluateRegisterGate(opts: {
+  userCount: number;
+  isAuthenticated: boolean;
+  setupToken: string | undefined;
+  providedSetupToken: string | undefined;
+}): RegisterGateDecision {
+  if (opts.userCount === 0) {
+    if (!opts.setupToken) {
+      return {
+        kind: "rejected",
+        code: "INTERNAL",
+        status: 500,
+        message: "服务端未配置引导注册令牌（SETUP_TOKEN），无法注册",
+      };
+    }
+    if (
+      !opts.providedSetupToken ||
+      !secretsEqual(opts.providedSetupToken, opts.setupToken)
+    ) {
+      return {
+        kind: "rejected",
+        code: "FORBIDDEN",
+        status: 403,
+        message: "引导注册令牌不正确",
+      };
+    }
+    return { kind: "first-time" };
+  }
+  if (!opts.isAuthenticated) {
+    return {
+      kind: "rejected",
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "请先登录后再添加新的登录凭证",
+    };
+  }
+  return { kind: "authenticated" };
 }
 
 // ---- Login throttle (pure state transitions; state held in-memory at service) ----

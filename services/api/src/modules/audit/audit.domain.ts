@@ -12,8 +12,12 @@ export const UNAUTHORIZED_DEDUP_WINDOW_MS = 10 * 60_000; // 10 分钟
 export const EVENT_MESSAGES: Record<AuditEvent, string> = {
   "auth.login": "登录成功",
   "auth.login_failed": "登录失败",
+  "auth.register": "注册 / 添加登录凭证",
+  "auth.credential_delete": "删除登录凭证",
   "auth.logout": "退出登录",
   "auth.unauthorized": "未认证或登录已过期",
+  "token.create": "创建 API 令牌",
+  "token.revoke": "撤销 API 令牌",
   "blob.upload": "文件上传成功",
   "blob.delete": "文件已删除",
   "moment.delete": "闪念已删除",

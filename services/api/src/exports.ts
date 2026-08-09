@@ -146,6 +146,35 @@ export {
   TagNameSchema,
 } from "@/modules/tag/tag.types";
 
+// ---- Auth module (Passkey) ----
+export { authService } from "@/modules/auth/auth.service";
+export type {
+  UserEntry,
+  CredentialEntry,
+  AuthMeEntry,
+  RegisterStartInput,
+  RegisterFinishInput,
+  LoginFinishInput,
+  UpdateUserProfileInput,
+  LoginFinishOutcome,
+} from "@/modules/auth/auth.types";
+export {
+  DateOnlySchema,
+  RegisterStartSchema,
+  RegisterFinishSchema,
+  LoginFinishSchema,
+  UpdateUserProfileSchema,
+} from "@/modules/auth/auth.types";
+
+// ---- Tokens module ----
+export { tokenService } from "@/modules/tokens/token.service";
+export type {
+  TokenEntry,
+  TokenCreateResult,
+  CreateTokenInput,
+} from "@/modules/tokens/token.types";
+export { CreateTokenSchema } from "@/modules/tokens/token.types";
+
 // ---- Shared utilities ----
 export { AppError, ErrorCode } from "@/shared/errors";
 export type { ErrorCode as ErrorCodeType } from "@/shared/errors";

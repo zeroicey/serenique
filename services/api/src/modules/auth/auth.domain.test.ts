@@ -1,66 +1,197 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildSessionCookie,
   clearSessionCookie,
+  evaluateRegisterGate,
   secretsEqual,
   signSessionCookie,
+  throttleIsBlocked,
   throttleRecordFailure,
   throttleShouldBlock,
   verifySessionCookie,
 } from "./auth.domain";
 
-const SECRET = "0123456789abcdef0123456789abcdef"; // ≥32 chars
+// ---------------------------------------------------------------------------
+// Auth domain unit tests — cookie signing (userId 载荷), constant-time compare,
+// register gate decisions, throttle state transitions. No DB / IO.
+// ---------------------------------------------------------------------------
+
+const SECRET = "session-secret-0123456789abcdef";
+const USER_ID = "0198f6d0-9e7c-71d7-8214-2a0f7f5f1001";
+const NOW = 1_800_000_000;
 
 describe("secretsEqual", () => {
-  test("rejects different values and lengths", () => {
+  test("true for identical strings, false for any difference", () => {
     expect(secretsEqual("abc", "abc")).toBe(true);
     expect(secretsEqual("abc", "abd")).toBe(false);
-    expect(secretsEqual("abc", "abcd")).toBe(false);
+    expect(secretsEqual("abc", "abc ")).toBe(false);
+    expect(secretsEqual("", "abc")).toBe(false);
   });
 });
 
-describe("signSessionCookie / verifySessionCookie", () => {
-  const exp = 1_800_000_000;
-  const cookie = signSessionCookie(SECRET, exp);
-
-  test("round-trips and expires", () => {
-    expect(verifySessionCookie(SECRET, cookie, exp - 1)).toEqual({ valid: true });
-    expect(verifySessionCookie(SECRET, cookie, exp + 1)).toEqual({ valid: false, reason: "expired" });
-    expect(cookie.split(".").length).toBe(2);
-    expect(Number(cookie.split(".")[0])).toBe(exp);
+describe("session cookie (userId 载荷)", () => {
+  test("sign → verify round-trip returns the userId", () => {
+    const cookie = signSessionCookie(SECRET, NOW + 3600, USER_ID);
+    expect(verifySessionCookie(SECRET, cookie, NOW)).toEqual({
+      valid: true,
+      userId: USER_ID,
+    });
   });
 
-  test("rejects tampering, malformed values, wrong secret", () => {
-    const [, sig] = cookie.split(".");
-    expect(verifySessionCookie(SECRET, `${exp + 1}.${sig}`, 1)).toEqual({ valid: false, reason: "tampered" });
-    expect(verifySessionCookie(SECRET, `${exp}.xxxx`, 1)).toEqual({ valid: false, reason: "tampered" });
-    expect(verifySessionCookie(SECRET, "nosig", 1)).toEqual({ valid: false, reason: "malformed" });
-    expect(verifySessionCookie("yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy", cookie, exp - 1)).toEqual({ valid: false, reason: "tampered" });
+  test("tampered userId → tampered", () => {
+    const cookie = signSessionCookie(SECRET, NOW + 3600, USER_ID);
+    const [exp, , sig] = cookie.split(".");
+    const forged = `${exp}.0198f6d0-9e7c-71d7-8214-2a0f7f5f9999.${sig}`;
+    expect(verifySessionCookie(SECRET, forged, NOW)).toEqual({
+      valid: false,
+      reason: "tampered",
+    });
+  });
+
+  test("tampered expiry → tampered", () => {
+    const cookie = signSessionCookie(SECRET, NOW + 3600, USER_ID);
+    const [, uid, sig] = cookie.split(".");
+    const forged = `${NOW + 7200}.${uid}.${sig}`;
+    expect(verifySessionCookie(SECRET, forged, NOW)).toEqual({
+      valid: false,
+      reason: "tampered",
+    });
+  });
+
+  test("expired cookie → expired", () => {
+    const cookie = signSessionCookie(SECRET, NOW - 1, USER_ID);
+    expect(verifySessionCookie(SECRET, cookie, NOW)).toEqual({
+      valid: false,
+      reason: "expired",
+    });
+  });
+
+  test("wrong secret → tampered", () => {
+    const cookie = signSessionCookie(SECRET, NOW + 3600, USER_ID);
+    expect(verifySessionCookie("another-secret-0123456789abcdef", cookie, NOW)).toEqual({
+      valid: false,
+      reason: "tampered",
+    });
+  });
+
+  test("malformed shapes → malformed", () => {
+    // 旧格式（无 userId，2 段）也一律视为 malformed
+    expect(verifySessionCookie(SECRET, "123.abc", NOW)).toEqual({
+      valid: false,
+      reason: "malformed",
+    });
+    // 4 段
+    const cookie = signSessionCookie(SECRET, NOW + 3600, USER_ID);
+    expect(verifySessionCookie(SECRET, `${cookie}.extra`, NOW)).toEqual({
+      valid: false,
+      reason: "malformed",
+    });
+    // 非整数过期
+    expect(verifySessionCookie(SECRET, `abc.${USER_ID}.sig`, NOW)).toEqual({
+      valid: false,
+      reason: "malformed",
+    });
+    // 非 UUID userId
+    expect(verifySessionCookie(SECRET, `${NOW + 3600}.not-a-uuid.sig`, NOW)).toEqual({
+      valid: false,
+      reason: "malformed",
+    });
   });
 });
 
-describe("buildSessionCookie", () => {
-  test("sets HttpOnly + SameSite flags by mode", () => {
-    const prod = buildSessionCookie("v", 3600, true, true);
-    expect(prod).toContain("HttpOnly");
-    expect(prod).toContain("SameSite=None");
-    expect(prod).toContain("Secure");
-    expect(prod).toContain("Max-Age=3600");
-    const dev = buildSessionCookie("v", 3600, false, false);
-    expect(dev).toContain("SameSite=Lax");
-    expect(dev).not.toContain("Secure");
-    expect(clearSessionCookie(true, true)).toContain("Max-Age=0");
+describe("evaluateRegisterGate", () => {
+  const setupToken = "setup-token-0123456789abcdef";
+
+  test("users empty + correct setup token → first-time", () => {
+    expect(
+      evaluateRegisterGate({
+        userCount: 0,
+        isAuthenticated: false,
+        setupToken,
+        providedSetupToken: setupToken,
+      }),
+    ).toEqual({ kind: "first-time" });
+  });
+
+  test("users empty + wrong/missing setup token → rejected", () => {
+    expect(
+      evaluateRegisterGate({
+        userCount: 0,
+        isAuthenticated: false,
+        setupToken,
+        providedSetupToken: "wrong",
+      }),
+    ).toMatchObject({ kind: "rejected", status: 403 });
+    expect(
+      evaluateRegisterGate({
+        userCount: 0,
+        isAuthenticated: false,
+        setupToken,
+        providedSetupToken: undefined,
+      }),
+    ).toMatchObject({ kind: "rejected", status: 403 });
+  });
+
+  test("users empty + setup token not configured → rejected 500", () => {
+    expect(
+      evaluateRegisterGate({
+        userCount: 0,
+        isAuthenticated: false,
+        setupToken: undefined,
+        providedSetupToken: "anything",
+      }),
+    ).toMatchObject({ kind: "rejected", status: 500 });
+  });
+
+  test("users exist + no session → rejected 401 (添加设备需登录)", () => {
+    expect(
+      evaluateRegisterGate({
+        userCount: 1,
+        isAuthenticated: false,
+        setupToken,
+        providedSetupToken: setupToken,
+      }),
+    ).toMatchObject({ kind: "rejected", status: 401 });
+  });
+
+  test("users exist + session → authenticated (添加设备)", () => {
+    expect(
+      evaluateRegisterGate({
+        userCount: 1,
+        isAuthenticated: true,
+        setupToken,
+        providedSetupToken: undefined,
+      }),
+    ).toEqual({ kind: "authenticated" });
   });
 });
 
-describe("throttle", () => {
-  test("blocks only after the cap within the window", () => {
-    let s: ReturnType<typeof throttleRecordFailure> | undefined;
-    const now = 1_000_000;
-    for (let i = 0; i < 4; i++) s = throttleRecordFailure(s, now);
-    expect(throttleShouldBlock(s, now)).toBe(false);
-    s = throttleRecordFailure(s, now);
-    expect(throttleShouldBlock(s, now)).toBe(true);
-    expect(throttleShouldBlock(s, now + 11 * 60_000)).toBe(false); // 窗口过期
+describe("login throttle state transitions", () => {
+  test("blocked only inside window with count >= max", () => {
+    expect(throttleIsBlocked(undefined, 0)).toBe(false);
+    const state = throttleRecordFailure(undefined, 1000);
+    expect(throttleIsBlocked(state, 2000)).toBe(true);
+    expect(throttleShouldBlock(state, 2000, 5)).toBe(false); // count 1 < 5
+    let s = state;
+    for (let i = 0; i < 4; i++) s = throttleRecordFailure(s, 2000);
+    expect(throttleShouldBlock(s, 2000, 5)).toBe(true);
+    expect(throttleShouldBlock(s, 2000 + 10 * 60_000, 5)).toBe(false); // 窗口过期
+  });
+
+  test("window restarts on expiry", () => {
+    const s1 = throttleRecordFailure(undefined, 1000);
+    const s2 = throttleRecordFailure(s1, 1000 + 11 * 60_000);
+    expect(s2).toEqual({ count: 1, resetAtMs: 1000 + 11 * 60_000 + 10 * 60_000 });
+  });
+});
+
+describe("cookie builders", () => {
+  test("buildSessionCookie includes HttpOnly + SameSite, Secure only when requested", () => {
+    const crossSite = clearSessionCookie(true, true);
+    expect(crossSite).toContain("HttpOnly");
+    expect(crossSite).toContain("SameSite=None");
+    expect(crossSite).toContain("Secure");
+    const lax = clearSessionCookie(false, false);
+    expect(lax).toContain("SameSite=Lax");
+    expect(lax).not.toContain("Secure");
   });
 });

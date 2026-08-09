@@ -25,8 +25,11 @@ export const TEST_DATABASE_URL =
 /** Fallback signing secret for blob access-link tests (≥32 chars). */
 export const TEST_SIGNING_SECRET = "test-signing-secret-0123456789abcdef";
 
-/** Fallback auth credential for tests (≥32 chars). */
-export const TEST_AUTH_TOKEN = "test-auth-token-0123456789abcdef";
+/** Fallback session cookie signing secret for tests (≥32 chars). */
+export const TEST_SESSION_SECRET = "test-session-secret-0123456789abcdef";
+
+/** Fallback bootstrap registration token for tests (≥32 chars). */
+export const TEST_SETUP_TOKEN = "test-setup-token-0123456789abcdef";
 
 /**
  * Set test env vars. Must be called at the top of a test file, before any
@@ -36,6 +39,10 @@ export const TEST_AUTH_TOKEN = "test-auth-token-0123456789abcdef";
  * - BLOB_ROOT is forced (not `??=`): `@/env` is parsed once per `bun test`
  *   process and shared across files, so integration tests must never touch a
  *   real/production BLOB_ROOT regardless of which file imports `@/env` first.
+ * - WEBAUTHN_RP_ID defaults to "localhost"（认证启用——HTTP 级测试必须带会话
+ *   cookie 或 Bearer token）。所有测试文件共用同一份 env（bun test 单进程、
+ *   先 import 先赢），所以不允许个别文件关闭认证；DB-free 的 smoke 测试用
+ *   mock.module 替换 tokenService 即可。
  */
 export function setTestEnv(
   opts: {
@@ -43,7 +50,10 @@ export function setTestEnv(
     BLOB_ROOT?: string;
     BLOB_MAX_SIZE?: string;
     BLOB_SIGNING_SECRET?: string;
-    AUTH_TOKEN?: string;
+    SESSION_SECRET?: string;
+    SETUP_TOKEN?: string;
+    WEBAUTHN_RP_ID?: string;
+    WEBAUTHN_ORIGINS?: string;
     NODE_ENV?: string;
   } = {},
 ): void {
@@ -52,14 +62,17 @@ export function setTestEnv(
   // gets a fresh disk root and leftovers can never collide with a later run.
   process.env.BLOB_ROOT = opts.BLOB_ROOT ?? `/tmp/serenique-api-test-${RUN_TOKEN}`;
   process.env.BLOB_MAX_SIZE ??= opts.BLOB_MAX_SIZE ?? "104857600";
-  // Ensure a signing secret is set before `@/env` is first parsed — bun test
+  // Ensure the signing secret is set before `@/env` is first parsed — bun test
   // shares one process across files, and whichever file's setTestEnv runs
   // first wins for the cached `@/env` module.
   process.env.BLOB_SIGNING_SECRET ??=
     opts.BLOB_SIGNING_SECRET ?? TEST_SIGNING_SECRET;
-  // Ensure AUTH_TOKEN is always written before `@/env` is first parsed, so auth
-  // tests never read an empty credential in a shared `bun test` process.
-  process.env.AUTH_TOKEN ??= opts.AUTH_TOKEN ?? TEST_AUTH_TOKEN;
+  // Session / bootstrap secrets — always present so auth-enabled tests work.
+  process.env.SESSION_SECRET ??= opts.SESSION_SECRET ?? TEST_SESSION_SECRET;
+  process.env.SETUP_TOKEN ??= opts.SETUP_TOKEN ?? TEST_SETUP_TOKEN;
+  process.env.WEBAUTHN_RP_ID ??= opts.WEBAUTHN_RP_ID ?? "localhost";
+  process.env.WEBAUTHN_ORIGINS ??=
+    opts.WEBAUTHN_ORIGINS ?? "http://localhost:5173,http://localhost:3000";
   process.env.NODE_ENV ??= opts.NODE_ENV ?? "test";
 }
 

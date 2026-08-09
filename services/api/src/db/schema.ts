@@ -10,3 +10,5 @@ export { taskGroups, tasks } from "@/modules/task/task.schema";
 export { events } from "@/modules/event/event.schema";
 export { auditLogs } from "@/modules/audit/audit.schema";
 export { tags, tagRelations } from "@/modules/tag/tag.schema";
+export { users, passkeyCredentials } from "@/modules/auth/auth.schema";
+export { apiTokens } from "@/modules/tokens/token.schema";

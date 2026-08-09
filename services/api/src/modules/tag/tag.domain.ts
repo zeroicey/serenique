@@ -49,6 +49,12 @@ export function registerOwnerValidator(
   ownerValidators.set(ownerType, validator);
 }
 
+/** Drop a registered owner type (used when an owner module is removed; also
+ *  lets tests restore the registry after temporarily registering extras). */
+export function unregisterOwnerValidator(ownerType: string): void {
+  ownerValidators.delete(ownerType);
+}
+
 /** Throw VALIDATION 400 for owner types that are not registered. */
 export function assertRegisteredOwnerType(ownerType: string): void {
   if (!ownerValidators.has(ownerType)) {

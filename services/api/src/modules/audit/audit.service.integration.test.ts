@@ -4,7 +4,6 @@ import {
   RUN_DB_TESTS,
   RUN_TOKEN,
   setTestEnv,
-  TEST_AUTH_TOKEN,
   uniqueTitle,
 } from "@/test/helpers";
 
@@ -12,8 +11,13 @@ import {
 // Audit service integration tests — real PostgreSQL (RUN_DB_TESTS=1).
 //
 // Covers the read chain (record → list → unread-count → mark-read) and the
-// write-point hooks (auth login success/failure, auth.unauthorized per-IP
-// dedup, business delete rows).
+// write-point hooks (auth login failure, auth.unauthorized per-IP dedup,
+// business delete rows).
+//
+// 说明：auth.login 成功 / auth.register / token.create / token.revoke /
+// auth.credential_delete 的写点由 auth 集成测试（真实 ceremony）覆盖，
+// 本文件不再重复造用户行（users 表是单行语义，多文件并行做引导注册会竞态）。
+// 登录失败写点不需要任何用户/凭证，可直接在 service 层触发。
 //
 // Cleanup: every audit row this file creates is tracked by id and deleted in
 // afterAll — the audit table is shared with the other integration files (auth
@@ -26,6 +30,7 @@ type AuditRow = typeof import("./audit.schema").auditLogs.$inferSelect;
 
 describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
   let auditService: typeof import("./audit.service").auditService;
+  let authService: typeof import("@/modules/auth/auth.service").authService;
   let db: typeof import("@/db/connection").db;
   let auditLogs: typeof import("./audit.schema").auditLogs;
   let eventService: typeof import("@/modules/event/event.service").eventService;
@@ -61,7 +66,11 @@ describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
       BLOB_ROOT: process.env.BLOB_ROOT!,
       BLOB_MAX_SIZE: 104857600,
       BLOB_SIGNING_SECRET: process.env.BLOB_SIGNING_SECRET!,
-      AUTH_TOKEN: TEST_AUTH_TOKEN,
+      SESSION_SECRET: process.env.SESSION_SECRET!,
+      SETUP_TOKEN: process.env.SETUP_TOKEN!,
+      WEBAUTHN_RP_ID: "localhost",
+      WEBAUTHN_RP_NAME: "Serenique",
+      WEBAUTHN_ORIGINS: ["http://localhost:5173", "http://localhost:3000"],
       PORT: 3000,
       NODE_ENV: "test",
     });
@@ -70,6 +79,7 @@ describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
   beforeAll(async () => {
     setTestEnv();
     auditService = (await import("./audit.service")).auditService;
+    authService = (await import("@/modules/auth/auth.service")).authService;
     db = (await import("@/db/connection")).db;
     auditLogs = (await import("./audit.schema")).auditLogs;
     eventService = (await import("@/modules/event/event.service")).eventService;
@@ -197,30 +207,27 @@ describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
 
   // ---- write-point hooks ---------------------------------------------------
 
-  test("auth login success / failure write audit rows", async () => {
-    const app = makeApp();
-    const ipOk = `it-${RUN_TOKEN}-login-ok`;
-    const okRes = await app.request("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json", "cf-connecting-ip": ipOk },
-      body: JSON.stringify({ token: TEST_AUTH_TOKEN }),
-    });
-    expect(okRes.status).toBe(200);
-
-    const okRows = await waitForAuditRows(
-      and(eq(auditLogs.event, "auth.login"), eq(auditLogs.ip, ipOk)),
-    );
-    expect(okRows.length).toBe(1);
-    expect(okRows[0].level).toBe("info");
-    track(okRows[0]);
-
+  test("auth login failure writes audit rows (service 层触发，无需用户)", async () => {
+    // 用未知凭证 id 走完 login/start → finish：凭证不存在 → rejected → 审计。
+    // （登录成功 / 注册 / token 写点由 auth 集成测试的真实 ceremony 覆盖。）
     const ipBad = `it-${RUN_TOKEN}-login-bad`;
-    const badRes = await app.request("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json", "cf-connecting-ip": ipBad },
-      body: JSON.stringify({ token: "wrong-token-0123456789abcdef" }),
-    });
-    expect(badRes.status).toBe(401);
+    const { challengeId } = await authService.loginStart();
+    const outcome = await authService.loginFinish(
+      {
+        challengeId,
+        origin: "http://localhost:5173",
+        ip: ipBad,
+        credential: {
+          id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          rawId: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          type: "public-key",
+          response: { clientDataJSON: "e30=", authenticatorData: "e30=", signature: "e30=" },
+          clientExtensionResults: {},
+        },
+      },
+      0, // delayMs=0：测试不等真实节流延迟
+    );
+    expect(outcome.status).toBe("rejected");
 
     const badRows = await waitForAuditRows(
       and(eq(auditLogs.event, "auth.login_failed"), eq(auditLogs.ip, ipBad)),

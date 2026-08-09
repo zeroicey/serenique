@@ -8,6 +8,7 @@ import { eventRouter } from "@/modules/event";
 import { auditRouter } from "@/modules/audit";
 import { tagRouter } from "@/modules/tag";
 import { authMiddleware, authRouter } from "@/modules/auth";
+import { tokenRouter } from "@/modules/tokens";
 import { Res } from "@/shared/response";
 import { logger as pinoLogger } from "@/shared/logger";
 
@@ -17,10 +18,15 @@ import { logger as pinoLogger } from "@/shared/logger";
 // ---------------------------------------------------------------------------
 
 export function createApp(env: Env) {
-  // ---- 0. Fail-closed: 生产必须配置 AUTH_TOKEN，否则拒绝启动 --------------
-  //    createApp(env) 的 env 来自 @/env（index.ts 同一次解析），生产缺失即崩溃。
-  if (env.NODE_ENV === "production" && !env.AUTH_TOKEN) {
-    throw new Error("生产环境必须配置 AUTH_TOKEN 才能启动（认证 fail-closed）");
+  // ---- 0. Fail-closed: 生产必须配置会话签名密钥与 RP ID，否则拒绝启动 -------
+  //    （SETUP_TOKEN 注册完成后可移除，故不在此列 —— 见需求文档 ⑦）
+  if (
+    env.NODE_ENV === "production" &&
+    (!env.SESSION_SECRET || !env.WEBAUTHN_RP_ID)
+  ) {
+    throw new Error(
+      "生产环境必须配置 SESSION_SECRET 与 WEBAUTHN_RP_ID 才能启动（认证 fail-closed）",
+    );
   }
 
   const app = new Hono();
@@ -44,7 +50,7 @@ export function createApp(env: Env) {
   app.get("/health", (c) => Res.ok("服务运行中", { status: "ok" }).build(c));
   app.get("/", (c) =>
     Res.ok("Serenique API", {
-      modules: ["moment", "blob", "task", "event", "audit", "tags"],
+      modules: ["moment", "blob", "task", "event", "audit", "tags", "auth", "tokens"],
     }).build(c),
   );
 
@@ -53,6 +59,7 @@ export function createApp(env: Env) {
   //
   app.use("/api/*", authMiddleware);
   app.route("/api", authRouter);
+  app.route("/api", tokenRouter);
   app.route("/api", momentRouter);
   app.route("/api", blobRouter);
   app.route("/api", taskRouter);

@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { setTestEnv, TEST_AUTH_TOKEN } from "@/test/helpers";
-
-// Bearer credential shared by every /api request below — Task 5's
-// authMiddleware will require it once mounted. Carried now so the contract
-// smoke tests stay green when the middleware lands.
-const AUTH = { Authorization: `Bearer ${TEST_AUTH_TOKEN}` };
+import { setTestEnv } from "@/test/helpers";
 
 // ---------------------------------------------------------------------------
 // REST contract smoke tests — lock the behavior most at risk from handler /
@@ -12,29 +7,44 @@ const AUTH = { Authorization: `Bearer ${TEST_AUTH_TOKEN}` };
 //   - malformed JSON body → 400 (unified handleError)
 //   - unknown route → unified 404 shape
 //   - /health → 200
-// Only DB-free request paths are exercised here; DB-backed flows are covered by
-// the per-module integration tests.
+//   - 旧 /api/auth/login 路由已退役 → 404
+//   - 全模块 :id 参数 UUID 校验 → 400（不落 DB）
+//
+// Auth middleware is enabled (like every other test file — bun test shares one
+// env across files). Requests authenticate via a session cookie minted with
+// the pure HMAC signer (createSessionCookie 不碰 DB)，所以整个文件保持 DB-free；
+// 不用 mock.module —— bun test 单进程共享模块缓存，mock 会泄漏到其它文件。
 // ---------------------------------------------------------------------------
 
 setTestEnv();
 
 describe("REST contract smoke", () => {
-  async function makeApp() {
-    const { createApp } = await import("@/app");
-    return createApp({
+  async function makeAuthedApp() {
+    const [{ createApp }, { authService }] = await Promise.all([
+      import("@/app"),
+      import("@/modules/auth/auth.service"),
+    ]);
+    const app = createApp({
       DATABASE_URL:
         "postgresql://serenique:serenique@127.0.0.1:5432/serenique",
       BLOB_ROOT: "/tmp/serenique-app-test",
       BLOB_MAX_SIZE: 104857600,
       BLOB_SIGNING_SECRET: "test-signing-secret-0123456789abcdef",
+      SESSION_SECRET: "test-session-secret-0123456789abcdef",
+      WEBAUTHN_RP_NAME: "Serenique",
+      WEBAUTHN_ORIGINS: ["http://localhost:5173"],
       PORT: 3000,
       NODE_ENV: "test",
-      AUTH_TOKEN: TEST_AUTH_TOKEN,
     });
+    // 纯 HMAC 会话 cookie（无 DB）：中间件 cookie 分支只验签。
+    const value = authService.createSessionCookie(
+      "0198f6d0-9e7c-71d7-8214-2a0f7f5f9001",
+    );
+    return { app, cookie: `serenique_session=${value}` };
   }
 
   test("GET /health returns 200", async () => {
-    const app = await makeApp();
+    const { app } = await makeAuthedApp();
     const res = await app.request("/health");
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -43,10 +53,10 @@ describe("REST contract smoke", () => {
   });
 
   test("malformed JSON body maps to 400, not 500", async () => {
-    const app = await makeApp();
+    const { app, cookie } = await makeAuthedApp();
     const res = await app.request("/api/moments", {
       method: "POST",
-      headers: { ...AUTH, "content-type": "application/json" },
+      headers: { cookie, "content-type": "application/json" },
       body: "{ not valid json",
     });
     expect(res.status).toBe(400);
@@ -55,12 +65,12 @@ describe("REST contract smoke", () => {
   });
 
   test("blob attachment create with malformed JSON maps to 400 (was 500)", async () => {
-    const app = await makeApp();
+    const { app, cookie } = await makeAuthedApp();
     const res = await app.request(
       "/api/blobs/0198f6d0-9e7c-71d7-8214-2a0f7f5f2001/attachments",
       {
         method: "POST",
-        headers: { ...AUTH, "content-type": "application/json" },
+        headers: { cookie, "content-type": "application/json" },
         body: "{ broken",
       },
     );
@@ -68,11 +78,21 @@ describe("REST contract smoke", () => {
   });
 
   test("unknown route returns the unified 404 shape", async () => {
-    const app = await makeApp();
-    const res = await app.request("/api/nope", { headers: { ...AUTH } });
+    const { app, cookie } = await makeAuthedApp();
+    const res = await app.request("/api/nope", { headers: { cookie } });
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.success).toBe(false);
+  });
+
+  test("旧 /api/auth/login（共享密钥时代）已退役 → 404", async () => {
+    const { app, cookie } = await makeAuthedApp();
+    const res = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ token: "whatever" }),
+    });
+    expect(res.status).toBe(404);
   });
 
   test("invalid UUID path params map to 400 VALIDATION, not 500", async () => {
@@ -80,7 +100,7 @@ describe("REST contract smoke", () => {
     // the DB, so a malformed id must never surface as an unrelated 500 from a
     // database query. Regression for the moment/blob handlers, which used to
     // pass any non-empty string straight through to the service.
-    const app = await makeApp();
+    const { app, cookie } = await makeAuthedApp();
     const badRequests: Array<{ path: string; method?: string }> = [
       { path: "/api/moments/not-a-uuid" },
       { path: "/api/tasks/not-a-uuid" },
@@ -104,43 +124,19 @@ describe("REST contract smoke", () => {
         path: "/api/moments/not-a-uuid/tags/not-a-uuid",
         method: "DELETE",
       },
+      { path: "/api/tokens/not-a-uuid", method: "DELETE" },
+      { path: "/api/auth/credentials/not-a-uuid", method: "DELETE" },
     ];
     for (const { path, method } of badRequests) {
       const res = await app.request(path, {
         method: method ?? "GET",
-        headers: { ...AUTH },
+        headers: { cookie },
       });
-      // 400 (VALIDATION), never the 500 a malformed id used to trigger once it
+      // 400 (VALIDATION)，never the 500 a malformed id used to trigger once it
       // reached the database layer.
       expect(res.status).toBe(400);
       const body = await res.json();
       expect(body.success).toBe(false);
     }
-  });
-
-  test("unauthenticated /api request → 401", async () => {
-    const app = await makeApp();
-    const res = await app.request("/api/moments");
-    expect(res.status).toBe(401);
-  });
-
-  test("login with wrong token → 401, login with correct token sets cookie", async () => {
-    const app = await makeApp();
-    const bad = await app.request("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: "wrong-token" }),
-    });
-    expect(bad.status).toBe(401);
-
-    const ok = await app.request("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: TEST_AUTH_TOKEN }),
-    });
-    expect(ok.status).toBe(200);
-    const setCookie = ok.headers.get("set-cookie") ?? "";
-    expect(setCookie).toContain("serenique_session=");
-    expect(setCookie).toContain("HttpOnly");
   });
 });
