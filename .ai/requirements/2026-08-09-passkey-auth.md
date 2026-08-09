@@ -63,7 +63,8 @@
 
 ## 3. 业务规则
 
-- **注册（首次）**：`POST /api/auth/register/start` + `/register/finish`（WebAuthn create ceremony），**须携带 `SETUP_TOKEN`**（部署时随机生成的 env，仅用于引导注册，对标旧 AUTH_TOKEN 语义但范围极窄）→ 注册完成后自动登录。**新增设备凭证 = 登录状态下再走一次 create ceremony**（同一接口，由门禁区分：带 SETUP_TOKEN 且 users 表为空才允许引导注册；否则需会话）。
+- **注册（引导期）**：`POST /api/auth/register/start` + `/register/finish` 仅作**引导/加设备**用，不再面向公开 UI：`passkey_credentials` 计数为 0 时需携带 `SETUP_TOKEN`（常量时间比对）→ 首次凭证 ceremony；凭证 ≥1 后仅登录态可调（添加新设备，同一接口）。**登录页无任何注册表单/入口**。
+- **用户创建 = 引导脚本**：`users` 表为空时后端**启动 fail-closed**（auth 启用时），报错提示先运行 `bun scripts/bootstrap-user.ts`（幂等，从参数/env 读 name/email/birthday 创建首行）。**前端没有「创建用户/注册」概念**。
 - **登录**：`POST /api/auth/login/start`（生成 challenge）+ `/login/finish`（get ceremony，校验签名 + counter）→ 签发会话。
 - **challenge**：短时效（如 5 分钟）、一次性、单进程内存即可（个人服务无需多节点协调）。
 - **凭据列表管理**：`GET /api/auth/credentials`（列表）、`DELETE /api/auth/credentials/:id`（移除某设备，需会话已登录）。**新增设备凭证 = 登录状态下再走一次 create ceremony**（与首次注册复用同一接口，由门禁区分）。
@@ -105,17 +106,20 @@
 | ④ | CLI 认证 | **可管理 API Token**（GitHub PAT 模式），单独创建/撤销；`AUTH_TOKEN` 退役 ✅已确认 |
 | ⑤ | challenge 存储 | 单进程内存，短时效一次性（个人服务够用） |
 | ⑥ | 会话 | 沿用现有 HMAC 无状态 cookie，签名密钥改用独立 `SESSION_SECRET` |
-| ⑦ | 注册门禁 | **`SETUP_TOKEN` 引导制**：部署时随机生成 env，注册时提供；注册完成后可移除 ✅已确认 |
+| ⑦ | 注册门禁 | **`SETUP_TOKEN` 引导制**：凭证计数=0 时携带 SETUP_TOKEN 才允许首次凭证 ceremony；凭证 ≥1 后仅登录态加设备 ✅已确认 |
 | ⑧ | 移动端 | **也走 Passkey**（规划，08-09 已调研落盘）：插件选 corbado `passkeys`（iOS 16+ / Android 9+）；共享凭证靠 RP ID 域托管 AASA + assetlinks.json；**服务端需配合 expectedOrigin 数组（含 Android `apk-key-hash` origin）+ counter 宽松校验**；Android 需 `FlutterFragmentActivity`；实施清单见 `worklog/2026-08-09-passkey-flutter-research.md` ✅已确认 |
+| ⑨ | 公开首次注册 | **移除**：users 由引导脚本 `bootstrap-user.ts` 创建（幂等，参数/env 读 name/email/birthday）；auth 启用且 users 空表 → 启动 fail-closed；前端只有隐藏 `/setup?setupToken=` 页创建首个凭证；登录页只留通行密钥登录；`userInfo` 字段从 register/start 移除 ✅已确认 |
 
 ---
 
 ## 6. 实施路线（初步）
 
-1. 清理：删除现有 auth 模块实现（保留 `auth.domain.ts` 的 cookie 签名 / 节流纯函数，改造复用）；schema 加 users / passkey_credentials / api_tokens 迁移。
-2. WebAuthn 服务端：challenge 签发 + 校验（使用 `@simplewebauthn/server`，Bun 兼容性需验证）。
-3. 路由 + 中间件改造：身份来源改为会话中的 user_id；Bearer 分支改为查 `api_tokens` 表。
-4. tokens 模块：CRUD + 撤销（明文仅创建时返回一次）。
-5. Web 登录页：navigator.credentials 流程 + 凭证管理 UI + token 管理页。
-6. CLI：改 token 模式（`auth login` 走粘贴 token / 浏览器流程）。
-7. 移动端（后续 phase）：Passkey 插件 + 域名关联文件，服务端无需改动。
+1. 清理：删除现有 auth 模块实现（保留 `auth.domain.ts` 的 cookie 签名 / 节流纯函数，改造复用）；schema 加 users / passkey_credentials / api_tokens 迁移。✅（a3409f4）
+2. WebAuthn 服务端：challenge 签发 + 校验（使用 `@simplewebauthn/server`，Bun 兼容性需验证）。✅（a3409f4）
+3. 路由 + 中间件改造：身份来源改为会话中的 user_id；Bearer 分支改为查 `api_tokens` 表。✅（a3409f4）
+4. tokens 模块：CRUD + 撤销（明文仅创建时返回一次）。✅（a3409f4）
+5. Web 登录页：navigator.credentials 流程 + 凭证管理 UI + token 管理页。✅（Web 3 commits）
+6. CLI：改 token 模式（`auth login` 走粘贴 token / 浏览器流程）。✅（8026efa）
+7. 部署 v0.5.0 + 生产验证。✅（22857dc，见 `worklog/2026-08-09-passkey-prod-deploy.md`）
+8. **移除公开首次注册**（决策⑨）：引导脚本 + 启动 fail-closed + 隐藏 setup 页 + 登录页去注册表单。← 本次
+9. 移动端（后续 phase）：Passkey 插件 + 域名关联文件，服务端配合 expectedOrigin 数组等。
