@@ -8,24 +8,45 @@ class FakeSocket {
   readyState = 1
   onopen: (() => void) | null = null
   onmessage: ((e: { data: string }) => void) | null = null
-  constructor(public url: string) { FakeSocket.instances.push(this) }
-  send(d: string) { this.sent.push(d) }
+  constructor(public url: string) {
+    FakeSocket.instances.push(this)
+  }
+  send(d: string) {
+    this.sent.push(d)
+  }
   close() {}
-  emit(json: unknown) { this.onmessage?.({ data: JSON.stringify(json) }) }
-  open() { this.onopen?.() }
+  emit(json: unknown) {
+    this.onmessage?.({ data: JSON.stringify(json) })
+  }
+  open() {
+    this.onopen?.()
+  }
 }
 
 beforeEach(() => {
   FakeSocket.instances = []
-  useAiStore.setState({ status: 'offline', busy: false, currentSessionId: null, messages: [], sessions: [], activeTurn: null, lastError: null })
+  useAiStore.setState({
+    status: 'offline',
+    busy: false,
+    currentSessionId: null,
+    messages: [],
+    sessions: [],
+    activeTurn: null,
+    lastError: null,
+  })
 })
 
 describe('ai-store', () => {
   test('connect 后收到 session_ready 更新状态', () => {
     useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
-    const p = useAiStore.getState().connect()
+    useAiStore.getState().connect()
     const ws = FakeSocket.instances[0]
-    ws.emit({ type: 'session_ready', sessionId: 's1', model: 'deepseek/deepseek-v4-flash', messages: [] })
+    ws.emit({
+      type: 'session_ready',
+      sessionId: 's1',
+      model: 'deepseek/deepseek-v4-flash',
+      messages: [],
+    })
     ws.open() // 实际顺序以实现为准；测试关注最终状态
     expect(useAiStore.getState().status).toBe('online')
     expect(useAiStore.getState().currentSessionId).toBe('s1')
@@ -58,7 +79,10 @@ describe('ai-store', () => {
     useAiStore.getState().connect()
     const ws = FakeSocket.instances[0]
     ws.emit({ type: 'turn_start' })
-    ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '第一轮' } })
+    ws.emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: '第一轮' },
+    })
     ws.emit({ type: 'turn_end' })
     const { activeTurn, messages } = useAiStore.getState()
     expect(activeTurn).toBeNull()
@@ -85,22 +109,49 @@ describe('ai-store', () => {
     const ws = FakeSocket.instances[0]
     ws.emit({ type: 'agent_start' })
     ws.emit({ type: 'turn_start' })
-    ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '分析' } })
-    ws.emit({ type: 'tool_execution_start', toolCallId: 't1', toolName: 'readDiary', args: { date: '2026-08-09' } })
-    ws.emit({ type: 'tool_execution_end', toolCallId: 't1', toolName: 'readDiary', result: '日记内容', isError: false })
+    ws.emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'thinking_delta', delta: '分析' },
+    })
+    ws.emit({
+      type: 'tool_execution_start',
+      toolCallId: 't1',
+      toolName: 'readDiary',
+      args: { date: '2026-08-09' },
+    })
+    ws.emit({
+      type: 'tool_execution_end',
+      toolCallId: 't1',
+      toolName: 'readDiary',
+      result: '日记内容',
+      isError: false,
+    })
     ws.emit({ type: 'turn_end' })
     ws.emit({ type: 'turn_start' })
-    ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '最终答案' } })
+    ws.emit({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: '最终答案' },
+    })
     ws.emit({ type: 'agent_end' })
     const { messages, activeTurn, busy } = useAiStore.getState()
     expect(messages).toHaveLength(2)
     // 第一轮：思考 + 工具卡（含结果）
     expect(messages[0]).toMatchObject({ role: 'assistant', text: '', thinking: '分析' })
     expect(messages[0].toolCalls).toHaveLength(1)
-    expect(messages[0].toolCalls[0]).toMatchObject({ id: 't1', name: 'readDiary', result: '日记内容', isError: false })
+    expect(messages[0].toolCalls[0]).toMatchObject({
+      id: 't1',
+      name: 'readDiary',
+      result: '日记内容',
+      isError: false,
+    })
     expect(messages[0].toolCalls[0].args).toEqual({ date: '2026-08-09' })
     // 第二轮：最终文本
-    expect(messages[1]).toMatchObject({ role: 'assistant', text: '最终答案', thinking: '', toolCalls: [] })
+    expect(messages[1]).toMatchObject({
+      role: 'assistant',
+      text: '最终答案',
+      thinking: '',
+      toolCalls: [],
+    })
     expect(activeTurn).toBeNull()
     expect(busy).toBe(false)
   })

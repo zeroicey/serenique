@@ -70,7 +70,13 @@ function pushAssistantTurn() {
     role: 'assistant',
     text: activeTurn.text,
     thinking: activeTurn.thinking,
-    toolCalls: [...activeTurn.toolCards.values()].map(({ running, ...rest }) => rest),
+    toolCalls: [...activeTurn.toolCards.values()].map((card) => ({
+      id: card.id,
+      name: card.name,
+      args: card.args,
+      result: card.result,
+      isError: card.isError,
+    })),
   }
   useAiStore.setState((s) => ({
     messages: m.text || m.thinking || m.toolCalls.length > 0 ? [...s.messages, m] : s.messages,
@@ -88,7 +94,9 @@ export const useAiStore = create<AiState>((set, get) => ({
   messages: [],
   activeTurn: null,
 
-  setWsFactory: (f) => { wsFactory = f },
+  setWsFactory: (f) => {
+    wsFactory = f
+  },
 
   connect: async () => {
     // 幂等：非 offline（连接中/在线）不重建连接。基于 status 而非模块级 ws 判断，
@@ -105,11 +113,22 @@ export const useAiStore = create<AiState>((set, get) => ({
     ws.onopen = () => set({ status: 'online' })
     ws.onmessage = (e) => {
       let ev: ServerMessage
-      try { ev = JSON.parse(String(e.data)) } catch { return }
+      try {
+        ev = JSON.parse(String(e.data))
+      } catch {
+        return
+      }
       switch (ev.type) {
         case 'session_ready':
         case 'session_switched': {
-          set({ currentSessionId: ev.sessionId, model: ev.model, messages: ev.messages as RenderMessage[], busy: false, activeTurn: null, lastError: null })
+          set({
+            currentSessionId: ev.sessionId,
+            model: ev.model,
+            messages: ev.messages as RenderMessage[],
+            busy: false,
+            activeTurn: null,
+            lastError: null,
+          })
           get().refreshSessions()
           break
         }
@@ -138,7 +157,9 @@ export const useAiStore = create<AiState>((set, get) => ({
         case 'message_update': {
           const a = ev.assistantMessageEvent
           const turn = get().activeTurn
-          if (!turn) { set({ activeTurn: { id: ++turnSeq, thinking: '', text: '', toolCards: new Map() } }) }
+          if (!turn) {
+            set({ activeTurn: { id: ++turnSeq, thinking: '', text: '', toolCards: new Map() } })
+          }
           set((s) => {
             const t = s.activeTurn!
             if (a.type === 'text_delta') return { activeTurn: { ...t, text: t.text + a.delta } }
@@ -148,9 +169,21 @@ export const useAiStore = create<AiState>((set, get) => ({
         }
         case 'tool_execution_start':
           set((s) => {
-            const t = s.activeTurn ?? { id: ++turnSeq, thinking: '', text: '', toolCards: new Map() }
+            const t = s.activeTurn ?? {
+              id: ++turnSeq,
+              thinking: '',
+              text: '',
+              toolCards: new Map(),
+            }
             const cards = new Map(t.toolCards)
-            cards.set(ev.toolCallId, { id: ev.toolCallId, name: ev.toolName, args: ev.args, result: '', isError: false, running: true })
+            cards.set(ev.toolCallId, {
+              id: ev.toolCallId,
+              name: ev.toolName,
+              args: ev.args,
+              result: '',
+              isError: false,
+              running: true,
+            })
             return { activeTurn: { ...t, toolCards: cards } }
           })
           break
@@ -181,7 +214,10 @@ export const useAiStore = create<AiState>((set, get) => ({
           break
       }
     }
-    ws.onclose = () => { ws = null; set({ status: 'offline', busy: false }) }
+    ws.onclose = () => {
+      ws = null
+      set({ status: 'offline', busy: false })
+    }
   },
 
   send: (text) => {

@@ -11,7 +11,7 @@ describe('SessionSidebar', () => {
         { id: 'b', name: '新会话', messageCount: 0, modified: '' },
       ],
       currentSessionId: 'a',
-    } as any)
+    })
     render(<SessionSidebar />)
     expect(screen.getByText('今天计划')).toBeTruthy()
     expect(screen.getByText('新会话')).toBeTruthy()
@@ -19,7 +19,11 @@ describe('SessionSidebar', () => {
 
   test('点击会话触发 switchSession', () => {
     const switched: string[] = []
-    useAiStore.setState({ sessions: [{ id: 'b', name: '新会话', messageCount: 0, modified: '' }], currentSessionId: 'a', switchSession: (id: string) => switched.push(id) } as any)
+    useAiStore.setState({
+      sessions: [{ id: 'b', name: '新会话', messageCount: 0, modified: '' }],
+      currentSessionId: 'a',
+      switchSession: (id: string) => switched.push(id),
+    })
     render(<SessionSidebar />)
     fireEvent.click(screen.getByText('新会话'))
     expect(switched).toEqual(['b'])
@@ -28,7 +32,11 @@ describe('SessionSidebar', () => {
   test('删除触发 confirm + deleteSession', () => {
     const del: string[] = []
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    useAiStore.setState({ sessions: [{ id: 'a', name: '今天计划', messageCount: 1, modified: '' }], currentSessionId: 'a', deleteSession: (id: string) => del.push(id) } as any)
+    useAiStore.setState({
+      sessions: [{ id: 'a', name: '今天计划', messageCount: 1, modified: '' }],
+      currentSessionId: 'a',
+      deleteSession: (id: string) => del.push(id),
+    })
     render(<SessionSidebar />)
     fireEvent.click(screen.getByTitle('删除'))
     expect(del).toEqual(['a'])
