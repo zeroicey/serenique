@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -22,6 +23,24 @@ func commandContext(cmd *cobra.Command) context.Context {
 		return ctx
 	}
 	return context.Background()
+}
+
+// isUnauthorized reports whether err is an API 401 (missing/invalid/expired
+// credentials). Auth commands use it to replace the raw API message with an
+// actionable hint (e.g. "run auth login first") while preserving the original
+// error for everything else.
+func isUnauthorized(err error) bool {
+	var apiErr *client.APIError
+	return errors.As(err, &apiErr) && apiErr.HTTPStatus == http.StatusUnauthorized
+}
+
+// orDash renders a nullable user-profile field for display: "-" when unset
+// (nil or empty), per the "未设置显示 -" convention for auth me.
+func orDash(v *string) string {
+	if v == nil || *v == "" {
+		return "-"
+	}
+	return *v
 }
 
 // confirm asks the user to confirm a destructive action.

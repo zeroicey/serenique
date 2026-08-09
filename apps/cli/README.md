@@ -43,11 +43,11 @@ make build-all
 serenique init
 ```
 
-交互式提示输入 API 地址和认证令牌（当前后端暂无认证，token 可留空）：
+交互式提示输入 API 地址和 API 令牌（令牌可稍后用 `serenique auth login` 配置）：
 
 ```
 API 服务地址 [http://localhost:3000]:
-认证令牌 (可选，直接回车跳过) []:
+API 令牌 (可选，直接回车跳过) []:
 
 ✓ 配置已保存到 ~/.serenique/config.yaml
 ```
@@ -92,7 +92,7 @@ serenique blob download <文件ID>
 | 选项 | 简写 | 说明 |
 |------|------|------|
 | `--baseurl` | `-b` | API 服务地址（覆盖配置文件） |
-| `--token` | `-t` | 认证令牌（覆盖配置文件） |
+| `--token` | `-t` | API 令牌（覆盖配置文件） |
 | `--json` | `-j` | JSON 格式输出（适合 AI 和脚本消费） |
 | `--config` | `-c` | 配置文件路径（默认 `~/.serenique/config.yaml`） |
 | `--version` | | 显示版本信息（由 Makefile 构建元数据注入） |
@@ -104,6 +104,31 @@ serenique init              # 交互式初始化配置
 serenique config            # 查看当前配置
 serenique config set <key> <value>  # 修改配置项
 serenique config path       # 显示配置文件路径
+```
+
+### 认证与 API 令牌
+
+API 令牌（GitHub PAT 模式）是 CLI/脚本访问 API 的凭证，由服务端统一管理（只存
+SHA-256 哈希，可单独创建/撤销）。**首次使用需先在浏览器登录 Web 后，在设置页
+「API Token 管理」创建令牌**，然后：
+
+```sh
+# 配置本机令牌（交互式粘贴，或 --token 直传）
+serenique auth login
+serenique auth login --token serenique_xxx
+
+# 查看认证状态（Token 身份不携带用户资料，完整用户信息需浏览器会话）
+serenique auth me
+
+# 清除本机令牌（默认不动服务端；--revoke 按前缀匹配一并撤销）
+serenique auth logout
+serenique auth logout --revoke
+
+# 令牌管理（需要已有可用令牌）
+serenique token list                 # 列表（前缀/名称/时间，含已撤销，无明文）
+serenique token create macbook       # 创建（明文仅此一次返回，请立即保存）
+serenique token revoke <令牌ID>       # 撤销（撤销后立即失效，不可恢复）
+serenique token revoke <令牌ID> --force
 ```
 
 ### 闪念管理

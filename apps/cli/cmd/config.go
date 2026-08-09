@@ -59,11 +59,11 @@ var configSetCmd = &cobra.Command{
 
 支持的 key:
   baseurl  - API 服务地址
-  token    - 认证令牌
+  token    - API 令牌
 
 示例:
   serenique config set baseurl http://localhost:3000
-  serenique config set token my-secret-token`,
+  serenique config set token serenique_xxx`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]

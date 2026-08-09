@@ -115,7 +115,7 @@ scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.d
 services/api/src/
 ├── index.ts          — Entry point: validates env, initialises blob root, creates app
 ├── app.ts            — App factory: wires middleware, routes, error handler, 404
-├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, AUTH_TOKEN, SESSION_TTL, PORT, NODE_ENV)
+├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, SESSION_SECRET, SETUP_TOKEN, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, WEBAUTHN_ORIGINS, SESSION_TTL, PORT, NODE_ENV)
 ├── exports.ts        — Public workspace exports for @serenique/api (service layer only, no Hono)
 ├── db/
 │   ├── connection.ts — Single Drizzle client + Postgres pool (shared across all modules)
@@ -202,9 +202,15 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 |--------|------|--------|
 | GET | `/health` | Health check |
 | GET | `/` | API info |
-| POST | `/api/auth/login` | Authenticate (exchange the secret for an HttpOnly session cookie) |
+| POST | `/api/auth/register/start` | WebAuthn registration start (`{ setupToken?, userInfo? }`; empty users table = guided bootstrap needing SETUP_TOKEN, users exist = add a device, session required) |
+| POST | `/api/auth/register/finish` | Registration finish (validate attestation → create user/credential → auto-login cookie) |
+| POST | `/api/auth/login/start` | WebAuthn login start (returns challenge + allowCredentials) |
+| POST | `/api/auth/login/finish` | Login finish (validate signature + counter → session cookie) |
 | POST | `/api/auth/logout` | Logout (clears the cookie) |
-| GET | `/api/auth/me` | Query login state |
+| GET | `/api/auth/me` | Auth state + user info (`{ authenticated, user }`) |
+| GET, DELETE | `/api/auth/credentials[/:id]` | Credential list / delete (last credential delete → 409) |
+| GET, PUT | `/api/users/me` | Profile read/update (name/email/birthday, session required) |
+| POST, GET, DELETE | `/api/tokens[/:id]` | API token create (plaintext once) / list (prefix only) / revoke |
 | GET, POST | `/api/diaries` | Diary list / create |
 | GET | `/api/diaries/by-date/:date` | Diary by date (404 if none; registered before `:id`) |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
@@ -233,14 +239,15 @@ Field-naming gotcha: diary uses `content`/`diaryDate`, but moment uses `text`. D
 
 User-facing messages are in Chinese.
 
-### Authentication (Auth)
+### Authentication (Passkey + API tokens)
 
-Single shared-secret authentication: all clients share the high-entropy `AUTH_TOKEN` from the root `.env` (≥32 chars, 48+ recommended). **If missing in production, the API refuses to start** (fail closed); when unset in dev, authentication is skipped entirely (zero friction locally).
+Standard **WebAuthn (Passkey)** auth with manageable API tokens for CLI/scripts (GitHub PAT mode). Single-user design (the deployer), multi-device via multiple passkey credentials.
 
-- **CLI / mobile / scripts:** send the request header `Authorization: Bearer <AUTH_TOKEN>`.
-- **Web (browser):** the `/login` form posts `{ token }` → exchanged for an **HttpOnly signed cookie** (`serenique_session`, stateless HMAC signature, no session table); requests use `credentials:"include"`.
-- **Middleware allowlist:** `/health`, `/`, `/api/auth/login`, `/api/auth/logout`, signed blob file links (`/api/blobs/:id/file?expires=&signature=`).
-- **Rotating the secret invalidates everything:** after changing `.env` and restarting, old session cookies and old Bearer tokens all stop working — there is no session table to clear.
+- **Browser (Web):** `navigator.credentials` ceremony against `/api/auth/register/*` (bootstrap registration requires `SETUP_TOKEN`) and `/api/auth/login/*` → HttpOnly **HMAC-signed cookie** (`serenique_session`, stateless, signed with `SESSION_SECRET`, payload carries `userId`; no session table).
+- **CLI / scripts / mobile:** `Authorization: Bearer <API token>` — tokens created via `POST /api/tokens` (plaintext shown once, only SHA-256 hash stored, `revoked_at` soft-revoke).
+- **env:** `SESSION_SECRET` (cookie signing), `SETUP_TOKEN` (bootstrap registration; removable after first registration), `WEBAUTHN_RP_ID` (RP ID = **front-end domain**, not the API domain; changing it invalidates all passkeys), `WEBAUTHN_RP_NAME`, `WEBAUTHN_ORIGINS` (comma-separated ceremony origin allowlist).
+- **Middleware allowlist:** `/health`, `/`, `/api/auth/register/start|finish`, `/api/auth/login/start|finish`, `/api/auth/logout`, signed blob file links (`/api/blobs/:id/file?expires=&signature=`). Ceremony endpoints still resolve session vars best-effort (add-device flow needs the logged-in userId).
+- **Rotating `SESSION_SECRET` invalidates all session cookies; revoking a token kills that Bearer immediately.**
 - Session cookie defaults to 30 days (`SESSION_TTL`, in seconds). Production cross-origin setups (e.g. pages.dev → api.zeroicey.me) need `CORS_ORIGIN` explicitly set to the web domain — credentialed cross-origin forbids `*`.
 
 ### services/mcp (frozen)
@@ -298,12 +305,15 @@ docker run -p 3000:3000 \
   -e BLOB_ROOT=/data/blobs \
   -e BLOB_MAX_SIZE=104857600 \
   -e BLOB_SIGNING_SECRET=<32+ chars> \
-  -e AUTH_TOKEN=<32+ chars> \
+  -e SESSION_SECRET=<32+ chars> \
+  -e SETUP_TOKEN=<32+ chars> \
+  -e WEBAUTHN_RP_ID=your-web-domain \
+  -e WEBAUTHN_ORIGINS=https://your-web-domain \
   -e CORS_ORIGIN=https://your-web-domain \
   -v /host/path:/data/blobs \
   serenique-api
 ```
 
-The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed to `/data/blobs` inside the container and persisted through a host volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites localhost database hosts to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access-link feature. Auth is optional in dev (skipped when `AUTH_TOKEN` is unset), required in production (fail closed).
+The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed to `/data/blobs` inside the container and persisted through a host volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites localhost database hosts to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access-link feature. Passkey auth is optional in dev (skipped when `WEBAUTHN_RP_ID` is unset), required in production (fail-closed on missing `SESSION_SECRET` / `WEBAUTHN_RP_ID`). `SETUP_TOKEN` is only needed until the first registration completes.
 
 Default values in Dockerfiles: `NODE_ENV=production`, `BLOB_ROOT=/data/blobs`, `BLOB_MAX_SIZE=104857600` (100 MB), API `PORT=3000`, MCP `PORT=3001`, MCP `MCP_TRANSPORT=streamable-http`.

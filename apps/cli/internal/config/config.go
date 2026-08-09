@@ -30,7 +30,10 @@ func SetPath(path string) {
 type Config struct {
 	// BaseURL is the API server address (without trailing slash).
 	BaseURL string `yaml:"baseurl" json:"baseurl"`
-	// Token is the authentication token (reserved — backend auth not implemented yet).
+	// Token is the API token (manageable, GitHub-PAT style) sent as
+	// Authorization: Bearer. It is stored plaintext locally — the file is
+	// chmod 0600 (see Save) so it is never world-readable. Never output it
+	// unmasked (use the cmd package's maskToken).
 	Token string `yaml:"token" json:"token,omitempty"`
 }
 

@@ -329,7 +329,7 @@ func flagJSONRequestedFromData(args []string, d *flagScanData) bool {
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&flagBaseURL, "baseurl", "b", "", "API 服务地址（覆盖配置文件）")
-	rootCmd.PersistentFlags().StringVarP(&flagToken, "token", "t", "", "认证令牌（覆盖配置文件）")
+	rootCmd.PersistentFlags().StringVarP(&flagToken, "token", "t", "", "API 令牌（覆盖配置文件）")
 	rootCmd.PersistentFlags().BoolVarP(&useJSON, "json", "j", false, "以 JSON 格式输出（供 AI 和脚本使用）")
 	rootCmd.PersistentFlags().StringVarP(&flagConfig, "config", "c", "", "配置文件路径（默认 ~/.serenique/config.yaml）")
 
@@ -342,5 +342,6 @@ func init() {
 	rootCmd.AddCommand(eventCmd)
 	rootCmd.AddCommand(tagCmd)
 	rootCmd.AddCommand(authCmd)
+	rootCmd.AddCommand(tokenCmd)
 	rootCmd.AddCommand(auditCmd)
 }

@@ -123,7 +123,7 @@ scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.d
 services/api/src/
 ├── index.ts          — Entry point: validates env, initializes blob root, creates app
 ├── app.ts            — App factory: wires middleware, routes, error handling, 404
-├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, AUTH_TOKEN, SESSION_TTL, PORT, NODE_ENV)
+├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, SESSION_SECRET, SETUP_TOKEN, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, WEBAUTHN_ORIGINS, SESSION_TTL, PORT, NODE_ENV)
 ├── exports.ts        — @serenique/api public workspace exports (service layer only, no Hono)
 ├── db/
 │   ├── connection.ts — Single Drizzle client + Postgres connection pool (shared by all modules)
