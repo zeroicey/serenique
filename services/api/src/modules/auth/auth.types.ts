@@ -146,7 +146,7 @@ export type CredentialEntry = {
   createdAt: string;
 };
 
-/** /api/auth/me 载荷。 */
+/** /api/auth/me 载荷。authenticated:true 时 user 可为 null（令牌身份且尚未注册用户时）。 */
 export type AuthMeEntry =
-  | { authenticated: true; user: UserEntry }
+  | { authenticated: true; user: UserEntry | null }
   | { authenticated: false; user: null };

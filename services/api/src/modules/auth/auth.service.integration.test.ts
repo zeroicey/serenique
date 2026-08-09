@@ -422,6 +422,13 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
     const moments = await app.request("/api/moments", { headers: bearer });
     expect(moments.status).toBe(200);
 
+    // 令牌身份 /auth/me → 200 + authenticated:true（携带单用户资料）
+    const meByBearer = await app.request("/api/auth/me", { headers: bearer });
+    expect(meByBearer.status).toBe(200);
+    const meBody = await meByBearer.json();
+    expect(meBody.data.authenticated).toBe(true);
+    expect(meBody.data.user?.id).toBeTruthy();
+
     // 列表无明文字段
     const listBody = await listByBearer.json();
     expect(listBody.data.items.some((i: { id: string }) => i.id === tokenId)).toBe(true);

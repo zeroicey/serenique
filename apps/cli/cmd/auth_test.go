@@ -277,13 +277,13 @@ func TestAuthMeDisplaysUserInfo(t *testing.T) {
 	})
 }
 
-// TestAuthMeTokenIdentity 验证 Token 身份（200 + authenticated:false +
-// user:null）显示「令牌有效」，不误报未登录。
+// TestAuthMeTokenIdentity 验证 Token 身份（200 + user:null，尚未注册用户资料）
+// 显示「令牌有效」，不误报未登录。
 func TestAuthMeTokenIdentity(t *testing.T) {
 	withTempConfigDir(t)
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"message":"ok","data":{"authenticated":false,"user":null}}`))
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"authenticated":true,"user":null}}`))
 	}, false, func(srv *httptest.Server) {
 		out := captureStdout(t, func() {
 			if err := authMeCmd.RunE(authMeCmd, nil); err != nil {

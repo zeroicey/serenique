@@ -134,14 +134,19 @@ export const authHandler = {
     return Res.ok("已退出登录", { authenticated: false }).build(c);
   },
 
-  /** 会话状态 + 用户信息（认证禁用/未登录 → authenticated:false）。 */
+  /**
+   * 会话状态 + 用户信息。认证禁用/未登录 → authenticated:false；
+   * 令牌身份（已通过中间件认证）→ authenticated:true + 单用户资料（未注册时为 null）。
+   */
   async me(c: Context) {
     try {
-      const { userId } = getAuthVars(c);
-      if (!userId) {
+      const { userId, authSource } = getAuthVars(c);
+      if (!userId && authSource !== "token") {
         return Res.ok("查询成功", { authenticated: false, user: null }).build(c);
       }
-      const user = await authService.getProfile(userId);
+      const user = userId
+        ? await authService.getProfile(userId)
+        : await authService.getFirstUser();
       return Res.ok("查询成功", { authenticated: true, user }).build(c);
     } catch (e) {
       return handleError(e, c, "auth");

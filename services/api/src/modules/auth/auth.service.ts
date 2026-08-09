@@ -445,6 +445,16 @@ export const authService = {
     return toUserEntry(row);
   },
 
+  /** 取唯一用户（单用户系统）；尚未注册时返回 null。令牌身份的 me 用。 */
+  async getFirstUser(): Promise<UserEntry | null> {
+    const [row] = await db
+      .select()
+      .from(users)
+      .orderBy(asc(users.createdAt))
+      .limit(1);
+    return row ? toUserEntry(row) : null;
+  },
+
   async updateProfile(
     userId: string,
     patch: UpdateUserProfileInput,

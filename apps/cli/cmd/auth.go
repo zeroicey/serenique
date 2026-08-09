@@ -150,8 +150,9 @@ var authMeCmd = &cobra.Command{
 	Short: "验证认证状态",
 	Long: `调用 GET /api/auth/me 验证当前 API Token 并显示用户信息。
 
-注意：API Token 身份不携带用户资料（服务端对有效令牌返回 authenticated:false +
-user:null，仅会话 Cookie 携带用户信息）；完整用户资料需浏览器会话可见。
+注意：令牌身份返回单用户资料（服务端对有效令牌返回 authenticated:true +
+user:单用户行；尚未注册用户时 user 为 null）。完整用户资料亦可在浏览器会话
+（Web 设置页）查看。
 
 示例:
   serenique auth me
@@ -183,9 +184,9 @@ user:null，仅会话 Cookie 携带用户信息）；完整用户资料需浏览
 			return nil
 		}
 		if apiClient.Token != "" {
-			// HTTP 200 且令牌身份：鉴权通过，但服务端不返回用户信息。
+			// HTTP 200 且令牌身份：鉴权通过，但服务端暂无用户资料。
 			printer.PrintKeyValue(map[string]string{
-				"认证状态": "令牌有效（API Token 身份不返回用户信息）",
+				"认证状态": "令牌有效（用户资料未设置）",
 			})
 			return nil
 		}
