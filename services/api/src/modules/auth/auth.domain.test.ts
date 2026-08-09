@@ -211,4 +211,9 @@ describe("cookie builders", () => {
     expect(lax).toContain("SameSite=Lax");
     expect(lax).not.toContain("Secure");
   });
+
+  test("跨站模式带 Partitioned（CHIPS，移动端第三方 cookie 拦截兼容），同源模式不带", () => {
+    expect(clearSessionCookie(true, true)).toContain("Partitioned");
+    expect(clearSessionCookie(false, false)).not.toContain("Partitioned");
+  });
 });

@@ -66,8 +66,11 @@ export function verifySessionCookie(
 }
 
 /**
- * Build a Set-Cookie header. crossSite=true 用于生产（pages.dev → api.zeroicey.me）
- * 需 SameSite=None；dev 走 Vite 代理（同源）用 SameSite=Lax 即可在 http 下生效。
+ * Build a Set-Cookie header. crossSite=true 用于生产（serenique.0icey.icu →
+ * api.hcyj.xyz）：SameSite=None + Secure 之外再加 **Partitioned**（CHIPS）——
+ * 移动端 Safari/Chrome 默认拦截跨站第三方 cookie，Partitioned 让 cookie 按
+ * 顶层站点（serenique.0icey.icu）分区存储，仅同顶层站点的请求携带，安全语义
+ * 恰好符合单用户私有部署。dev 走 Vite 代理（同源）用 SameSite=Lax。
  * secure=false 用于 dev（http），生产必须 true（https）。
  */
 export function buildSessionCookie(
@@ -84,6 +87,7 @@ export function buildSessionCookie(
     `Max-Age=${maxAgeSeconds}`,
   ];
   if (secure) parts.push("Secure");
+  if (crossSite) parts.push("Partitioned");
   return parts.join("; ");
 }
 
