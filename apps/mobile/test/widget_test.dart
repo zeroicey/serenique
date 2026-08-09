@@ -8,7 +8,10 @@ import 'helpers.dart';
 void main() {
   testWidgets('App 冒烟测试：未登录落在登录页', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [tokenStorageProvider.overrideWithValue(FakeTokenStorage())],
+      overrides: [
+        tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
+        registerGateProvider.overrideWith((ref) async => RegisterGateStatus.ready),
+      ],
       child: const App(),
     ));
     await tester.pumpAndSettle();

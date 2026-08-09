@@ -22,7 +22,7 @@
 | ③ | 登录页 | **门禁探测**（镜像 Web）：无参调 `register/start` → 403 = 引导期（显示首次设置提示 + 前端 `/setup` URL 指引）；401 = 已有凭证（通行密钥登录按钮）；网络/500 = 登录 + 错误提示 |
 | ④ | 首次注册 | **严格按需求 (b)**：移动端不提供 SETUP_TOKEN 输入，首个 passkey 走浏览器 `/setup`；移动端只做提示引导 |
 | ⑤ | 设置页 | 三 tab 镜像 Web：个人信息 / 登录凭证（列表+删除+添加设备+重命名）/ API 令牌（列表+创建+撤销，明文仅一次） |
-| ⑥ | Origin 头 | 移动端 finish 请求必须带 `Origin` header（见 §3.2）：iOS = `https://<RP_ID>`；Android = `android:apk-key-hash:<指纹>` |
+| ⑥ | Origin 头 | **v1 不带 Origin header**：服务端 `resolveExpectedOrigin` 无 Origin 时默认 `WEBAUTHN_ORIGINS[0]`——生产 `[0] = https://<RP_ID>` 恰等于 iOS 原生 clientDataJSON origin（`https://<RPID>`），天然匹配；dev 联调服务端配 `WEBAUTHN_ORIGINS=https://localhost` 即可。**Android phase 必须带 `Origin: android:apk-key-hash:<指纹>` + 白名单**（Android origin 非 URL，无法靠默认值命中） |
 | ⑦ | 401 登出 | 沿用现有 `onUnauthorized` → 清本地 session → 跳登录页 |
 | ⑧ | 登出 | 仅清本地 + 调 `POST /api/auth/logout`（best-effort）；服务端 cookie 无状态，本地清除即生效 |
 | ⑨ | 错误翻译 | 镜像 Web `webauthn.ts`：NotAllowedError →「已取消或没有可用的通行密钥」等中文；ApiError 透传 |
@@ -43,8 +43,8 @@ passkey 按 RP ID 存于 iCloud Keychain / Google Password Manager，App 与浏�
 
 服务端 origin 校验（`auth.handler.ts`）：finish 请求带 `Origin` header 且 ∈ `WEBAUTHN_ORIGINS` → 作为 `expectedOrigin` 传给 simplewebauthn；不带 → 默认 `WEBAUTHN_ORIGINS[0]`。移动端 clientDataJSON 里的 origin 必须命中：
 
-- **iOS 原生**：origin = `https://<RP_ID>`（与 Web 相同）→ 现有 `WEBAUTHN_ORIGINS` 无需改；移动端显式带 `Origin: https://<RP_ID>` 即可
-- **Android 原生**：origin = `android:apk-key-hash:<base64url(SHA-256 签名指纹)>`（非 URL）→ **必须**追加到 `WEBAUTHN_ORIGINS`（debug 包用 debug 指纹，release 用 release 指纹，各一条），移动端 finish 请求带同串 `Origin` header
+- **iOS 原生**：origin = `https://<RP_ID>`（与 Web 相同）→ 生产 `WEBAUTHN_ORIGINS[0] = https://<RP_ID>` 天然匹配，**移动端无需带 Origin header**；dev 联调服务端配 `WEBAUTHN_RP_ID=localhost` + `WEBAUTHN_ORIGINS=https://localhost`
+- **Android 原生**：origin = `android:apk-key-hash:<base64url(SHA-256 签名指纹)>`（非 URL）→ **必须**追加到 `WEBAUTHN_ORIGINS`（debug 包用 debug 指纹，release 用 release 指纹，各一条），且移动端 finish 请求带同串 `Origin` header（Android phase）
 
 ```sh
 # .env 示例（生产）
@@ -78,9 +78,9 @@ dependencies:
 
 ```
 登录页「使用通行密钥登录」
-  → POST /api/auth/login/start                    （无 body）
+  → POST /api/auth/login/start                    （无 body，不带 Origin header）
   → PasskeyAuthenticator.authenticate(AuthenticateRequestType.fromJsonString(jsonEncode(start.options), mediation: optional, preferImmediatelyAvailableCredentials: false))
-  → POST /api/auth/login/finish  body { challengeId, credential }   ← 带 Origin header
+  → POST /api/auth/login/finish  body { challengeId, credential }
   → 200：捕获 Set-Cookie 的 serenique_session → 存 Keychain → auth state 更新 → 跳 /moments
 ```
 
@@ -103,9 +103,9 @@ dependencies:
 ### 5.3 添加设备（已登录，设置 → 登录凭证 → 添加）
 
 ```
-→ POST /api/auth/register/start   body { }（会话 cookie 自动带上）
+→ POST /api/auth/register/start   body { }（会话 cookie 自动带上，不带 Origin header）
 → PasskeyAuthenticator.register(RegisterRequestType.fromJsonString(jsonEncode(start.options)))
-→ POST /api/auth/register/finish  body { challengeId, deviceLabel?, credential }  ← 带 Origin header
+→ POST /api/auth/register/finish  body { challengeId, deviceLabel?, credential }
 → 200「登录凭证添加成功」→ 刷新凭证列表
 ```
 
