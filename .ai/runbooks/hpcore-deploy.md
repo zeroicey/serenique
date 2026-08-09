@@ -6,7 +6,7 @@
 
 - 镜像已由 GitHub Actions 构建并推送（main push → `:main`；tag → `latest`）
 - 生产 .env 在 `/srv/compose/serenique/.env`（0600），**改动前先 `cp .env .env.bak.<时间戳>`**
-- secrets（DB 密码、`BLOB_SIGNING_SECRET`、`AUTH_TOKEN`）只在服务器 .env，**绝不写进 git / worklog / 日志**
+- secrets（DB 密码、`BLOB_SIGNING_SECRET`、`SESSION_SECRET`、`SETUP_TOKEN`）只在服务器 .env，**绝不写进 git / worklog / 日志**（`AUTH_TOKEN` 已随 v0.5.0 退役，见下）
 
 ## 更新镜像（正常流程）
 
@@ -36,6 +36,22 @@ docker compose up -d --force-recreate api
 - 生产是 **linux/amd64**。本机是 arm64 Mac，`docker build` 默认产出 arm64 镜像，直接 scp/load 会 `Restarting (255)` 崩溃循环。
 - 正确姿势：走 GitHub Actions 构建（多架构），服务器 `docker pull zeroicey/serenique-api:main` 后 tag 成 `latest`。
 - 手动构建必须 `docker build --platform linux/amd64`。
+
+## Passkey 环境变量（v0.5.0 起）
+
+生产 .env 的认证相关键（**首次配置后不可随意改**，除 SETUP_TOKEN）：
+
+| 键 | 生成方式 | 语义 / 坑 |
+|----|----------|-----------|
+| `SESSION_SECRET` | `openssl rand -hex 32` | cookie 签名密钥。**改了 = 所有会话立即失效**（旧 cookie 验签失败），密钥轮换即全员下线 |
+| `SETUP_TOKEN` | `openssl rand -hex 24` | 引导注册门禁（users 表为空时注册必须携带）。**首次注册完成后可从 .env 移除**，之后注册靠登录态加设备 |
+| `WEBAUTHN_RP_ID` | `serenique.0icey.icu`（固定） | **RP ID = 前端域名（serenique.0icey.icu），不是 API 域名**。⚠️ 换前端域名 = 全部 passkey 永久失效（iCloud/Google 按 RP ID 存凭证） |
+| `WEBAUTHN_RP_NAME` | `Serenique` | 仅展示用 |
+| `WEBAUTHN_ORIGINS` | `https://serenique.0icey.icu` | ceremony origin 白名单（逗号分隔）。移动端 phase 需扩展 Android `android:apk-key-hash:<指纹>` |
+
+- 生产 fail-closed：缺 `SESSION_SECRET` 或 `WEBAUTHN_RP_ID` → 容器拒绝启动（app.ts）。
+- `AUTH_TOKEN` 已退役（v0.5.0 迁移时从 .env 删除）；旧客户端 401。
+- 数据库迁移 `0014_rapid_stone_men`（users / passkey_credentials / api_tokens 三表）已于 2026-08-09 应用到生产（drizzle 记录 id=15，hash 450a3cdd…）。
 
 ## 回滚
 
