@@ -30,6 +30,12 @@ import {
 //     （registry 本来就保证同会话进程内单实例）。
 //  3. Bun 对 unhandled rejection 默认崩溃进程 —— handleMessage 必须全局
 //     try/catch，任何分支异常转 error 消息，绝不让 rejection 逃逸。
+//
+// 会话生命周期（评审确认）：同会话可被多个连接同时持有（需求 4.2.1），
+// 用跨连接引用计数（sessionRefCount）决定何时真正释放实例 —— 只有最后一
+// 个连接离开才 releaseSession（dispose 会 abort 在途 turn + 断开事件订阅，
+// 提前释放会让另一标签页静默失明）。删除是用户显式操作，例外：无条件
+// releaseSession + 清 refCount。
 // ---------------------------------------------------------------------------
 
 /**
@@ -69,6 +75,50 @@ function getConn(ws: WSContext): Conn | undefined {
   return ws.raw ? connections.get(ws.raw) : undefined;
 }
 
+// ---- 会话跨连接引用计数 -----------------------------------------------
+// 同一会话可被多个连接同时持有；实例（AgentSession）在进程内唯一（registry），
+// dispose 会 abort 在途 turn / 断开事件订阅 / 停止持久化 —— 只有最后一个
+// 连接放弃时才能 releaseSession。删除例外：用户显式删除无条件释放。
+const sessionRefCount = new Map<string, number>();
+
+function acquireSession(id: string) {
+  sessionRefCount.set(id, (sessionRefCount.get(id) ?? 0) + 1);
+}
+
+/** 连接放弃当前会话：退订、置空 conn 引用；仅最后一个连接离开才释放实例。 */
+function releaseConnectionSession(conn: Conn) {
+  const id = conn.sessionId;
+  if (!id) return;
+  conn.unsubscribe?.();
+  conn.unsubscribe = undefined;
+  conn.session = undefined;
+  conn.sessionId = undefined;
+  const count = (sessionRefCount.get(id) ?? 1) - 1;
+  if (count <= 0) {
+    sessionRefCount.delete(id);
+    aiService.releaseSession(id); // 最后一个连接离开 → 释放实例
+  } else {
+    sessionRefCount.set(id, count);
+  }
+}
+
+/**
+ * 无条件放弃会话（删除语义）：即使其它连接仍持有也释放实例并清 refCount。
+ * 已落盘删除时 deleteSession 内部已 releaseSession（此处幂等），未落盘删除
+ * 时由这里补上。返回后 conn 不再指向该会话（F2：createNewSession 失败时
+ * conn 也不悬空）。
+ */
+function dropConnectionSession(conn: Conn, deletedId: string) {
+  sessionRefCount.delete(deletedId);
+  if (conn.sessionId === deletedId) {
+    conn.unsubscribe?.();
+    conn.unsubscribe = undefined;
+    conn.session = undefined;
+    conn.sessionId = undefined;
+  }
+  aiService.releaseSession(deletedId);
+}
+
 function safeSend(ws: WSContext, json: string) {
   try {
     if (ws.readyState === 1) ws.send(json);
@@ -77,7 +127,7 @@ function safeSend(ws: WSContext, json: string) {
   }
 }
 
-/** 切换到新会话：退订旧事件流、登记新订阅与实例、更新 conn 指向。 */
+/** 切换到新会话：退订旧事件流、登记新订阅与实例、更新 conn 指向、引用 +1。 */
 function attachSession(
   conn: Conn,
   ws: WSContext,
@@ -88,6 +138,15 @@ function attachSession(
   conn.sessionId = sessionId;
   conn.session = session;
   conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session);
+  acquireSession(sessionId);
+}
+
+/** 删除当前会话后的收尾：无条件释放 + 重置 conn + 建新会话（失败时 conn 已重置）。 */
+async function resetAfterDelete(conn: Conn, ws: WSContext, deletedId: string) {
+  dropConnectionSession(conn, deletedId);
+  const { sm, session } = await aiService.createNewSession();
+  attachSession(conn, ws, sm.getSessionId(), session);
+  return { sm, session };
 }
 
 /** session_switched 的应答构造（切换/新建/删除当前会话后共用）。 */
@@ -119,6 +178,7 @@ export function createAiWebSocket(
           conn.sessionId = sm.getSessionId();
           conn.session = session;
           conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session);
+          acquireSession(conn.sessionId);
           safeSend(
             ws,
             JSON.stringify({
@@ -144,8 +204,7 @@ export function createAiWebSocket(
       },
       onClose(_evt, ws) {
         const conn = getConn(ws);
-        if (conn?.unsubscribe) conn.unsubscribe();
-        if (conn?.sessionId) aiService.releaseSession(conn.sessionId);
+        if (conn) releaseConnectionSession(conn);
         if (ws.raw) connections.delete(ws.raw);
       },
     };
@@ -175,6 +234,8 @@ async function handleMessage(ws: WSContext, raw: string) {
           session = opened.session;
           conn.sessionId = opened.sm.getSessionId();
           conn.session = session;
+          conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session);
+          acquireSession(conn.sessionId);
         }
         const p =
           msg.type === "prompt"
@@ -197,9 +258,8 @@ async function handleMessage(ws: WSContext, raw: string) {
       }
       case "new_session": {
         const { sm, session } = await aiService.createNewSession();
-        // 释放旧会话（异步 dispose，无需 await；registry 条目先移除，
-        // 避免旧会话残留已 dispose 实例被后续复用）
-        if (conn.sessionId) aiService.releaseSession(conn.sessionId);
+        // 放弃旧会话（引用 -1；仅本连接是最后一个持有者时才释放实例）
+        releaseConnectionSession(conn);
         attachSession(conn, ws, sm.getSessionId(), session);
         safeSend(ws, sessionPayload(sm.getSessionId(), session));
         const sessions = await aiService.listSessions();
@@ -220,22 +280,21 @@ async function handleMessage(ws: WSContext, raw: string) {
           );
         }
         const { sm, session } = await aiService.openSession(path);
-        if (conn.sessionId) aiService.releaseSession(conn.sessionId);
+        releaseConnectionSession(conn); // 放弃旧会话（引用 -1）
         attachSession(conn, ws, sm.getSessionId(), session);
         safeSend(ws, sessionPayload(sm.getSessionId(), session));
         break;
       }
       case "delete_session": {
         // 删除「当前会话」且未落盘（新建未对话，磁盘无文件）：findSessionPath
-        // 找不到 → deleteSession 必抛 404，该会话永远删不掉。走「释放实例 +
-        // 建新会话」，不报 404。
+        // 找不到 → deleteSession 必抛 404，该会话永远删不掉。走「无条件释放
+        // + 建新会话」，不报 404。
         if (msg.sessionId === conn.sessionId) {
           const path = await aiService.findSessionPath(msg.sessionId);
           if (!path) {
-            conn.unsubscribe?.();
-            if (conn.sessionId) aiService.releaseSession(conn.sessionId);
-            const { sm, session } = await aiService.createNewSession();
-            attachSession(conn, ws, sm.getSessionId(), session);
+            // F2：resetAfterDelete 先重置 conn 再建新会话 —— createNewSession
+            // 失败（如凭据失效）时 conn 不悬空，下次 prompt 走兜底重开
+            const { sm, session } = await resetAfterDelete(conn, ws, msg.sessionId);
             safeSend(ws, JSON.stringify({ type: "session_deleted", sessionId: msg.sessionId }));
             safeSend(ws, sessionPayload(sm.getSessionId(), session));
             const sessions = await aiService.listSessions();
@@ -244,11 +303,12 @@ async function handleMessage(ws: WSContext, raw: string) {
           }
           // 已落盘 → 落入下方通用删除流程
         }
+        // 删除例外（用户显式操作）：无条件释放实例（deleteSession 内部
+        // releaseSession + unlink），即使其它连接仍持有该会话。
         await aiService.deleteSession(msg.sessionId);
         safeSend(ws, JSON.stringify({ type: "session_deleted", sessionId: msg.sessionId }));
         if (conn.sessionId === msg.sessionId) {
-          const { sm, session } = await aiService.createNewSession();
-          attachSession(conn, ws, sm.getSessionId(), session);
+          const { sm, session } = await resetAfterDelete(conn, ws, msg.sessionId);
           safeSend(ws, sessionPayload(sm.getSessionId(), session));
         }
         const sessions = await aiService.listSessions();

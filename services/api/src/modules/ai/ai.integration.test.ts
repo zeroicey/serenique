@@ -134,13 +134,14 @@ describe.skipIf(!RUN_DB_TESTS)("ai.integration", () => {
       //    toolResult 回填 → 第二轮 faux 返回最终文本，回合结束。
       await session.prompt("帮我创建一个任务：写周报，截止明天");
 
-      // 5. 断言：真实 taskService 落库
+      // 5. 断言：真实 taskService 落库。
+      //    先登记 id 再断言：dueDate 断言失败时 afterAll 也能清理该任务。
       const taskService = (await import("@/modules/task/task.service")).taskService;
       const tasks = await taskService.listTasks({ page: 1, pageSize: 50 });
       const created = tasks.items.find((t) => t.title === TOOL_CALL_TITLE);
+      if (created) createdTaskIds.push(created.id);
       expect(created).toBeDefined();
       expect(created?.dueDate).toBe(TOOL_CALL_DUE_DATE);
-      if (created) createdTaskIds.push(created.id);
     } finally {
       session.dispose();
     }
