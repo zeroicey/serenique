@@ -42,4 +42,15 @@ describe('MessageList', () => {
     await user.click(toggle)
     expect(screen.getByText('用户要建任务')).toBeTruthy()
   })
+
+  test('助手消息经 Streamdown 渲染 Markdown（加粗）', () => {
+    useAiStore.setState({
+      messages: [{ role: 'assistant', text: '这是**加粗**文本', thinking: '', toolCalls: [] }],
+      activeTurn: null,
+    })
+    const { container } = render(<MessageList />)
+    // Streamdown 将 strong 渲染为 <span data-streamdown="strong">，而非 <strong> 标签
+    const strong = container.querySelector('[data-streamdown="strong"]')
+    expect(strong?.textContent).toBe('加粗')
+  })
 })

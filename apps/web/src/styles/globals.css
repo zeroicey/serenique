@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* streamdown（AI 消息 Markdown 渲染）：bun 未 hoist 到根 node_modules，
+   包位于 apps/web/node_modules/streamdown（symlink 指向根 .bun store），
+   相对本文件（src/styles/）向上 2 层即 apps/web/node_modules。 */
+@source "../../node_modules/streamdown/dist/*.js";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

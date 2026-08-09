@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react'
+import { Streamdown } from 'streamdown'
+import 'streamdown/styles.css'
 import { useAiStore } from '@/features/ai/store/ai-store'
 import { ThinkingBlock } from './thinking-block'
 import { ToolCard } from './tool-card'
@@ -22,7 +24,10 @@ export function MessageList() {
         ) : (
           <div key={i} className="flex flex-col gap-1">
             <ThinkingBlock text={m.thinking} />
-            <div className="max-w-[78%] rounded-lg border border-border bg-card px-3.5 py-2.5 whitespace-pre-wrap break-words">{m.text}</div>
+            <div className="max-w-[78%] break-words rounded-lg border border-border bg-card px-3.5 py-2.5">
+              {/* 历史消息已完整：静态渲染，不动画 */}
+              <Streamdown isAnimating={false}>{m.text}</Streamdown>
+            </div>
             {m.toolCalls.map((tc) => <ToolCard key={tc.id} card={{ ...tc, running: false }} />)}
           </div>
         ),
