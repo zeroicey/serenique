@@ -1,0 +1,34 @@
+import { useEffect, useRef } from 'react'
+import { useAiStore } from '@/features/ai/store/ai-store'
+import { ThinkingBlock } from './thinking-block'
+import { ToolCard } from './tool-card'
+import { TurnView } from './turn-view'
+
+export function MessageList() {
+  const messages = useAiStore((s) => s.messages)
+  const activeTurn = useAiStore((s) => s.activeTurn)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // 可选调用：jsdom 未实现 scrollIntoView，避免测试环境抛错；浏览器中正常滚动到底部。
+    bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' })
+  }, [messages, activeTurn?.text])
+
+  return (
+    <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+      {messages.map((m, i) =>
+        m.role === 'user' ? (
+          <div key={i} className="self-end max-w-[78%] rounded-lg bg-primary/10 px-3.5 py-2.5 whitespace-pre-wrap break-words">{m.text}</div>
+        ) : (
+          <div key={i} className="flex flex-col gap-1">
+            <ThinkingBlock text={m.thinking} />
+            <div className="max-w-[78%] rounded-lg border border-border bg-card px-3.5 py-2.5 whitespace-pre-wrap break-words">{m.text}</div>
+            {m.toolCalls.map((tc) => <ToolCard key={tc.id} card={{ ...tc, running: false }} />)}
+          </div>
+        ),
+      )}
+      {activeTurn && <TurnView turn={activeTurn} />}
+      <div ref={bottomRef} />
+    </div>
+  )
+}
