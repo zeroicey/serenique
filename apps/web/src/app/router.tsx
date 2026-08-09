@@ -73,7 +73,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'settings',
-            element: lazyPage(() => import('@/app/pages/placeholder-module-page')),
+            element: lazyPage(() => import('@/features/settings/pages/settings-page')),
             handle: { nav: <ModuleTitleNav title="设置" /> },
           },
           { path: '*', element: lazyPage(() => import('@/app/pages/not-found-page')) },
