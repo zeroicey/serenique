@@ -17,7 +17,7 @@ class FakeSocket {
 
 beforeEach(() => {
   FakeSocket.instances = []
-  useAiStore.setState({ status: 'offline', busy: false, currentSessionId: null, messages: [], sessions: [], activeTurn: null })
+  useAiStore.setState({ status: 'offline', busy: false, currentSessionId: null, messages: [], sessions: [], activeTurn: null, lastError: null })
 })
 
 describe('ai-store', () => {
@@ -51,5 +51,57 @@ describe('ai-store', () => {
     ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '你' } })
     ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '好' } })
     expect(useAiStore.getState().activeTurn?.text).toBe('你好')
+  })
+
+  test('turn_end 归并当前轮到 messages 并重置 activeTurn', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    ws.emit({ type: 'turn_start' })
+    ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '第一轮' } })
+    ws.emit({ type: 'turn_end' })
+    const { activeTurn, messages } = useAiStore.getState()
+    expect(activeTurn).toBeNull()
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({ role: 'assistant', text: '第一轮', thinking: '' })
+  })
+
+  test('error 事件设置 lastError 并解除 busy；agent_end 清 lastError', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    useAiStore.setState({ busy: true })
+    ws.emit({ type: 'error', message: '模型超时' })
+    expect(useAiStore.getState().busy).toBe(false)
+    expect(useAiStore.getState().lastError).toBe('模型超时')
+    useAiStore.setState({ busy: true, activeTurn: null })
+    ws.emit({ type: 'agent_end' })
+    expect(useAiStore.getState().lastError).toBeNull()
+  })
+
+  test('多轮归并：turn_end 保留首轮工具卡，agent_end 兜底收尾', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    ws.emit({ type: 'agent_start' })
+    ws.emit({ type: 'turn_start' })
+    ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '分析' } })
+    ws.emit({ type: 'tool_execution_start', toolCallId: 't1', toolName: 'readDiary', args: { date: '2026-08-09' } })
+    ws.emit({ type: 'tool_execution_end', toolCallId: 't1', toolName: 'readDiary', result: '日记内容', isError: false })
+    ws.emit({ type: 'turn_end' })
+    ws.emit({ type: 'turn_start' })
+    ws.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '最终答案' } })
+    ws.emit({ type: 'agent_end' })
+    const { messages, activeTurn, busy } = useAiStore.getState()
+    expect(messages).toHaveLength(2)
+    // 第一轮：思考 + 工具卡（含结果）
+    expect(messages[0]).toMatchObject({ role: 'assistant', text: '', thinking: '分析' })
+    expect(messages[0].toolCalls).toHaveLength(1)
+    expect(messages[0].toolCalls[0]).toMatchObject({ id: 't1', name: 'readDiary', result: '日记内容', isError: false })
+    expect(messages[0].toolCalls[0].args).toEqual({ date: '2026-08-09' })
+    // 第二轮：最终文本
+    expect(messages[1]).toMatchObject({ role: 'assistant', text: '最终答案', thinking: '', toolCalls: [] })
+    expect(activeTurn).toBeNull()
+    expect(busy).toBe(false)
   })
 })

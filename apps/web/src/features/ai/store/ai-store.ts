@@ -34,6 +34,8 @@ let wsFactory: WsFactory | null = null
 interface AiState {
   status: 'connecting' | 'online' | 'offline'
   busy: boolean
+  /** 最近一次错误信息（error 事件或 action 异常）；组件监听展示 toast，正常 agent_end 时清空。 */
+  lastError: string | null
   currentSessionId: string | null
   model: string
   sessions: SessionItem[]
@@ -52,10 +54,15 @@ interface AiState {
 let ws: WebSocket | null = null
 let turnSeq = 0
 
+// 浏览器规范：未 OPEN 时 send 抛 InvalidStateError；字面量 1 而非 WebSocket.OPEN，
+// 避免 jsdom（vitest 环境）无 WebSocket 全局时 ReferenceError。
 function sendMsg(msg: ClientMessage) {
-  ws?.send(JSON.stringify(msg))
+  if (!ws || ws.readyState !== 1) return
+  ws.send(JSON.stringify(msg))
 }
 
+// 归并当前轮：非空（有文本/思考/工具卡）追加到 messages；无论空否都重置 activeTurn。
+// turn_end（每轮必发）为主路径，agent_end 为兜底。
 function pushAssistantTurn() {
   const { activeTurn } = useAiStore.getState()
   if (!activeTurn) return
@@ -65,13 +72,16 @@ function pushAssistantTurn() {
     thinking: activeTurn.thinking,
     toolCalls: [...activeTurn.toolCards.values()].map(({ running, ...rest }) => rest),
   }
-  if (!m.text && !m.thinking && m.toolCalls.length === 0) return
-  useAiStore.setState((s) => ({ messages: [...s.messages, m], activeTurn: null }))
+  useAiStore.setState((s) => ({
+    messages: m.text || m.thinking || m.toolCalls.length > 0 ? [...s.messages, m] : s.messages,
+    activeTurn: null,
+  }))
 }
 
 export const useAiStore = create<AiState>((set, get) => ({
   status: 'offline',
   busy: false,
+  lastError: null,
   currentSessionId: null,
   model: '',
   sessions: [],
@@ -84,9 +94,14 @@ export const useAiStore = create<AiState>((set, get) => ({
     // 幂等：非 offline（连接中/在线）不重建连接。基于 status 而非模块级 ws 判断，
     // 保证每次 offline 后 connect 都得到全新连接（onclose 清空 ws 后重连也自然成立）。
     if (get().status !== 'offline') return
-    set({ status: 'connecting' })
+    set({ status: 'connecting', lastError: null })
     const factory = wsFactory ?? ((url: string) => new WebSocket(url))
-    ws = factory(apiWsUrl())
+    try {
+      ws = factory(apiWsUrl())
+    } catch (err) {
+      set({ status: 'offline', lastError: err instanceof Error ? err.message : String(err) })
+      return
+    }
     ws.onopen = () => set({ status: 'online' })
     ws.onmessage = (e) => {
       let ev: ServerMessage
@@ -94,7 +109,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       switch (ev.type) {
         case 'session_ready':
         case 'session_switched': {
-          set({ currentSessionId: ev.sessionId, model: ev.model, messages: ev.messages as RenderMessage[], busy: false, activeTurn: null })
+          set({ currentSessionId: ev.sessionId, model: ev.model, messages: ev.messages as RenderMessage[], busy: false, activeTurn: null, lastError: null })
           get().refreshSessions()
           break
         }
@@ -105,18 +120,20 @@ export const useAiStore = create<AiState>((set, get) => ({
           get().refreshSessions()
           break
         case 'error':
-          set({ busy: false })
-          // 错误展示由组件监听（可在 store 加 lastError 字段，组件 toast）
+          set({ busy: false, lastError: ev.message })
           break
         case 'agent_start':
           set({ busy: true })
           break
         case 'agent_end':
-          set({ busy: false })
+          set({ busy: false, lastError: null })
           pushAssistantTurn()
           break
         case 'turn_start':
           set({ activeTurn: { id: ++turnSeq, thinking: '', text: '', toolCards: new Map() } })
+          break
+        case 'turn_end':
+          pushAssistantTurn()
           break
         case 'message_update': {
           const a = ev.assistantMessageEvent
@@ -132,8 +149,9 @@ export const useAiStore = create<AiState>((set, get) => ({
         case 'tool_execution_start':
           set((s) => {
             const t = s.activeTurn ?? { id: ++turnSeq, thinking: '', text: '', toolCards: new Map() }
-            t.toolCards.set(ev.toolCallId, { id: ev.toolCallId, name: ev.toolName, args: ev.args, result: '', isError: false, running: true })
-            return { activeTurn: { ...t } }
+            const cards = new Map(t.toolCards)
+            cards.set(ev.toolCallId, { id: ev.toolCallId, name: ev.toolName, args: ev.args, result: '', isError: false, running: true })
+            return { activeTurn: { ...t, toolCards: cards } }
           })
           break
         case 'tool_execution_update':
@@ -141,8 +159,9 @@ export const useAiStore = create<AiState>((set, get) => ({
             const t = s.activeTurn
             const card = t?.toolCards.get(ev.toolCallId)
             if (!t || !card) return s
-            card.result += ev.partialResult
-            return { activeTurn: { ...t } }
+            const cards = new Map(t.toolCards)
+            cards.set(ev.toolCallId, { ...card, result: card.result + ev.partialResult })
+            return { activeTurn: { ...t, toolCards: cards } }
           })
           break
         case 'tool_execution_end':
@@ -150,10 +169,14 @@ export const useAiStore = create<AiState>((set, get) => ({
             const t = s.activeTurn
             const card = t?.toolCards.get(ev.toolCallId)
             if (!t || !card) return s
-            card.result = (card.result ? card.result + '\n' : '') + ev.result
-            card.isError = ev.isError
-            card.running = false
-            return { activeTurn: { ...t } }
+            const cards = new Map(t.toolCards)
+            cards.set(ev.toolCallId, {
+              ...card,
+              result: (card.result ? card.result + '\n' : '') + ev.result,
+              isError: ev.isError,
+              running: false,
+            })
+            return { activeTurn: { ...t, toolCards: cards } }
           })
           break
       }
