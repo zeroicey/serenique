@@ -57,10 +57,10 @@ const router = createBrowserRouter([
             element: lazyPage(() => import('@/features/audit/pages/audit-page')),
             handle: { nav: <AuditNav /> },
           },
-          // 占位模块（开发中）：宁序 / 习惯 / 素材库 / 设置。
+          // 宁序（AI 助手）已接入真实页面；习惯 / 素材库仍为占位模块（开发中）。
           {
             path: 'ai',
-            element: lazyPage(() => import('@/app/pages/placeholder-module-page')),
+            element: lazyPage(() => import('@/features/ai/pages/ai-page')),
             handle: { nav: <ModuleTitleNav title="宁序" /> },
           },
           {

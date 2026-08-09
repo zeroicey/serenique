@@ -11,9 +11,12 @@ export default defineConfig({
     },
   },
   server: {
-    // dev 下把 /api 代理到 API 服务，避免 CORS。
+    // dev 下把 /api 代理到 API 服务，避免 CORS；ws: true 支持 /api/ai/ws WebSocket。
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': {
+        target: 'http://localhost:3000',
+        ws: true,
+      },
     },
   },
   test: {
