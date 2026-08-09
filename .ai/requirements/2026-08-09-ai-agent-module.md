@@ -31,7 +31,7 @@
 - **会话管理**：`SessionManager` 文件持久化（jsonl）、`continueRecent/open/create/list`、会话树、自动恢复历史 —— 会话管理功能免费获得。
 - **系统提示词**：`DefaultResourceLoader({ systemPromptOverride, appendSystemPromptOverride })` 完全接管。⚠️ `systemPromptOverride` **必须返回真实提示词字符串**（返回 undefined 会回退到默认编程助手提示词）；自定义提示词时 SDK 不再注入默认 "Available tools" 段，需自行说明业务工具用法（工具 schema 仍通过 LLM function-calling 传入）。
 - **隔离与安全**：`SettingsManager.inMemory()` + `noExtensions/noSkills/noPromptTemplates/noThemes/noContextFiles` 切断全局 `~/.pi/agent` 资源加载（防 pi-mcp-adapter 等泄漏）。⚠️ **禁用内置工具的正确写法**：`excludeTools: ["bash","read","edit","write","grep","find","ls"]`（7 个内置全列）或 `noTools: "builtin"`——**不能用 `tools: []`**（空数组 = 空 Set 非 undefined，会把 customTools 业务工具也一并过滤掉，agent 将无工具可用）。agent 只能调用我们注册的业务工具 → **容器内无逃逸路径**。
-- **模型凭据**：`ModelRuntime.create()` 读 `auth.json` 或环境变量（pi-ai 内置 deepseek provider，`DEEPSEEK_API_KEY` 支持 env 认证，走 api.deepseek.com）—— Docker 部署用 env 注入即可；`PI_MODEL="provider/modelId"` 可覆盖模型选择。⚠️ **默认 pin 必须写全 `deepseek/deepseek-v4-flash`**（原型默认 `opencode-go/deepseek-v4-flash` 读的是 `OPENCODE_API_KEY`、走 opencode.ai 网关，凭据错配则模型不可用，不得照抄）。
+- **模型凭据**：`ModelRuntime.create()` 读 `auth.json` 或环境变量（pi-ai 内置 opencode-go provider，`OPENCODE_API_KEY` 支持 env 认证，走 opencode.ai 网关）—— Docker 部署用 env 注入即可；`PI_MODEL="provider/modelId"` 可覆盖模型选择。**默认 pin 为 `opencode-go/deepseek-v4-flash`**（走 opencode 网关，凭据 `OPENCODE_API_KEY`；不配 `DEEPSEEK_API_KEY`——DeepSeek 官方直连为备选）。
 
 ## 3. 数据模型（设计方向）
 
@@ -97,10 +97,10 @@
 ### 4.5 部署
 
 - `services/api/package.json` 新增 `@earendil-works/pi-coding-agent` + `typebox` 依赖。**镜像体积实测膨胀 +150~250MB**（pi-coding-agent 15M + pi-ai + 各 provider SDK 硬依赖 + photon-node wasm 等，原型 node_modules 199MB），release runbook 注明。
-- 容器内新增模型凭据 env：`DEEPSEEK_API_KEY`（pi-ai 支持环境变量认证，无需 auth.json）；`PI_MODEL` 覆盖模型。
+- 容器内新增模型凭据 env：`OPENCODE_API_KEY`（pi-ai 支持环境变量认证，无需 auth.json）；`PI_MODEL` 覆盖模型。
 - AI 会话目录：**独立卷 `/data/sessions`**。Dockerfile 需补 `mkdir -p /data/sessions && chown -R serenique:serenique /data/sessions`（与 /data/blobs 同模式，否则命名卷不继承属主）。
 - `env.ts` 新增 `AI_SESSION_DIR`（zod 校验）；dev 默认值**不能**是 `/data/sessions`（Mac 无 /data），按 NODE_ENV 区分或 dev 默认项目内目录。
-- `.env.example` + docker run 文档补 `DEEPSEEK_API_KEY`、`PI_MODEL`、`AI_SESSION_DIR` 及第二个卷挂载。
+- `.env.example` + docker run 文档补 `OPENCODE_API_KEY`、`PI_MODEL`、`AI_SESSION_DIR` 及第二个卷挂载。
 - 单进程内嵌（随 API 主镜像发布，无独立服务）。
 - **缺模型凭据的失败策略**：生产 fail-closed（启用 AI 但无可用模型 → 启动报错），或按连接友好报错并记录——实施时选一。
 
@@ -114,7 +114,7 @@
 | 4 | 工具权限边界 | customTools 白名单 + `excludeTools` 排除 7 个内置工具（**不用 `tools: []`**）；WS 走现有 auth 中间件 + Origin 白名单 |
 | 5 | 确认弹窗 | 第一版不做 |
 | 6 | Skills | 第一版不用，系统提示词 + 工具描述 |
-| 7 | 模型凭据 | 默认 pin `deepseek/deepseek-v4-flash`，`DEEPSEEK_API_KEY` env 注入，`PI_MODEL` 可覆盖 |
+| 7 | 模型凭据 | 默认 pin `opencode-go/deepseek-v4-flash`，`OPENCODE_API_KEY` env 注入，`PI_MODEL` 可覆盖 |
 | 8 | 全局配置隔离 | SettingsManager.inMemory + noExtensions/noSkills/noContextFiles + systemPromptOverride（须返回真实提示词） |
 | 9 | 前端占位 | apps/web `/ai` 已存在（宁序），替换为真实聊天页 |
 | 10 | 会话实例模型 | 进程内同会话单实例注册表（防并发写坏 jsonl），不同会话并行 |
@@ -124,7 +124,7 @@
 ## 6. 待确认问题（下一步讨论）
 
 1. ~~会话持久化目录~~ ✅ 已定：独立卷 `/data/sessions`
-2. ~~生产模型~~ ✅ 已定：`deepseek/deepseek-v4-flash` 默认，`PI_MODEL` 可覆盖
+2. ~~生产模型~~ ✅ 已定：`opencode-go/deepseek-v4-flash` 默认（opencode 网关，`OPENCODE_API_KEY`），`PI_MODEL` 可覆盖
 3. ~~工具范围~~ ✅ 已定：task/event 全量 CRUD + moment 查询/创建，含删除类工具
 4. ~~语音输入~~ ✅ 已定：不做，输入法自带语音转文字
 5. ~~会话实例模型~~ ✅ 已定：进程内同会话单实例注册表

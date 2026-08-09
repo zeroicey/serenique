@@ -36,7 +36,7 @@ const envSchema = z.object({
     .default("development"),
   // ---- AI 助手（宁序，见 .ai/requirements/2026-08-09-ai-agent-module.md）----
   // 会话 jsonl 目录。生产缺省 /data/sessions（容器卷）；dev/test 用项目内目录，
-  // 避免 Mac 上 /data 不存在。模型凭据（DEEPSEEK_API_KEY）由 pi-ai 直接读
+  // 避免 Mac 上 /data 不存在。模型凭据（OPENCODE_API_KEY）由 pi-ai 直接读
   // process.env，不进本 schema。
   AI_SESSION_DIR: z.string().optional(),
   // 模型选择 "provider/modelId"，缺省 deepseek/deepseek-v4-flash。
@@ -50,4 +50,4 @@ export const env = envSchema.parse(process.env);
 export const aiSessionDir =
   env.AI_SESSION_DIR ??
   (env.NODE_ENV === "production" ? "/data/sessions" : "./.data/sessions");
-export const aiModel = env.AI_MODEL ?? "deepseek/deepseek-v4-flash";
+export const aiModel = env.AI_MODEL ?? "opencode-go/deepseek-v4-flash";
