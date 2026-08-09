@@ -1,7 +1,7 @@
 # Passkey 认证重构需求文档
 
 - 日期：2026-08-09
-- 状态：✅已实施（API 侧 2026-08-09 完成：auth 模块重写 + users/passkey_credentials/api_tokens 三表 + tokens 模块 + WebAuthn ceremony 集成测试全绿；实现见 `.ai/worklog/2026-08-09-passkey-auth-api.md`；Web 登录页 / CLI token 模式 / 移动端为后续 phase）
+- 状态：✅已实施（API 侧 2026-08-09 完成：auth 模块重写 + users/passkey_credentials/api_tokens 三表 + tokens 模块 + WebAuthn ceremony 集成测试全绿；Web 侧同日完成：登录页 Passkey ceremony + 设置页凭证/Token 管理，见 `.ai/worklog/2026-08-09-passkey-auth-api.md` / `2026-08-09-passkey-auth-web.md`；CLI token 模式 / 移动端为后续 phase）
 - 范围：`services/api`（重写 auth 模块 + 新增 users/credentials/api_tokens 表）、Web（登录页换 WebAuthn + token 管理页）、CLI（改 API token 凭证）、移动端 Flutter（规划）；MCP 冻结不受影响
 - 前置记录：`2026-08-06-auth.md`（旧共享密钥方案，已被本方案替换）、`2026-08-08-mcp-sunset.md`
 
