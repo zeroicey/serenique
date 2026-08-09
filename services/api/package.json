@@ -18,11 +18,13 @@
     "test:integration:full": "docker compose -f docker-compose.test.yml up -d --wait && DATABASE_URL=postgresql://serenique:serenique@127.0.0.1:5432/serenique bun run db:migrate && RUN_DB_TESTS=1 bun test src/modules/*/*.integration.test.ts; docker compose -f docker-compose.test.yml down"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.1",
     "@simplewebauthn/server": "^13.3.2",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.0",
     "pino": "^10.3.1",
     "postgres": "^3.4.9",
+    "typebox": "1.3.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -3,3 +3,6 @@ node_modules/
 
 # uploaded files
 blobs/
+
+# ai sessions (dev default ./sessions)
+.data/
