@@ -52,7 +52,7 @@ describe('ai-store', () => {
     expect(useAiStore.getState().currentSessionId).toBe('s1')
   })
 
-  test('busy 时 send 发 steer，否则发 prompt', () => {
+  test('busy 时 send 发 steer，否则发 prompt；均乐观追加 user 消息', () => {
     useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
     useAiStore.getState().connect()
     const ws = FakeSocket.instances[0]
@@ -62,6 +62,21 @@ describe('ai-store', () => {
     useAiStore.getState().send('停一下')
     const types = ws.sent.map((s) => JSON.parse(s).type)
     expect(types).toEqual(['prompt', 'steer'])
+    // busy 与否都乐观追加 user 消息（steer 的打断内容也要显示）
+    const { messages } = useAiStore.getState()
+    expect(messages).toHaveLength(2)
+    expect(messages[0]).toMatchObject({ role: 'user', text: '你好', thinking: '', toolCalls: [] })
+    expect(messages[1]).toMatchObject({ role: 'user', text: '停一下', thinking: '', toolCalls: [] })
+  })
+
+  test('send 非 busy 时乐观追加 user 消息并发送 prompt', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    useAiStore.getState().send('帮我创建任务')
+    expect(JSON.parse(ws.sent[0])).toEqual({ type: 'prompt', text: '帮我创建任务' })
+    const { messages } = useAiStore.getState()
+    expect(messages[messages.length - 1]).toEqual({ role: 'user', text: '帮我创建任务', thinking: '', toolCalls: [] })
   })
 
   test('text_delta 追加到 activeTurn.text', () => {

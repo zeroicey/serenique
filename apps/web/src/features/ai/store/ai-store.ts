@@ -223,6 +223,11 @@ export const useAiStore = create<AiState>((set, get) => ({
   send: (text) => {
     if (!text.trim()) return
     const { busy } = get()
+    // 乐观追加：后端事件流（forwardEvents）只转发 assistant 侧事件，无 user 回显，
+    // 不本地追加则实时对话中用户消息永不显示（直到重载/切会话才有历史）。
+    // 若未来后端加 user 回显，此处需去重（按 text+时间或等回显替代）。
+    const userMsg: RenderMessage = { role: 'user', text, thinking: '', toolCalls: [] }
+    set((s) => ({ messages: [...s.messages, userMsg] }))
     sendMsg(busy ? { type: 'steer', text } : { type: 'prompt', text })
   },
   abort: () => sendMsg({ type: 'abort' }),
