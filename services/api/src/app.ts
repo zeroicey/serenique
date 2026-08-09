@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { upgradeWebSocket } from "hono/bun";
 import type { Env } from "@/env";
 import { cors, logger } from "@/middleware";
 import { momentRouter } from "@/modules/moment";
@@ -9,15 +10,19 @@ import { auditRouter } from "@/modules/audit";
 import { tagRouter } from "@/modules/tag";
 import { authMiddleware, authRouter } from "@/modules/auth";
 import { tokenRouter } from "@/modules/tokens";
+import { createAiRouter } from "@/modules/ai";
 import { Res } from "@/shared/response";
 import { logger as pinoLogger } from "@/shared/logger";
 
 // ---------------------------------------------------------------------------
 // App factory — receives validated env, returns an assembled Hono instance.
 // Middleware and routes are wired here, in order.
+//
+// ws.upgradeWebSocket 由入口（index.ts 的 createBunWebSocket() 单例）注入：
+// 必须与 Bun.serve 的 websocket handlers 同源，否则 WS 升级后消息无法送达。
 // ---------------------------------------------------------------------------
 
-export function createApp(env: Env) {
+export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSocket }) {
   // ---- 0. Fail-closed: 生产必须配置会话签名密钥与 RP ID，否则拒绝启动 -------
   //    （SETUP_TOKEN 注册完成后可移除，故不在此列 —— 见需求文档 ⑦）
   if (
@@ -66,6 +71,7 @@ export function createApp(env: Env) {
   app.route("/api", eventRouter);
   app.route("/api", auditRouter);
   app.route("/api", tagRouter);
+  app.route("/api", createAiRouter(ws.upgradeWebSocket));
 
   // ---- 5. 404 fallback ----------------------------------------------------
   app.notFound((c) => Res.notFound("接口不存在").build(c));

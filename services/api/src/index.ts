@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { createApp } from "@/app";
+import { createBunWebSocket } from "hono/bun";
 import { startAuditSweeper } from "@/modules/audit/audit.service";
 import { authService } from "@/modules/auth/auth.service";
 import { initBlobRoot } from "@/shared/storage";
@@ -23,9 +24,14 @@ if (env.NODE_ENV !== "test") {
   startAuditSweeper();
 }
 
-const app = createApp(env);
+// createBunWebSocket() 单例：upgradeWebSocket（Hono handler 侧）与 websocket
+// （Bun.serve 侧）必须来自同一次调用，否则底层 handler 实例不匹配、WS 升级
+// 后消息无法路由。Bun.serve 缺 websocket option 时 WS 升级请求会 404。
+const { upgradeWebSocket, websocket } = createBunWebSocket();
+const app = createApp(env, { upgradeWebSocket });
 
 export default {
   port: env.PORT,
   fetch: app.fetch,
+  websocket,
 };

@@ -1,7 +1,7 @@
 # AI 助手模块（宁序）需求文档
 
 - 日期：2026-08-09
-- 状态：🔶设计中
+- 状态：🔶设计中（**后端已实施**于 feat/ai-agent-module 2026-08-09，SDD 全流程评审通过；前端 Web 聊天页待实施，见 `.ai/archive/2026-08-09-ai-agent-web-plan.md`）
 - 范围：services/api（新增 ai 模块，PI SDK 内嵌）+ apps/web（/ai 页面聊天 UI）；后端为第一优先级
 - 前置记录：`.ai/decisions/2026-08-08-mcp-sunset.md`（MCP 停更冻结，AI 能力不再走 MCP/外部工具层）；`apps/web` 侧边栏已有 `/ai`「宁序」占位路由
 - 参考原型：`~/workspace/tests/pi-test`（PI SDK + WebSocket 最小对话服务，含会话持久化/切换 + e2e 测试）
