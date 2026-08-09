@@ -323,7 +323,10 @@ docker run -p 3000:3000 \
   -e WEBAUTHN_RP_ID=your-web-domain \
   -e WEBAUTHN_ORIGINS=https://your-web-domain \
   -e CORS_ORIGIN=https://your-web-domain \
+  -e DEEPSEEK_API_KEY=<key> \
+  -e AI_MODEL=deepseek/deepseek-v4-flash \
   -v /host/path:/data/blobs \
+  -v /host/sessions:/data/sessions \
   serenique-api
 ```
 

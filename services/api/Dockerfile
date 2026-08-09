@@ -15,8 +15,8 @@ ENV HOME=/home/serenique
 RUN groupadd --gid 10001 serenique \
   && useradd --uid 10001 --gid 10001 --create-home --home-dir /home/serenique \
     --shell /usr/sbin/nologin serenique \
-  && mkdir -p /data/blobs \
-  && chown -R serenique:serenique /home/serenique /data/blobs
+  && mkdir -p /data/blobs /data/sessions \
+  && chown -R serenique:serenique /home/serenique /data/blobs /data/sessions
 
 WORKDIR /app
 
