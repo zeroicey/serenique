@@ -45,7 +45,7 @@ export const passkeyCredentials = pgTable(
     publicKey: text("public_key").notNull(), // COSE 公钥原始 bytes，base64url 编码
     transports: jsonb("transports").$type<AuthenticatorTransport[] | null>(), // usb/nfc/ble/internal
     deviceLabel: text("device_label"), // 人类可读设备标签（如「MacBook · Apple」）
-    counter: bigint("counter", { mode: "number" }).notNull().default(0), // 防克隆计数器（严格递增校验）
+    counter: bigint("counter", { mode: "number" }).notNull().default(0), // 防克隆计数器（仅回退拒绝，相等放行：Apple 平台认证器不递增）
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

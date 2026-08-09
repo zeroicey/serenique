@@ -40,6 +40,7 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
   // 每个运行唯一：崩溃残留的旧审计行不会污染本轮的 count 断言
   const IP_LOGIN = `it-auth-e2e-${RUN_TOKEN}-login`;
   const IP_COUNTER = `it-auth-e2e-${RUN_TOKEN}-counter`;
+  const IP_COUNTER_EQUAL = `it-auth-e2e-${RUN_TOKEN}-counter-equal`;
   const IP_UNKNOWN = `it-auth-e2e-${RUN_TOKEN}-unknown`;
   const IP_FORGED = `it-auth-e2e-${RUN_TOKEN}-forged`;
   let device1: TestAuthenticator;
@@ -367,6 +368,37 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
     expect(rows.length).toBe(1);
     expect(rows[0].message).toContain("计数器");
     trackAudit(rows[0]);
+  });
+
+  test("登录成功：counter 相等（Apple 平台认证器不递增计数）→ 放行", async () => {
+    // 已存 counter=1（上个用例）；Apple 平台 passkey 每次断言 signCount 不变。
+    // 相等必须放行（仅回退才算克隆信号），且存储值不倒退。
+    const start = await app.request("/api/auth/login/start", { method: "POST" });
+    const startBody = await start.json();
+    const credential = await simulateAuthentication({
+      rpID: RP_ID,
+      origin: ORIGIN,
+      challenge: startBody.data.options.challenge,
+      authenticator: device1,
+      counter: 1, // == 已存 1
+    });
+    const finish = await app.request(
+      "/api/auth/login/finish",
+      json(
+        { challengeId: startBody.data.challengeId, credential },
+        { "cf-connecting-ip": IP_COUNTER_EQUAL },
+      ),
+    );
+    expect(finish.status).toBe(200);
+    const finishBody = await finish.json();
+    expect(finishBody.data.authenticated).toBe(true);
+
+    // counter 未回退（仍为 1）
+    const [credRow] = await db
+      .select()
+      .from(passkeyCredentials)
+      .where(eq(passkeyCredentials.credentialId, credentialId1));
+    expect(credRow!.counter).toBe(1);
   });
 
   test("登录失败：伪造签名 / 未知凭证 → 401 + 审计", async () => {

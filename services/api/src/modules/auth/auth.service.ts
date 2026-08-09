@@ -335,7 +335,8 @@ export const authService = {
   },
 
   /**
-   * 完成登录：校验断言签名 + counter（严格递增），成功后更新 counter 并返回用户。
+   * 完成登录：校验断言签名 + counter（防克隆：仅回退拒绝，相等放行——Apple
+   * 平台认证器不递增 signCount），成功后更新 counter 并返回用户。
    * 节流：失败（含无效挑战）记一次；窗口内 ≥5 次 → throttled。
    * delayMs / nowMs 可注入，单测无需真实等待。
    */
@@ -362,7 +363,7 @@ export const authService = {
         event: "auth.login_failed",
         message:
           reason === "counter"
-            ? "登录失败：凭证计数器未递增，可能存在克隆风险"
+            ? "登录失败：凭证计数器回退，可能存在克隆风险"
             : "登录失败：登录验证未通过",
         level: "warn",
         ip: input.ip,
@@ -392,17 +393,13 @@ export const authService = {
       .where(eq(passkeyCredentials.credentialId, input.credential.id));
     if (!credRow) return fail("invalid");
 
-    // 严格 counter 校验（防克隆）：先于签名校验解析 authenticatorData 的
-    // signCount，新值 ≤ 旧值（且非全零初值）直接判失败——比等库内校验更早
-    // 命中，审计消息可明确区分「计数器未递增」。
+    // counter 防克隆预检：先于签名校验解析 authenticatorData 的 signCount，
+    // 仅「新值 < 旧值」（回退）判失败——相等是合法（Apple 平台认证器不递增）。
     try {
       const parsed = parseAuthenticatorData(
         isoBase64URL.toBuffer(input.credential.response.authenticatorData),
       );
-      if (
-        (parsed.counter > 0 || credRow.counter > 0) &&
-        parsed.counter <= credRow.counter
-      ) {
+      if (parsed.counter < credRow.counter) {
         return fail("counter");
       }
     } catch {
@@ -422,7 +419,10 @@ export const authService = {
         credential: {
           id: credRow.credentialId,
           publicKey: isoBase64URL.toBuffer(credRow.publicKey),
-          counter: credRow.counter,
+          // counter 恒传 0 以禁用库内严格检查（v13.3.2 内部 `counter <= stored`
+          // 会拒绝相等——Apple 平台认证器不递增 signCount，导致合法登录被拒）。
+          // 防克隆 counter 语义由上方预检 + 下方终检把关（仅回退拒绝）。
+          counter: 0,
           transports: credRow.transports ?? undefined,
         },
         requireUserVerification: true,
@@ -432,9 +432,9 @@ export const authService = {
     }
     if (!verification.verified) return fail("invalid");
 
-    // 严格 counter 校验：新 counter 必须大于已存值（防克隆）。
+    // counter 防克隆：仅回退（新 < 旧）拒绝；相等放行（Apple 等不递增计数）。
     const newCounter = verification.authenticationInfo.newCounter;
-    if (newCounter <= credRow.counter) return fail("counter");
+    if (newCounter < credRow.counter) return fail("counter");
 
     await db
       .update(passkeyCredentials)
