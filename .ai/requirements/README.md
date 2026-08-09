@@ -14,6 +14,7 @@
 | `2026-08-08-push-module.md` | 推送模块 | 🔶设计中 |
 | `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | ✅已实施（显示/预览 MVP；上传下阶段） |
 | `2026-08-08-moment-location.md` | Moment 位置信息 | ✅已实施 |
+| `2026-08-09-ai-agent-module.md` | AI 助手模块（宁序，PI SDK 内嵌） | 🔶设计中 |
 
 ## 约定
 

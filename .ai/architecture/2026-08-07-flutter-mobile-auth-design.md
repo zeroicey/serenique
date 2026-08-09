@@ -1,5 +1,7 @@
 # Flutter 移动端接入认证（Mobile Auth Integration）
 
+> ⚠️ **已被取代**：后端认证已重构为 Passkey（v0.5.0），本文档的「共享密钥 Bearer 直连」方案已退役。当前有效设计见 `2026-08-09-flutter-passkey-auth-design.md`。
+
 - 日期：2026-08-07
 - 状态：**已定稿**（队长与用户确认，进入实现计划）
 - 范围：`apps/mobile`（Flutter）。后端 auth 已完成并合入 main（`/api/auth/login|logout|me` + Bearer/Cookie 中间件）。
