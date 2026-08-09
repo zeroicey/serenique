@@ -1,20 +1,39 @@
 import { useState } from 'react'
-import { KeyRound, Trash2 } from 'lucide-react'
+import { KeyRound, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { toDisplayError } from '@/api/errors'
 import { formatDate } from '@/lib/format'
-import { useCredentials, useDeleteCredential, useRegister } from '@/features/auth/queries'
+import {
+  useCredentials,
+  useDeleteCredential,
+  useRegister,
+  useRenameCredential,
+} from '@/features/auth/queries'
 
-// 登录凭证管理：列出已注册的通行密钥，支持删除（删最后一把 409 由服务端文案提示）
-// 与登录态添加新设备（不带 setupToken 的注册 ceremony）。
+// 登录凭证管理：列出已注册的通行密钥，支持重命名（PATCH /auth/credentials/:id）、
+// 删除（删最后一把 409 由服务端文案提示）与登录态添加新设备（不带 setupToken
+// 的注册 ceremony）。
 export function CredentialsSection() {
   const { data: credentials, isPending, isError, refetch } = useCredentials()
   const deleteCredential = useDeleteCredential()
   const register = useRegister()
+  const renameCredential = useRenameCredential()
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [renameTarget, setRenameTarget] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const pendingDelete = credentials?.find((c) => c.id === confirmId) ?? null
+  const pendingRename = credentials?.find((c) => c.id === renameTarget) ?? null
 
   async function handleAddDevice() {
     try {
@@ -22,6 +41,20 @@ export function CredentialsSection() {
       toast.success('登录凭证添加成功')
     } catch (e) {
       toast.error(toDisplayError(e).message)
+    }
+  }
+
+  async function handleRename() {
+    if (!renameTarget) return
+    try {
+      await renameCredential.mutateAsync({
+        id: renameTarget,
+        deviceLabel: renameValue.trim() || null,
+      })
+      setRenameTarget(null)
+      setRenameValue('')
+    } catch {
+      // toast 已由 mutation onError 弹出
     }
   }
 
@@ -67,14 +100,27 @@ export function CredentialsSection() {
                   {cred.lastUsedAt ? ` · 最近使用 ${formatDate(cred.lastUsedAt)}` : ''}
                 </p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`删除凭证 ${cred.deviceLabel ?? '未命名设备'}`}
-                onClick={() => setConfirmId(cred.id)}
-              >
-                <Trash2 className="text-destructive" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`重命名凭证 ${cred.deviceLabel ?? '未命名设备'}`}
+                  onClick={() => {
+                    setRenameTarget(cred.id)
+                    setRenameValue(cred.deviceLabel ?? '')
+                  }}
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`删除凭证 ${cred.deviceLabel ?? '未命名设备'}`}
+                  onClick={() => setConfirmId(cred.id)}
+                >
+                  <Trash2 className="text-destructive" />
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
@@ -91,6 +137,44 @@ export function CredentialsSection() {
           if (confirmId) deleteCredential.mutate(confirmId)
         }}
       />
+
+      <Dialog
+        open={renameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenameTarget(null)
+            setRenameValue('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>重命名登录凭证</DialogTitle>
+            <DialogDescription>
+              给「{pendingRename?.deviceLabel ?? '未命名设备'}」起个一眼能认出的名字（如
+              iPhone · Apple / MacBook）。
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={renameValue}
+            maxLength={50}
+            placeholder="例如：iPhone · Apple"
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRename()
+            }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>
+              取消
+            </Button>
+            <Button onClick={handleRename} disabled={renameCredential.isPending}>
+              {renameCredential.isPending ? '保存中…' : '保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

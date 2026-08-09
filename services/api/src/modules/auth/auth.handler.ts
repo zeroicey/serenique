@@ -14,6 +14,7 @@ import {
   LoginFinishSchema,
   RegisterFinishSchema,
   RegisterStartSchema,
+  UpdateCredentialLabelSchema,
   UpdateUserProfileSchema,
 } from "@/modules/auth/auth.types";
 import { handleError, uuidParam } from "@/shared/handler";
@@ -174,6 +175,21 @@ export const authHandler = {
         credentialId: uuidParam(c, "id"),
       });
       return Res.noContent("凭证删除成功").build(c);
+    } catch (e) {
+      return handleError(e, c, "auth");
+    }
+  },
+
+  async renameCredential(c: Context) {
+    try {
+      const userId = requireSessionUser(c);
+      const body = UpdateCredentialLabelSchema.parse(await c.req.json());
+      const item = await authService.updateCredentialLabel({
+        userId,
+        credentialId: uuidParam(c, "id"),
+        deviceLabel: body.deviceLabel,
+      });
+      return Res.ok("凭证已重命名", item).build(c);
     } catch (e) {
       return handleError(e, c, "auth");
     }

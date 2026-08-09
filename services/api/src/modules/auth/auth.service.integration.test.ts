@@ -267,6 +267,53 @@ describe.skipIf(!RUN_DB_TESTS)("auth + tokens integration", () => {
     expect(credRows.length).toBe(2);
   });
 
+  test("凭证管理：重命名设备标签（PATCH）；空串清空；不存在 → 404", async () => {
+    const creds = await app.request("/api/auth/credentials", { headers: { cookie: cookie1 } });
+    const items = (await creds.json()).data.items as Array<{ id: string; deviceLabel: string | null }>;
+    expect(items.length).toBe(2);
+    const target = items.find((i) => i.deviceLabel == null)!;
+    expect(target).toBeDefined();
+
+    // 重命名
+    const patch = await app.request(`/api/auth/credentials/${target.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookie1, "content-type": "application/json" },
+      body: JSON.stringify({ deviceLabel: "iPhone · Apple" }),
+    });
+    expect(patch.status).toBe(200);
+    expect((await patch.json()).data.deviceLabel).toBe("iPhone · Apple");
+
+    // 列表同步
+    const after = await app.request("/api/auth/credentials", { headers: { cookie: cookie1 } });
+    const renamed = ((await after.json()).data.items as Array<{ id: string; deviceLabel: string | null }>)
+      .find((i) => i.id === target.id)!;
+    expect(renamed.deviceLabel).toBe("iPhone · Apple");
+
+    // 审计
+    const rows = await waitForAuditRows(
+      and(eq(auditLogs.event, "auth.credential_rename"), sql`${auditLogs.detail}->>'id' = ${target.id}`),
+    );
+    expect(rows.length).toBe(1);
+    trackAudit(rows[0]);
+
+    // 空字符串 → 清空（null）
+    const clear = await app.request(`/api/auth/credentials/${target.id}`, {
+      method: "PATCH",
+      headers: { cookie: cookie1, "content-type": "application/json" },
+      body: JSON.stringify({ deviceLabel: "  " }),
+    });
+    expect(clear.status).toBe(200);
+    expect((await clear.json()).data.deviceLabel).toBeNull();
+
+    // 不存在 / 越权 → 404
+    const missing = await app.request("/api/auth/credentials/00000000-0000-4000-8000-000000000000", {
+      method: "PATCH",
+      headers: { cookie: cookie1, "content-type": "application/json" },
+      body: JSON.stringify({ deviceLabel: "x" }),
+    });
+    expect(missing.status).toBe(404);
+  });
+
   test("凭证管理：删除一把成功；删除最后一把 → 409", async () => {
     const creds = await app.request("/api/auth/credentials", { headers: { cookie: cookie1 } });
     const items = (await creds.json()).data.items as Array<{ id: string; credentialId: string }>;

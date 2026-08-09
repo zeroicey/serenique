@@ -54,6 +54,22 @@ export const RegisterFinishSchema = z.object({
   credential: RegistrationCredentialSchema,
 });
 
+// ---- 凭证管理 --------------------------------------------------------------
+
+export const UpdateCredentialLabelSchema = z.object({
+  // 重命名设备：空字符串或 null 都视为清空（回到「未命名设备」）。
+  deviceLabel: z
+    .string()
+    .trim()
+    .max(50)
+    .nullable()
+    .transform((v) => (v ? v : null)),
+});
+
+export type UpdateCredentialLabelInput = z.infer<
+  typeof UpdateCredentialLabelSchema
+>;
+
 // ---- Login ceremony -------------------------------------------------------
 
 export const AuthenticationCredentialSchema = z.object({

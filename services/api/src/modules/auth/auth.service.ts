@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -219,8 +219,11 @@ export const authService = {
         transports: cred.transports ?? undefined,
       })),
       authenticatorSelection: {
-        residentKey: "preferred",
-        userVerification: "preferred",
+        // residentKey 要求 required：第三方提供方（微软 Authenticator、
+        // 1Password 等）的 iOS 凭证提供扩展只在可发现凭证请求下才接管，
+        // preferred 会被部分 App 拒绝（2026-08-09 实测 Authenticator 报不支持）。
+        residentKey: "required",
+        userVerification: "required",
       },
       timeout: 60_000,
     });
@@ -503,8 +506,7 @@ export const authService = {
   async deleteCredential(input: {
     userId: string;
     credentialId: string;
-  }): Promise<void> {
-    const [row] = await db
+  }): Promise<void> {    const [row] = await db
       .select()
       .from(passkeyCredentials)
       .where(eq(passkeyCredentials.id, input.credentialId));
@@ -527,6 +529,32 @@ export const authService = {
       level: "warn",
       detail: { id: row.id, credentialId: row.credentialId },
     });
+  },
+
+  /** 重命名设备标签（清空 → null = 未命名）。 */
+  async updateCredentialLabel(input: {
+    userId: string;
+    credentialId: string;
+    deviceLabel: string | null;
+  }): Promise<CredentialEntry> {
+    const [row] = await db
+      .update(passkeyCredentials)
+      .set({ deviceLabel: input.deviceLabel })
+      .where(
+        and(
+          eq(passkeyCredentials.id, input.credentialId),
+          eq(passkeyCredentials.userId, input.userId),
+        ),
+      )
+      .returning();
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "凭证不存在", 404);
+    fireAuditRecord({
+      event: "auth.credential_rename",
+      message: "已重命名登录凭证",
+      level: "info",
+      detail: { id: row.id, deviceLabel: row.deviceLabel },
+    });
+    return toCredentialEntry(row);
   },
 
   // ---- Login throttle（内存，单进程；key = IP）------------------------------

@@ -1,7 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useCredentials, useDeleteCredential, useProfile, useRegister, useUpdateProfile } from '@/features/auth/queries'
+import {
+  useCredentials,
+  useDeleteCredential,
+  useProfile,
+  useRegister,
+  useRenameCredential,
+  useUpdateProfile,
+} from '@/features/auth/queries'
 import SettingsPage from './settings-page'
 import { useCreateToken, useRevokeToken, useTokens } from '../queries'
 
@@ -11,6 +18,7 @@ vi.mock('@/features/auth/queries', () => ({
   useUpdateProfile: vi.fn(),
   useCredentials: vi.fn(),
   useDeleteCredential: vi.fn(),
+  useRenameCredential: vi.fn(),
   useRegister: vi.fn(),
 }))
 
@@ -24,6 +32,7 @@ const mockedUseProfile = vi.mocked(useProfile)
 const mockedUseUpdateProfile = vi.mocked(useUpdateProfile)
 const mockedUseCredentials = vi.mocked(useCredentials)
 const mockedUseDeleteCredential = vi.mocked(useDeleteCredential)
+const mockedUseRenameCredential = vi.mocked(useRenameCredential)
 const mockedUseRegister = vi.mocked(useRegister)
 const mockedUseTokens = vi.mocked(useTokens)
 const mockedUseCreateToken = vi.mocked(useCreateToken)
@@ -40,6 +49,7 @@ const profile = {
 
 const updateProfileMutate = vi.fn()
 const deleteCredentialMutate = vi.fn()
+const renameCredentialMutateAsync = vi.fn().mockResolvedValue({})
 const registerMutateAsync = vi.fn().mockResolvedValue({ authenticated: true, user: null })
 const revokeTokenMutate = vi.fn()
 const createTokenMutate = vi.fn()
@@ -68,6 +78,10 @@ function mockHooks(overrides: {
     mutate: deleteCredentialMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useDeleteCredential>)
+  mockedUseRenameCredential.mockReturnValue({
+    mutateAsync: renameCredentialMutateAsync,
+    isPending: false,
+  } as unknown as ReturnType<typeof useRenameCredential>)
   mockedUseRegister.mockReturnValue({
     mutateAsync: registerMutateAsync,
     isPending: false,
@@ -112,6 +126,7 @@ describe('SettingsPage', () => {
   beforeEach(() => {
     updateProfileMutate.mockClear()
     deleteCredentialMutate.mockClear()
+    renameCredentialMutateAsync.mockClear()
     registerMutateAsync.mockClear()
     revokeTokenMutate.mockClear()
     createTokenMutate.mockClear()
@@ -147,6 +162,25 @@ describe('SettingsPage', () => {
     expect(screen.getByText('删除登录凭证')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '删除' }))
     expect(deleteCredentialMutate).toHaveBeenCalledWith('c1')
+  })
+
+  it('凭证 tab：重命名设备标签走 PATCH（空串清空为 null）', async () => {
+    const user = userEvent.setup()
+    mockHooks({ credentials: [{ ...credential, deviceLabel: null }] })
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('button', { name: '登录凭证' }))
+
+    // 未命名设备 + 重命名按钮
+    expect(screen.getByText('未命名设备')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '重命名凭证 未命名设备' }))
+    expect(screen.getByText('重命名登录凭证')).toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('例如：iPhone · Apple'), 'iPhone · Apple')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(renameCredentialMutateAsync).toHaveBeenCalledWith({
+      id: 'c1',
+      deviceLabel: 'iPhone · Apple',
+    })
   })
 
   it('凭证 tab：添加新设备走注册 ceremony（不带 setupToken）', async () => {

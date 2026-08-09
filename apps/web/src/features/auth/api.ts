@@ -119,6 +119,11 @@ export async function deleteCredential(id: string): Promise<void> {
   await unwrap<void>(res)
 }
 
+export async function renameCredential(id: string, deviceLabel: string | null): Promise<CredentialEntry> {
+  const res = await api.patch(apiUrl(`auth/credentials/${id}`), { json: { deviceLabel } })
+  return unwrap<CredentialEntry>(res)
+}
+
 // ---- 个人信息（需登录会话）--------------------------------------------------
 
 export async function getProfile(): Promise<UserEntry> {

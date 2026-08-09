@@ -12,6 +12,7 @@ export const AUDIT_EVENTS = [
   "auth.login_failed",
   "auth.register",
   "auth.credential_delete",
+  "auth.credential_rename",
   "auth.logout",
   "auth.unauthorized",
   "token.create",

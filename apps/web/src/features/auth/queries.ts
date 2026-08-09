@@ -12,6 +12,7 @@ import {
   getProfile,
   listCredentials,
   logout,
+  renameCredential,
   updateProfile,
   type AuthStatus,
   type CredentialEntry,
@@ -97,6 +98,22 @@ export function useDeleteCredential(): UseMutationResult<void, Error, string> {
       queryClient.invalidateQueries({ queryKey: authKeys.credentials })
     },
     onError: (error) => toast.error(error.message || '删除凭证失败'),
+  })
+}
+
+export function useRenameCredential(): UseMutationResult<
+  CredentialEntry,
+  Error,
+  { id: string; deviceLabel: string | null }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, deviceLabel }) => renameCredential(id, deviceLabel),
+    onSuccess: () => {
+      toast.success('凭证已重命名')
+      queryClient.invalidateQueries({ queryKey: authKeys.credentials })
+    },
+    onError: (error) => toast.error(error.message || '重命名凭证失败'),
   })
 }
 

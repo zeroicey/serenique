@@ -14,6 +14,7 @@ export const EVENT_MESSAGES: Record<AuditEvent, string> = {
   "auth.login_failed": "登录失败",
   "auth.register": "注册 / 添加登录凭证",
   "auth.credential_delete": "删除登录凭证",
+  "auth.credential_rename": "重命名登录凭证",
   "auth.logout": "退出登录",
   "auth.unauthorized": "未认证或登录已过期",
   "token.create": "创建 API 令牌",

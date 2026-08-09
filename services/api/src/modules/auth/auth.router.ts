@@ -11,6 +11,7 @@ export const authRouter = new Hono()
   // ---- 会话状态 / 凭证管理 ----
   .get("/auth/me", authHandler.me)
   .get("/auth/credentials", authHandler.listCredentials)
+  .patch("/auth/credentials/:id", authHandler.renameCredential)
   .delete("/auth/credentials/:id", authHandler.deleteCredential)
   // ---- 个人信息 ----
   .get("/users/me", authHandler.getProfile)
