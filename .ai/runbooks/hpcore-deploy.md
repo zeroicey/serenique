@@ -44,14 +44,37 @@ docker compose up -d --force-recreate api
 | 键 | 生成方式 | 语义 / 坑 |
 |----|----------|-----------|
 | `SESSION_SECRET` | `openssl rand -hex 32` | cookie 签名密钥。**改了 = 所有会话立即失效**（旧 cookie 验签失败），密钥轮换即全员下线 |
-| `SETUP_TOKEN` | `openssl rand -hex 24` | 引导注册门禁（users 表为空时注册必须携带）。**首次注册完成后可从 .env 移除**，之后注册靠登录态加设备 |
+| `SETUP_TOKEN` | `openssl rand -hex 24` | 首个凭证门禁（**passkey_credentials 计数=0** 时 `/setup` 创建凭证必须携带，常量时间比对）。**首个凭证创建完成后可从 .env 移除**，之后加设备走登录态「添加设备」 |
 | `WEBAUTHN_RP_ID` | `serenique.0icey.icu`（固定） | **RP ID = 前端域名（serenique.0icey.icu），不是 API 域名**。⚠️ 换前端域名 = 全部 passkey 永久失效（iCloud/Google 按 RP ID 存凭证） |
 | `WEBAUTHN_RP_NAME` | `Serenique` | 仅展示用 |
 | `WEBAUTHN_ORIGINS` | `https://serenique.0icey.icu` | ceremony origin 白名单（逗号分隔）。移动端 phase 需扩展 Android `android:apk-key-hash:<指纹>` |
 
-- 生产 fail-closed：缺 `SESSION_SECRET` 或 `WEBAUTHN_RP_ID` → 容器拒绝启动（app.ts）。
+- 生产 fail-closed：缺 `SESSION_SECRET` 或 `WEBAUTHN_RP_ID` → 容器拒绝启动（app.ts）；**认证启用且 `users` 表为空 → 拒绝启动**，报错提示先跑引导脚本（见下）。
 - `AUTH_TOKEN` 已退役（v0.5.0 迁移时从 .env 删除）；旧客户端 401。
 - 数据库迁移 `0014_rapid_stone_men`（users / passkey_credentials / api_tokens 三表）已于 2026-08-09 应用到生产（drizzle 记录 id=15，hash 450a3cdd…）。
+
+## 全新安装（引导首个用户 + 首个凭证，v0.5.1 起）
+
+公开「首次注册」已移除（需求决策⑨）：**users 由引导脚本创建，首个凭证由隐藏 `/setup` 页创建**，登录页只留通行密钥登录。
+
+```sh
+# 1. 起好 DB + 迁移（见「升级 schema」）后，创建用户行（幂等，可重复跑）
+docker compose run --rm api bun scripts/bootstrap-user.ts \
+  --name "zeroicey" --email "me@example.com" --birthday "1990-01-01"
+#    ⚠️ docker compose run 覆盖 CMD → entrypoint 的 localhost→host.docker.internal
+#    重写不执行：容器内 DATABASE_URL 用 compose 网络服务名（postgres）即可直达。
+#    参数可用 env FIRST_USER_NAME/FIRST_USER_EMAIL/FIRST_USER_BIRTHDAY 替代。
+
+# 2. 浏览器打开（仅此一次，需 SETUP_TOKEN 在 .env 中）
+#    https://serenique.0icey.icu/setup?setupToken=<SETUP_TOKEN>
+#    → 「创建通行密钥」→ 自动登录。（该页无任何导航入口，凭证已存在时访问跳登录页）
+
+# 3. 验证后移除 SETUP_TOKEN 并重建容器
+#    vi .env（删 SETUP_TOKEN 行）→ docker compose up -d --no-deps api
+```
+
+- 用户可见面只有「通行密钥登录」；users 空表时服务起不来（fail-closed），前端只会看到「服务暂时不可用」。
+- 引导脚本在镜像内（services/api/scripts/ 已随镜像拷贝，WORKDIR /app/services/api），服务器无需 bun/npm。
 
 ## 回滚
 
