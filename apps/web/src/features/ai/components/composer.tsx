@@ -22,7 +22,8 @@ export function Composer() {
         placeholder={busy ? 'agent 运行中…（输入内容可打断）' : '输入消息，Enter 发送（Shift+Enter 换行）'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
+          // isComposing 守卫：中文输入法下按 Enter 确认候选词不触发发送（IME 冲突）
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() }
         }}
       />
       <button

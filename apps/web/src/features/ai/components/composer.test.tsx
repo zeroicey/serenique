@@ -26,4 +26,16 @@ describe('Composer', () => {
     fireEvent.click(screen.getByText('停止'))
     expect(aborted).toBe(true)
   })
+
+  test('IME 组合中按 Enter 不发送', () => {
+    let sent: string | null = null
+    useAiStore.setState({ busy: false, send: (t: string) => { sent = t } } as any)
+    render(<Composer />)
+    fireEvent.change(screen.getByPlaceholderText(/输入消息/), { target: { value: 'nihao' } })
+    fireEvent.keyDown(screen.getByPlaceholderText(/输入消息/), {
+      key: 'Enter',
+      isComposing: true,
+    })
+    expect(sent).toBeNull()
+  })
 })
