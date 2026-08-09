@@ -60,7 +60,7 @@ class _RecordingAdapter implements HttpClientAdapter {
 
 ApiClient _client(String baseUrl, String body) => ApiClient(
   baseUrl: baseUrl,
-  sessionReader: () => null,
+  tokenReader: () => null,
   dio: Dio(BaseOptions(baseUrl: baseUrl))
     ..httpClientAdapter = _FakeAdapter(body),
 );
@@ -141,7 +141,7 @@ void main() {
     );
     final client = ApiClient(
       baseUrl: 'https://api.test',
-      sessionReader: () => null,
+      tokenReader: () => null,
       dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
         ..httpClientAdapter = adapter,
     );
@@ -172,7 +172,7 @@ void main() {
     );
     final client = ApiClient(
       baseUrl: 'https://api.test',
-      sessionReader: () => null,
+      tokenReader: () => null,
       dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
         ..httpClientAdapter = adapter,
     );
@@ -209,7 +209,7 @@ void main() {
     );
     final client = ApiClient(
       baseUrl: 'https://api.test',
-      sessionReader: () => null,
+      tokenReader: () => null,
       dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
         ..httpClientAdapter = adapter,
     );

@@ -5,7 +5,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/core/network/api_client.dart';
 import 'package:serenique_mobile/core/network/api_exception.dart';
-import 'package:serenique_mobile/core/network/unwrap.dart';
 
 class _FakeAdapter implements HttpClientAdapter {
   _FakeAdapter(this.statusCode, this.body);
@@ -52,77 +51,18 @@ class _RecordingAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-/// 可定制响应头（Set-Cookie 测试用）。
-class _HeaderAdapter implements HttpClientAdapter {
-  _HeaderAdapter(this.body, this.headers);
-  final String body;
-  final Map<String, List<String>> headers;
-
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async => ResponseBody.fromString(body, 200, headers: headers);
-
-  @override
-  void close({bool force = false}) {}
-}
-
 void main() {
-  group('applySessionCookie', () {
-    test('有 session：注入 Cookie 头', () {
+  group('applyAuthHeader', () {
+    test('有 token：注入 Bearer', () {
       final options = RequestOptions(path: '/api/moments');
-      applySessionCookie(options, () => 'abc.def');
-      expect(options.headers['Cookie'], 'serenique_session=abc.def');
+      applyAuthHeader(options, () => 'secret');
+      expect(options.headers['Authorization'], 'Bearer secret');
     });
 
-    test('无 session：不加头', () {
+    test('无 token：不加头', () {
       final options = RequestOptions(path: '/api/moments');
-      applySessionCookie(options, () => null);
-      expect(options.headers.containsKey('Cookie'), isFalse);
-    });
-
-    test('空 session：不加头', () {
-      final options = RequestOptions(path: '/api/moments');
-      applySessionCookie(options, () => '');
-      expect(options.headers.containsKey('Cookie'), isFalse);
-    });
-  });
-
-  group('sessionCookieFrom（Set-Cookie 捕获）', () {
-    Response<dynamic> res(List<String> cookies) => Response(
-          requestOptions: RequestOptions(path: '/'),
-          statusCode: 200,
-          data: const {'success': true, 'data': {}},
-          headers: Headers.fromMap({'set-cookie': cookies}),
-        );
-
-    test('取 serenique_session 值，忽略 HttpOnly/Secure/Partitioned 属性', () {
-      final r = res([
-        'serenique_session=eyJ1c2VySWQiOiJ4In0.sig; Max-Age=2592000; Path=/; HttpOnly; Secure; Partitioned',
-      ]);
-      expect(
-        sessionCookieFrom(r),
-        'eyJ1c2VySWQiOiJ4In0.sig',
-      );
-    });
-
-    test('多个 Set-Cookie 只取目标 cookie', () {
-      final r = res([
-        'other=1; Path=/',
-        'serenique_session=v2; Path=/',
-      ]);
-      expect(sessionCookieFrom(r), 'v2');
-    });
-
-    test('无 Set-Cookie 头 → null', () {
-      final r = Response(
-        requestOptions: RequestOptions(path: '/'),
-        statusCode: 200,
-        data: const {'success': true, 'data': {}},
-      );
-      expect(sessionCookieFrom(r), isNull);
+      applyAuthHeader(options, () => null);
+      expect(options.headers.containsKey('Authorization'), isFalse);
     });
   });
 
@@ -192,7 +132,7 @@ void main() {
       var called = false;
       final client = ApiClient(
         baseUrl: 'http://x',
-        sessionReader: () => null,
+        tokenReader: () => null,
         onUnauthorized: () async => called = true,
         dio: dio,
       );
@@ -212,7 +152,7 @@ void main() {
       var called = false;
       final client = ApiClient(
         baseUrl: 'http://x',
-        sessionReader: () => null,
+        tokenReader: () => null,
         onUnauthorized: () async => called = true,
         dio: dio,
       );
@@ -222,25 +162,6 @@ void main() {
       );
       expect(called, isFalse);
     });
-  });
-
-  test('postRaw：返回原始响应，可读 Set-Cookie（登录 finish 用）', () async {
-    final dio = Dio();
-    dio.httpClientAdapter = _HeaderAdapter(
-      jsonEncode({'success': true, 'message': '登录成功', 'data': {'authenticated': true}}),
-      {
-        Headers.contentTypeHeader: ['application/json'],
-        'set-cookie': ['serenique_session=v9; Path=/; HttpOnly; Secure'],
-      },
-    );
-    final client = ApiClient(
-      baseUrl: 'http://x',
-      sessionReader: () => null,
-      dio: dio,
-    );
-    final res = await client.postRaw('/api/auth/login/finish', body: {});
-    expect(sessionCookieFrom(res), 'v9');
-    expect(unwrapResponse(res.data), {'authenticated': true});
   });
 
   test('postMultipart 发送 multipart/form-data 并解包响应', () async {
@@ -264,7 +185,7 @@ void main() {
     });
     final client = ApiClient(
       baseUrl: 'https://api.test',
-      sessionReader: () => null,
+      tokenReader: () => null,
       dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
         ..httpClientAdapter = adapter,
     );
@@ -293,7 +214,7 @@ void main() {
     });
     final client = ApiClient(
       baseUrl: 'https://api.test',
-      sessionReader: () => null,
+      tokenReader: () => null,
       dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
         ..httpClientAdapter = adapter,
     );

@@ -45,7 +45,6 @@ dependencies:
   image_picker: ^1.2.3
   mime: ^2.0.0
   collection: ^1.19.1
-  passkeys: ^2.22.1
 
 dev_dependencies:
   flutter_test:

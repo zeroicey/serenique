@@ -6,7 +6,7 @@ import 'package:serenique_mobile/features/audit/audit_api.dart';
 /// 不真正发起网络请求。
 class _FakeApiClient extends ApiClient {
   _FakeApiClient({required this.handler})
-      : super(baseUrl: 'http://x', sessionReader: () => null);
+      : super(baseUrl: 'http://x', tokenReader: () => null);
 
   final Future<Object?> Function(
     String method,

@@ -1,11 +1,9 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../../core/network/api_client.dart';
 
-/// 会话存取抽象：生产用 Keychain/Keystore，测试注入内存假实现。
-/// 存的是 login/register finish 响应 Set-Cookie 里的 serenique_session 值。
+/// 令牌存取抽象：生产用 Keychain/Keystore，测试注入内存假实现。
 abstract class TokenStorage {
   Future<String?> read();
-  Future<void> write(String session);
+  Future<void> write(String token);
   Future<void> delete();
 }
 
@@ -14,14 +12,14 @@ class SecureTokenStorage implements TokenStorage {
   SecureTokenStorage([FlutterSecureStorage? storage])
       : _storage = storage ?? const FlutterSecureStorage();
 
-  static const _key = sessionCookieName;
+  static const _key = 'auth_token';
   final FlutterSecureStorage _storage;
 
   @override
   Future<String?> read() => _storage.read(key: _key);
 
   @override
-  Future<void> write(String session) => _storage.write(key: _key, value: session);
+  Future<void> write(String token) => _storage.write(key: _key, value: token);
 
   @override
   Future<void> delete() => _storage.delete(key: _key);

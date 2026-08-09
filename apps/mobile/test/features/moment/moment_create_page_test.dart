@@ -16,7 +16,7 @@ import 'package:serenique_mobile/features/moment/widgets/local_attachment_grid.d
 /// 配置 uploadError 后 uploadBlob 抛错（模拟上传失败）。
 class _FakeMomentApi extends MomentApi {
   _FakeMomentApi({this.uploadError})
-      : super(ApiClient(baseUrl: 'http://localhost', sessionReader: () => null));
+      : super(ApiClient(baseUrl: 'http://localhost', tokenReader: () => null));
 
   final Object? uploadError;
   int uploadCount = 0;
