@@ -37,11 +37,9 @@ export interface CredentialEntry {
   createdAt: string
 }
 
-/** 引导注册时可选携带的初始个人信息。 */
-export interface RegisterUserInfo {
-  name?: string
-  email?: string
-  birthday?: string
+/** 引导期注册时携带的部署引导令牌（决策⑨：无 userInfo，用户由引导脚本创建）。 */
+export interface RegisterStartInput {
+  setupToken?: string
 }
 
 export interface RegisterStartResult {
@@ -68,8 +66,8 @@ export interface LoginFinishInput {
 // ---- 会话状态 --------------------------------------------------------------
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
-  // 401 即未登录，不能让 ky 默认抛错（throwHttpErrors:true）——AuthGuard 需要拿到响应。
-  const res = await api.get(apiUrl('auth/me'), { throwHttpErrors: false })
+  // 401 即未登录（client 全局 throwHttpErrors:false 不会抛错）——AuthGuard 需要拿到响应。
+  const res = await api.get(apiUrl('auth/me'))
   const body = (await res.json()) as ApiEnvelope<AuthStatus>
   if (!body.success) {
     // 401 即未登录：AuthGuard 用它决定跳到登录页，不是错误。
@@ -81,10 +79,7 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
 
 // ---- 注册 / 登录 ceremony（start 段返回 challengeId + 浏览器 options）--------
 
-export async function registerStart(input: {
-  setupToken?: string
-  userInfo?: RegisterUserInfo
-}): Promise<RegisterStartResult> {
+export async function registerStart(input: RegisterStartInput): Promise<RegisterStartResult> {
   const res = await api.post(apiUrl('auth/register/start'), { json: input })
   return unwrap<RegisterStartResult>(res)
 }

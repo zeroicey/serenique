@@ -59,7 +59,7 @@ describe('auth api', () => {
       }),
     )
     const result = await fetchAuthStatus()
-    expect(mockedGet).toHaveBeenCalledWith('/api/auth/me', { throwHttpErrors: false })
+    expect(mockedGet).toHaveBeenCalledWith('/api/auth/me')
     expect(result).toEqual({ authenticated: false, user: null })
   })
 
@@ -69,15 +69,34 @@ describe('auth api', () => {
     expect(result).toEqual({ authenticated: true, user })
   })
 
-  it('registerStart posts setupToken + userInfo', async () => {
+  it('registerStart posts only setupToken（决策⑨ 无 userInfo）', async () => {
     mockedPost.mockResolvedValue(
-      envelope({ challengeId: 'c1', options: { challenge: 'x', rp: { name: 'Serenique' }, user: { id: 'u', name: 'n' }, pubKeyCredParams: [], timeout: 60000 } }),
+      envelope({ challengeId: 'c1', options: { challenge: 'x', rp: { name: 'Serenique' }, pubKeyCredParams: [], timeout: 60000 } }),
     )
-    const result = await registerStart({ setupToken: 'tok', userInfo: { name: '测试' } })
+    const result = await registerStart({ setupToken: 'tok' })
     expect(mockedPost).toHaveBeenCalledWith('/api/auth/register/start', {
-      json: { setupToken: 'tok', userInfo: { name: '测试' } },
+      json: { setupToken: 'tok' },
     })
     expect(result.challengeId).toBe('c1')
+  })
+
+  it('registerStart 不带 setupToken 时发送空对象', async () => {
+    mockedPost.mockResolvedValue(envelope({ challengeId: 'c2', options: { challenge: 'x' } }))
+    await registerStart({})
+    expect(mockedPost).toHaveBeenCalledWith('/api/auth/register/start', { json: {} })
+  })
+
+  it('registerStart 非 2xx envelope → 抛 ApiError（带服务端文案与 status）', async () => {
+    mockedPost.mockResolvedValue(
+      new Response(JSON.stringify({ success: false, message: '引导注册令牌不正确' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    await expect(registerStart({ setupToken: 'wrong' })).rejects.toMatchObject({
+      message: '引导注册令牌不正确',
+      status: 403,
+    })
   })
 
   it('registerFinish posts challengeId + credential', async () => {

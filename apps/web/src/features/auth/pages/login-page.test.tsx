@@ -1,118 +1,91 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
+import { Toaster } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '@/api/errors'
 import LoginPage from './login-page'
-import { useLogin, useRegister, useRegisterGate, type RegisterGateState } from '../queries'
+import { browserSupportsWebAuthn, loginWithPasskey } from '../webauthn'
 
-// mock 掉 queries（登录/注册 mutation）与 webauthn（浏览器能力探测），
-// 页面只测门禁探测驱动的 UI 分支与交互。
-vi.mock('../queries', () => ({
-  useLogin: vi.fn(),
-  useRegister: vi.fn(),
-  useRegisterGate: vi.fn(),
-}))
-
+// 不 mock queries —— 页面走真实 useLogin（onError toast 就是错误文案的呈现路径）；
+// 只 mock webauthn 层（浏览器能力探测 + ceremony 编排，后者在 webauthn.test 里单测）。
 vi.mock('../webauthn', () => ({
   browserSupportsWebAuthn: vi.fn(() => true),
+  loginWithPasskey: vi.fn(),
 }))
 
-const mockedUseLogin = vi.mocked(useLogin)
-const mockedUseRegister = vi.mocked(useRegister)
-const mockedUseRegisterGate = vi.mocked(useRegisterGate)
+const mockedBrowserSupportsWebAuthn = vi.mocked(browserSupportsWebAuthn)
+const mockedLoginWithPasskey = vi.mocked(loginWithPasskey)
 
-const loginMutateAsync = vi.fn().mockResolvedValue({ authenticated: true, user: null })
-const registerMutate = vi.fn()
-
-function renderPage(
-  gateState?: RegisterGateState,
-  registerOverride?: Partial<ReturnType<typeof useRegister>>,
-) {
-  mockedUseLogin.mockReturnValue({
-    mutateAsync: loginMutateAsync,
-    isPending: false,
-  } as unknown as ReturnType<typeof useLogin>)
-  mockedUseRegister.mockReturnValue({
-    mutate: registerMutate,
-    isPending: false,
-    error: null,
-    ...registerOverride,
-  } as unknown as ReturnType<typeof useRegister>)
-  mockedUseRegisterGate.mockReturnValue({
-    data: gateState,
-  } as unknown as ReturnType<typeof useRegisterGate>)
+function renderPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
   return render(
-    <MemoryRouter initialEntries={['/login']}>
-      <LoginPage />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/login']}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<div>home-marker</div>} />
+        </Routes>
+      </MemoryRouter>
+      <Toaster />
+    </QueryClientProvider>,
   )
 }
 
 describe('LoginPage', () => {
   beforeEach(() => {
-    loginMutateAsync.mockClear()
-    registerMutate.mockClear()
+    mockedLoginWithPasskey.mockReset()
+    mockedBrowserSupportsWebAuthn.mockReturnValue(true)
   })
 
-  it('已注册状态：只渲染登录按钮，不显示注册表单', () => {
-    renderPage({ state: 'registered' })
+  it('只渲染通行密钥登录按钮：无注册表单、无注册入口', () => {
+    renderPage()
     expect(screen.getByRole('button', { name: '使用通行密钥登录' })).toBeInTheDocument()
     expect(screen.queryByLabelText('引导令牌')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '首次使用？注册新账户' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /注册/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /首次使用/ })).not.toBeInTheDocument()
   })
 
-  it('点击登录触发 passkey 登录 mutation', async () => {
+  it('点击登录触发 passkey 登录 ceremony，成功后跳主页', async () => {
     const user = userEvent.setup()
-    renderPage({ state: 'registered' })
+    mockedLoginWithPasskey.mockResolvedValue({ authenticated: true, user: null })
+    renderPage()
+
     await user.click(screen.getByRole('button', { name: '使用通行密钥登录' }))
-    expect(loginMutateAsync).toHaveBeenCalledTimes(1)
+
+    expect(mockedLoginWithPasskey).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('home-marker')).toBeInTheDocument()
   })
 
-  it('首次注册状态：直接展示注册表单（引导令牌 + 可选个人信息）', () => {
-    renderPage({ state: 'first-time' })
-    expect(screen.getByLabelText('引导令牌')).toBeInTheDocument()
-    expect(screen.getByLabelText('姓名（可选）')).toBeInTheDocument()
-    expect(screen.getByLabelText('邮箱（可选）')).toBeInTheDocument()
-    expect(screen.getByLabelText('生日（可选）')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '注册' })).toBeInTheDocument()
-    // 可从注册视图切回登录视图
-    expect(screen.getByRole('button', { name: '已有通行密钥？去登录' })).toBeInTheDocument()
-  })
-
-  it('提交注册表单：携带 setupToken 与可选个人信息调用注册 mutation', async () => {
+  it('登录失败（网络不可用）→ Toast 展示「服务暂时不可用，请稍后再试」', async () => {
     const user = userEvent.setup()
-    renderPage({ state: 'first-time' })
-    await user.type(screen.getByLabelText('引导令牌'), 'setup-tok-123')
-    await user.type(screen.getByLabelText('姓名（可选）'), '测试用户')
-    await user.click(screen.getByRole('button', { name: '注册' }))
+    mockedLoginWithPasskey.mockRejectedValue(new Error('服务暂时不可用，请稍后再试'))
+    renderPage()
 
-    expect(registerMutate).toHaveBeenCalledTimes(1)
-    const [payload] = registerMutate.mock.calls[0]
-    expect(payload).toEqual({ setupToken: 'setup-tok-123', userInfo: { name: '测试用户' } })
+    await user.click(screen.getByRole('button', { name: '使用通行密钥登录' }))
+
+    expect(await screen.findByText('服务暂时不可用，请稍后再试')).toBeInTheDocument()
+    // 不出现任何注册引导
+    expect(screen.queryByRole('button', { name: /注册/ })).not.toBeInTheDocument()
   })
 
-  it('不填可选信息时 userInfo 各字段为 undefined（发往服务端时被剔除）', async () => {
+  it('登录失败（服务端错误）→ Toast 透传服务端中文文案', async () => {
     const user = userEvent.setup()
-    renderPage({ state: 'first-time' })
-    await user.type(screen.getByLabelText('引导令牌'), 'setup-tok-123')
-    await user.click(screen.getByRole('button', { name: '注册' }))
+    mockedLoginWithPasskey.mockRejectedValue(new ApiError('没有找到可用的通行密钥', 404))
+    renderPage()
 
-    const [payload] = registerMutate.mock.calls[0]
-    expect(payload.setupToken).toBe('setup-tok-123')
-    expect(payload.userInfo.name).toBeUndefined()
-    expect(payload.userInfo.email).toBeUndefined()
-    expect(payload.userInfo.birthday).toBeUndefined()
+    await user.click(screen.getByRole('button', { name: '使用通行密钥登录' }))
+
+    expect(await screen.findByText('没有找到可用的通行密钥')).toBeInTheDocument()
   })
 
-  it('注册失败（如引导令牌不正确）内联展示错误文案', () => {
-    renderPage({ state: 'first-time' }, { error: new Error('引导注册令牌不正确') })
-    expect(screen.getByRole('alert')).toHaveTextContent('引导注册令牌不正确')
-  })
-
-  it('无法判断状态（网络异常）：登录按钮 + 注册入口 + 提示信息', () => {
-    renderPage({ state: 'unavailable', message: '无法连接服务器，请检查网络' })
-    expect(screen.getByRole('button', { name: '使用通行密钥登录' })).toBeInTheDocument()
-    expect(screen.getByText('无法连接服务器，请检查网络')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '首次使用？注册新账户' })).toBeInTheDocument()
+  it('浏览器不支持 WebAuthn → 按钮禁用并展示提示', () => {
+    mockedBrowserSupportsWebAuthn.mockReturnValue(false)
+    renderPage()
+    expect(screen.getByRole('button', { name: '使用通行密钥登录' })).toBeDisabled()
+    expect(screen.getByText('当前环境不支持通行密钥（需 HTTPS 或 localhost）')).toBeInTheDocument()
   })
 })

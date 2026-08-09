@@ -82,14 +82,14 @@ describe('webauthn ceremony', () => {
     expect(result).toEqual(authStatus)
   })
 
-  it('register: register/start（带 setupToken + 个人信息）→ startRegistration → register/finish', async () => {
+  it('register: register/start（带 setupToken）→ startRegistration → register/finish', async () => {
     mockedRegisterStart.mockResolvedValue({ challengeId: 'c2', options: registerOptions })
     mockedStartRegistration.mockResolvedValue(registrationResponse())
     mockedRegisterFinish.mockResolvedValue(authStatus)
 
-    const result = await registerWithPasskey({ setupToken: 'tok', userInfo: { name: '测试' } })
+    const result = await registerWithPasskey({ setupToken: 'tok' })
 
-    expect(mockedRegisterStart).toHaveBeenCalledWith({ setupToken: 'tok', userInfo: { name: '测试' } })
+    expect(mockedRegisterStart).toHaveBeenCalledWith({ setupToken: 'tok' })
     expect(mockedStartRegistration).toHaveBeenCalledWith({ optionsJSON: registerOptions })
     expect(mockedRegisterFinish).toHaveBeenCalledWith({
       challengeId: 'c2',
@@ -129,6 +129,20 @@ describe('webauthn ceremony', () => {
   it('服务端 ApiError 原样透传（如 403 引导注册令牌不正确）', async () => {
     mockedRegisterStart.mockRejectedValue(new ApiError('引导注册令牌不正确', 403))
     await expect(registerWithPasskey({ setupToken: 'wrong' })).rejects.toThrow('引导注册令牌不正确')
+  })
+
+  it('网络失败（fetch TypeError）→ 「服务暂时不可用，请稍后再试」', async () => {
+    mockedLoginStart.mockRejectedValue(new TypeError('fetch failed'))
+    await expect(loginWithPasskey()).rejects.toThrow('服务暂时不可用，请稍后再试')
+  })
+
+  it('请求超时（TimeoutError）→ 「服务暂时不可用，请稍后再试」', async () => {
+    const timeoutError = new Error('Request timed out')
+    timeoutError.name = 'TimeoutError'
+    mockedRegisterStart.mockRejectedValue(timeoutError)
+    await expect(registerWithPasskey({ setupToken: 'tok' })).rejects.toThrow(
+      '服务暂时不可用，请稍后再试',
+    )
   })
 
   it('SecurityError → 来源不受信任提示', async () => {

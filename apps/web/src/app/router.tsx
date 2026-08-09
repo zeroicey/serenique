@@ -22,6 +22,8 @@ function lazyPage(loader: () => Promise<{ default: ComponentType }>) {
 
 const router = createBrowserRouter([
   { path: '/login', element: lazyPage(() => import('@/features/auth/pages/login-page')) },
+  // 隐藏的部署引导页：不挂任何导航入口，仅 ?setupToken= 链接可达（决策⑨）。
+  { path: '/setup', element: lazyPage(() => import('@/features/auth/pages/setup-page')) },
   {
     path: '/',
     element: <AuthGuard />,
