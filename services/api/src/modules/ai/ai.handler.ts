@@ -207,6 +207,11 @@ async function handleMessage(ws: WSContext, raw: string) {
         break;
       }
       case "switch_session": {
+        // 切到当前会话：no-op（必须早于 findSessionPath）。若继续走
+        // openSession → registry 命中同一活实例 → releaseSession 会对
+        // 它 dispose（abort 在途 turn、清空事件监听）→ attachSession 挂上
+        // 已销毁实例：在途 prompt 被误 abort，后续事件静默丢失。
+        if (msg.sessionId === conn.sessionId) return;
         const path = await aiService.findSessionPath(msg.sessionId);
         if (!path) {
           return safeSend(
@@ -221,6 +226,24 @@ async function handleMessage(ws: WSContext, raw: string) {
         break;
       }
       case "delete_session": {
+        // 删除「当前会话」且未落盘（新建未对话，磁盘无文件）：findSessionPath
+        // 找不到 → deleteSession 必抛 404，该会话永远删不掉。走「释放实例 +
+        // 建新会话」，不报 404。
+        if (msg.sessionId === conn.sessionId) {
+          const path = await aiService.findSessionPath(msg.sessionId);
+          if (!path) {
+            conn.unsubscribe?.();
+            if (conn.sessionId) aiService.releaseSession(conn.sessionId);
+            const { sm, session } = await aiService.createNewSession();
+            attachSession(conn, ws, sm.getSessionId(), session);
+            safeSend(ws, JSON.stringify({ type: "session_deleted", sessionId: msg.sessionId }));
+            safeSend(ws, sessionPayload(sm.getSessionId(), session));
+            const sessions = await aiService.listSessions();
+            safeSend(ws, JSON.stringify({ type: "sessions", sessions }));
+            break;
+          }
+          // 已落盘 → 落入下方通用删除流程
+        }
         await aiService.deleteSession(msg.sessionId);
         safeSend(ws, JSON.stringify({ type: "session_deleted", sessionId: msg.sessionId }));
         if (conn.sessionId === msg.sessionId) {
