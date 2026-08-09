@@ -61,6 +61,7 @@
     "services/api": {
       "name": "@serenique/api",
       "dependencies": {
+        "@earendil-works/pi-agent-core": "^0.84.1",
         "@earendil-works/pi-coding-agent": "^0.84.1",
         "@simplewebauthn/server": "^13.3.2",
         "drizzle-orm": "^0.45.2",
