@@ -3,11 +3,18 @@ import { describe, expect, it, vi } from 'vitest'
 import App from './App'
 
 // App 外层套了 AuthGuard：未登录会被重定向到 /login。此处 mock 认证状态为已登录，
-// 以便渲染真实应用外壳。
+// 以便渲染真实应用外壳。mock 需覆盖 queries.ts 从 api 模块 import 的全部符号。
 vi.mock('@/features/auth/api', () => ({
-  login: vi.fn(),
+  fetchAuthStatus: vi.fn().mockResolvedValue({ authenticated: true, user: null }),
+  loginStart: vi.fn(),
+  loginFinish: vi.fn(),
+  registerStart: vi.fn(),
+  registerFinish: vi.fn(),
   logout: vi.fn(),
-  fetchAuthStatus: vi.fn().mockResolvedValue({ authenticated: true }),
+  listCredentials: vi.fn(),
+  deleteCredential: vi.fn(),
+  getProfile: vi.fn(),
+  updateProfile: vi.fn(),
 }))
 
 describe('App', () => {

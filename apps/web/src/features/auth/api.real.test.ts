@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { deleteCredential } from './api'
 import { fetchAuthStatus } from './api'
 
 // 真实 ky 边界测试：不 mock @/api/client，stub 全局 fetch，直接走真实 ky 实例，
@@ -26,7 +27,7 @@ describe('fetchAuthStatus at the real ky boundary', () => {
 
     const result = await fetchAuthStatus()
 
-    expect(result).toEqual({ authenticated: false })
+    expect(result).toEqual({ authenticated: false, user: null })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
@@ -46,5 +47,13 @@ describe('fetchAuthStatus at the real ky boundary', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(fetchAuthStatus()).rejects.toThrow('服务器错误')
+  })
+
+  it('deleteCredential resolves on a real 204 with no body (skips json parsing)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(deleteCredential('c1')).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
