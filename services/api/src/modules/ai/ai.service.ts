@@ -75,7 +75,9 @@ const EXCLUDED_BUILTIN_TOOLS = ["bash", "read", "edit", "write", "grep", "find",
 // ---- 同会话单实例注册表 -----------------------------------------------
 // SessionManager 无文件锁：同一会话两个 AgentSession 实例会互相覆盖
 // jsonl（assistant 首条时整文件重写）。注册表保证同会话进程内只有一个实例。
-const sessionRegistry = new Map<string, AgentSession>();
+// 存 Promise 而非实例：创建是异步的，check-then-act 之间并发调用（双标签页 /
+// WS 重连竞速）会创建两个实例——in-flight 去重把并发调用合并到同一个 promise。
+const sessionRegistry = new Map<string, Promise<AgentSession>>();
 
 /**
  * 创建（或恢复）一个绑定到 sm 的 AgentSession：隔离 loader + 模型 +
@@ -106,13 +108,14 @@ export async function createAgentSessionFor(
 
 /**
  * 会话目录。aiSessionDir 来自 env：生产 /data/sessions（绝对路径）；dev/test
- * 缺省 ./.data/sessions（相对路径）。相对路径基于本文件位置（import.meta.dir）
- * 解析成绝对路径，避免依赖进程 cwd（bun test / systemd 等不同 cwd 下仍指向
- * 同一目录）。
+ * 缺省 ./.data/sessions（相对路径）。相对路径以包根（services/api/）为基准：
+ * import.meta.dir 是本文件所在目录（src/modules/ai/），../../.. 上溯到包根，
+ * 再拼接 aiSessionDir —— 避免数据落到 src/ 下，也不依赖进程 cwd（bun test /
+ * systemd 等不同 cwd 下仍指向同一目录）。
  */
 const SESSION_DIR = isAbsolute(aiSessionDir)
   ? aiSessionDir
-  : resolve(import.meta.dir, aiSessionDir);
+  : resolve(import.meta.dir, "../../..", aiSessionDir);
 
 /** 会话列表（按修改时间倒序）。 */
 export async function listSessions(): Promise<Array<{
@@ -152,23 +155,31 @@ export async function createNewSession() {
   return { sm, session: await getOrCreateSession(sm) };
 }
 
-/** 同会话单实例：注册表命中直接复用，否则创建并登记。 */
+/** 同会话单实例：注册表命中（含 in-flight 创建中）直接复用，否则创建并登记。 */
 export async function getOrCreateSession(
   sm: SessionManager,
 ): Promise<AgentSession> {
   const id = sm.getSessionId();
   const existing = sessionRegistry.get(id);
   if (existing) return existing;
-  const session = await createAgentSessionFor(sm);
-  sessionRegistry.set(id, session);
-  return session;
+  // 先登记再 await：await 之前的同步段内不可能有并发插入（JS 单线程，
+  // 本函数在第一个 await 之前没有让出点），并发调用在此合并到同一 promise。
+  const promise = createAgentSessionFor(sm);
+  sessionRegistry.set(id, promise);
+  try {
+    return await promise;
+  } catch (err) {
+    sessionRegistry.delete(id); // 创建失败不残留，下次重试
+    throw err;
+  }
 }
 
 export function releaseSession(id: string): void {
-  const session = sessionRegistry.get(id);
-  if (session) {
-    session.dispose();
+  const promise = sessionRegistry.get(id);
+  if (promise) {
     sessionRegistry.delete(id);
+    // dispose 须在创建完成（resolve）后调用；失败时静默忽略。
+    promise.then((session) => session.dispose()).catch(() => {});
   }
 }
 
