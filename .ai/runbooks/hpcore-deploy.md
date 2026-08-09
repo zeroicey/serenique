@@ -76,6 +76,27 @@ docker compose run --rm api bun scripts/bootstrap-user.ts \
 - 用户可见面只有「通行密钥登录」；users 空表时服务起不来（fail-closed），前端只会看到「服务暂时不可用」。
 - 引导脚本在镜像内（services/api/scripts/ 已随镜像拷贝，WORKDIR /app/services/api），服务器无需 bun/npm。
 
+## AI 助手（宁序）配置（2026-08-09 起）
+
+- `.env` 新增：`OPENCODE_API_KEY=<opencode 网关 key>`（pi-ai 读 env；缺省模型 `opencode-go/deepseek-v4-flash` 走 opencode.ai 网关）。**不配 `DEEPSEEK_API_KEY`**（DeepSeek 官方直连为备选）。
+- `compose.yml` 已加 `serenique-ai-sessions:/data/sessions` 命名卷（全新卷自动继承镜像 10001 属主；既有卷需一次 `chown -R 10001:10001`）。
+- 冒烟命令（容器内项目目录，`@/` 别名才能解析）：
+  ```sh
+  docker exec -w /app/services/api serenique-api bun tmp-smoke.ts
+  # tmp-smoke.ts: import { aiService } from "@/modules/ai/ai.service";
+  #   → isAiEnabled() + openRecentOrCreate() + session.prompt("...") 验证模型/对话/落盘
+  ```
+
+## 坑：fake-ip DNS 劫持 → 容器必须走 mihomo 代理（2026-08-09 实测）
+
+- **症状**：容器/宿主 curl 任意公网域名（google/baidu/deepseek/opencode）全部 TCP 超时，但 `ping 8.8.8.8` 通、`docker pull` 能成功（镜像加速器例外）。
+- **根因**：家庭网关（192.168.5.1）做 fake-ip DNS 劫持（`dig @223.5.5.5` 正常，但系统 DNS 返回 `198.18.x.x` 保留网段——Clash/mihomo fake-ip 特征），本机流量没挂 TUN 时 198.18.x.x 不可路由 → 超时。
+- **解法**：走本机 mihomo HTTP 代理（`/usr/bin/mihomo -d /etc/mihomo`，监听 `*:7890`）：
+  - 验证：`curl -x http://127.0.0.1:7890 https://opencode.ai/zen/go/v1/models` → 200。
+  - compose.yml 的 api 服务已配 `HTTP_PROXY/HTTPS_PROXY=http://host.docker.internal:7890` + `extra_hosts: host.docker.internal:host-gateway` + `NO_PROXY=localhost,127.0.0.1,postgres,::1`。**改 compose 后必须 `docker compose up -d --force-recreate api`**。
+  - Bun 原生 fetch 支持 `HTTPS_PROXY` env（undici/pi-ai 走全局 fetch，代理生效；已容器内实测 200）。
+- **影响面**：凡容器内需要出公网的功能（AI 模型调用、未来任何外呼）都必须走该代理；仅本机 ping/内网不受影响。
+
 ## 回滚
 
 - 服务器 `docker compose pull` 旧 `latest`，或拉 CI 构建的 `:main` 后 tag 成 `latest`。
