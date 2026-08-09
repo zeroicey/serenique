@@ -19,7 +19,7 @@ export function SessionSidebar() {
         {sessions.map((s) => (
           <div
             key={s.id}
-            className={`flex cursor-pointer items-center gap-1 rounded px-2 py-1.5 text-sm ${s.id === currentSessionId ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+            className={`group flex cursor-pointer items-center gap-1 rounded px-2 py-1.5 text-sm ${s.id === currentSessionId ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-muted'}`}
             onClick={() => s.id !== currentSessionId && switchSession(s.id)}
             title={`${s.name} · ${s.messageCount} 条消息`}
           >
