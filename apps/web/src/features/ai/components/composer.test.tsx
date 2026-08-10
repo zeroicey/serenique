@@ -21,7 +21,21 @@ describe('Composer', () => {
   test('空文本时发送按钮禁用', () => {
     useAiStore.setState({ busy: false })
     render(<Composer />)
-    expect(screen.getByText('发送').hasAttribute('disabled')).toBe(true)
+    expect(screen.getByLabelText('发送').hasAttribute('disabled')).toBe(true)
+  })
+
+  test('输入后发送按钮可用，点击触发 send', () => {
+    let sent = ''
+    useAiStore.setState({
+      busy: false,
+      send: (t: string) => {
+        sent = t
+      },
+    })
+    render(<Composer />)
+    fireEvent.change(screen.getByPlaceholderText(/输入消息/), { target: { value: '你好' } })
+    fireEvent.click(screen.getByLabelText('发送'))
+    expect(sent).toBe('你好')
   })
 
   test('busy 时输入框禁用且按钮变为停止图标', () => {
@@ -29,7 +43,7 @@ describe('Composer', () => {
     render(<Composer />)
     const input = screen.getByPlaceholderText(/AI 正在回复/) as HTMLTextAreaElement
     expect(input.disabled).toBe(true)
-    expect(screen.queryByText('发送')).toBeNull()
+    expect(screen.queryByLabelText('发送')).toBeNull()
     expect(screen.getByLabelText('停止')).toBeTruthy()
   })
 

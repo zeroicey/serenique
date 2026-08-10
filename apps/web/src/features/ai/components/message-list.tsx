@@ -20,7 +20,7 @@ export function MessageList() {
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
       {messages.map((m, i) =>
         m.role === 'user' ? (
-          <div key={i} className="whitespace-pre-wrap break-words">{m.text}</div>
+          <div key={i} className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right">{m.text}</div>
         ) : (
           <div key={i} className="flex flex-col gap-1">
             <ThinkingBlock text={m.thinking} />

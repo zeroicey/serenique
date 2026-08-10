@@ -1,4 +1,4 @@
-import { Square } from 'lucide-react'
+import { Send, Square } from 'lucide-react'
 import { useState } from 'react'
 import { useAiStore } from '@/features/ai/store/ai-store'
 
@@ -47,11 +47,13 @@ export function Composer() {
       ) : (
         <button
           type="button"
-          className="shrink-0 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50"
+          aria-label="发送"
+          title="发送"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-50"
           disabled={!text.trim()}
           onClick={submit}
         >
-          发送
+          <Send className="size-4" />
         </button>
       )}
     </div>
