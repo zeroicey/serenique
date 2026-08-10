@@ -1,8 +1,8 @@
-/// 纯日期工具：全部基于设备本地时区。日期键 = YYYY-MM-DD / YYYY-MM。
-///
-/// 关键坑（已实测）：Dart 的 DateTime.parse 对带偏移 ISO（如
-/// "2026-08-05T10:00:00+08:00"）会归一化到 UTC（isUtc=true），
-/// 展示前必须先 .toLocal()。本文件所有「解析后端 ISO → 格式化」都遵守。
+// 纯日期工具：全部基于设备本地时区。日期键 = YYYY-MM-DD / YYYY-MM。
+//
+// 关键坑（已实测）：Dart 的 DateTime.parse 对带偏移 ISO（如
+// "2026-08-05T10:00:00+08:00"）会归一化到 UTC（isUtc=true），
+// 展示前必须先 .toLocal()。本文件所有「解析后端 ISO → 格式化」都遵守。
 import 'event_models.dart';
 
 String dayKey(DateTime d) =>
