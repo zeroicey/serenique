@@ -18,8 +18,10 @@ export function MessageList() {
 
   return (
     // 内容列限宽居中（与闪记一致 max-w-[600px]）：大屏两侧留白，小屏自动全宽。
+    // pb-24 为浮动输入框（absolute bottom 约 64px）留出滚动空间：滚到底时
+    // 最后一条消息停在输入条上方，不被遮挡。
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
-      <div className="mx-auto flex w-full max-w-[600px] flex-col gap-3">
+      <div className="mx-auto flex w-full max-w-[600px] flex-col gap-3 pb-24">
       {messages.map((m, i) =>
         m.role === 'user' ? (
           <div key={i} className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right">{m.text}</div>

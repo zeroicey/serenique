@@ -18,11 +18,12 @@ export function Composer() {
   }
 
   return (
-    // 输入区与消息区同宽居中（max-w-[600px]）：大屏两侧留白，小屏自动全宽。
-    <div className="shrink-0 border-t border-border p-3">
-      <div className="mx-auto flex w-full max-w-[600px] items-center gap-2">
+    // 浮动输入条：absolute 吸附底部，圆角 + 阴影 + 半透明背景形成悬浮感；
+    // 与消息区同宽居中（max-w-[600px]）：大屏两侧留白，小屏自动全宽。
+    <div className="absolute inset-x-0 bottom-0 z-10 p-4">
+      <div className="mx-auto flex w-full max-w-[600px] items-center gap-2 rounded-xl border border-border bg-background/95 p-2 shadow-lg backdrop-blur">
       <input
-        className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-primary disabled:opacity-60"
+        className="h-9 flex-1 rounded-md bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
         type="text"
         value={text}
         disabled={busy}

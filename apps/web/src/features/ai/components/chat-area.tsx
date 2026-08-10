@@ -14,9 +14,9 @@ export function ChatArea() {
   }, [lastError])
 
   return (
-    // 上下两区：上方消息流滚动（flex-1 + min-h-0 + overflow-y-auto），下方输入区固定。
+    // 消息流占满整页滚动（flex-1 + overflow-y-auto），输入框 absolute 浮动在底部。
     // 根元素 h-full 撑满 AppLayout 的 main（flex-1 定高），整页不滚动。
-    <div className="flex h-full min-w-0 flex-col overflow-hidden">
+    <div className="relative flex h-full min-w-0 flex-col overflow-hidden">
       <MessageList />
       <Composer />
     </div>
