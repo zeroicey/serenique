@@ -54,7 +54,9 @@ class _EventTileState extends State<EventTile> {
                   )
                 : Text(
                     eventTimeLabel(e),
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant, height: 1.3),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
                   ),
           ),
           const SizedBox(width: 10),

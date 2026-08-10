@@ -146,7 +146,7 @@ class _MonthCalendarSheetState extends ConsumerState<MonthCalendarSheet> {
             ),
           ),
           SizedBox(
-            height: 4,
+            height: 10,
             child: hasEvents
                 ? Center(
                     child: Container(
