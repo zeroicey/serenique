@@ -18,17 +18,17 @@ export function Composer() {
   }
 
   return (
-    <div className="flex shrink-0 items-end gap-2 border-t border-border p-3">
-      <textarea
-        className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-60"
-        rows={2}
+    <div className="flex shrink-0 items-center gap-2 border-t border-border p-3">
+      <input
+        className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-primary disabled:opacity-60"
+        type="text"
         value={text}
         disabled={busy}
-        placeholder={busy ? 'AI 正在回复…' : '输入消息，Enter 发送（Shift+Enter 换行）'}
+        placeholder={busy ? 'AI 正在回复…' : '输入消息，Enter 发送'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           // isComposing 守卫：中文输入法下按 Enter 确认候选词不触发发送（IME 冲突）
-          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
             e.preventDefault()
             submit()
           }

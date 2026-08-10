@@ -17,14 +17,14 @@ export function MessageList() {
   }, [messages, activeTurn?.text])
 
   return (
-    <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
       {messages.map((m, i) =>
         m.role === 'user' ? (
-          <div key={i} className="self-end max-w-[78%] rounded-lg bg-primary/10 px-3.5 py-2.5 whitespace-pre-wrap break-words">{m.text}</div>
+          <div key={i} className="whitespace-pre-wrap break-words">{m.text}</div>
         ) : (
           <div key={i} className="flex flex-col gap-1">
             <ThinkingBlock text={m.thinking} />
-            <div className="max-w-[78%] break-words rounded-lg border border-border bg-card px-3.5 py-2.5">
+            <div className="break-words">
               {/* 历史消息已完整：静态渲染，不动画 */}
               <Streamdown isAnimating={false}>{m.text}</Streamdown>
             </div>
