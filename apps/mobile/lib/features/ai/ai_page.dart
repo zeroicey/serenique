@@ -46,18 +46,22 @@ class _AiPageState extends ConsumerState<AiPage> {
         ..showSnackBar(SnackBar(content: Text(next)));
     });
 
-    return Column(
-      children: [
-        Expanded(child: MessageList()),
-        // 重连（回前台自动重连）期间无离线横幅，用细进度条指示连接中。
-        if (status == AiConnStatus.connecting)
-          const LinearProgressIndicator(minHeight: 2),
-        if (status == AiConnStatus.offline)
-          _OfflineBanner(
-            onRetry: () => ref.read(aiControllerProvider.notifier).connect(),
-          ),
-        const ComposerBar(),
-      ],
+    // 必须自带 Scaffold（与其它模块页面一致）：Scaffold 提供不透明 Material 表面，
+    // 否则路由背景透明，侧栏切换转场期间旧页面会透过新页面显示，直到转场结束才消失。
+    return Scaffold(
+      body: Column(
+        children: [
+          Expanded(child: MessageList()),
+          // 重连（回前台自动重连）期间无离线横幅，用细进度条指示连接中。
+          if (status == AiConnStatus.connecting)
+            const LinearProgressIndicator(minHeight: 2),
+          if (status == AiConnStatus.offline)
+            _OfflineBanner(
+              onRetry: () => ref.read(aiControllerProvider.notifier).connect(),
+            ),
+          const ComposerBar(),
+        ],
+      ),
     );
   }
 }
