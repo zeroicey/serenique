@@ -1,4 +1,4 @@
-// AppBar 会话切换标题（AppShell 对 /ai 渲染）：宁序 + 当前会话名（▾），点击弹会话列表。
+// AppBar 会话切换标题（AppShell 对 /ai 渲染）：当前会话名（▾），点击弹会话列表。
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,10 +20,8 @@ class AiSessionTitle extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('宁序'),
-          const SizedBox(width: 6),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
+            constraints: const BoxConstraints(maxWidth: 180),
             child: Text(
               name,
               overflow: TextOverflow.ellipsis,
