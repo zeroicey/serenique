@@ -1,11 +1,12 @@
 # AI 助手模块（宁序）需求文档
 
 - 日期：2026-08-09
-- 状态：✅已实施（后端 2026-08-09 + Web 前端 2026-08-09 均完成并上线生产）+ ⏳待实施（移动端 Flutter 2026-08-10 设计完成，设计稿 `.ai/architecture/2026-08-10-flutter-ai-module-design.md`）
+- 状态：✅已实施（后端 2026-08-09 + Web 前端 2026-08-09 + 移动端 2026-08-10 均完成）
+  - 2026-08-10 更新：✅移动端（Flutter `apps/mobile`）AI 聊天模块已实施 — `/ai` 占位页替换为真实聊天页（WS Bearer 握手、流式 Markdown、thinking 折叠、工具卡、会话弹层、断线横幅 + 回前台重连），后端零改动。设计稿 `.ai/architecture/2026-08-10-flutter-ai-module-design.md`；实现记录 `.ai/worklog/2026-08-10-flutter-ai-module.md`
 - 范围：services/api（新增 ai 模块，PI SDK 内嵌）+ apps/web（/ai 页面聊天 UI）+ apps/mobile（Flutter /ai 聊天页）；后端为第一优先级
 - 前置记录：`.ai/decisions/2026-08-08-mcp-sunset.md`（MCP 停更冻结，AI 能力不再走 MCP/外部工具层）；`apps/web` 侧边栏已有 `/ai`「宁序」占位路由
 - 参考原型：`~/workspace/tests/pi-test`（PI SDK + WebSocket 最小对话服务，含会话持久化/切换 + e2e 测试）
-- 实施计划：后端 `.ai/archive/2026-08-09-ai-agent-backend-plan.md`；前端 `.ai/archive/2026-08-09-ai-agent-web-plan.md`
+- 实施计划：后端 `.ai/archive/2026-08-09-ai-agent-backend-plan.md`；前端 `.ai/archive/2026-08-09-ai-agent-web-plan.md`；移动端 `.ai/archive/2026-08-10-flutter-ai-module-plan.md`
 
 ---
 
