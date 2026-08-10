@@ -18,7 +18,9 @@ export function Composer() {
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-t border-border p-3">
+    // 输入区与消息区同宽居中（max-w-[600px]）：大屏两侧留白，小屏自动全宽。
+    <div className="shrink-0 border-t border-border p-3">
+      <div className="mx-auto flex w-full max-w-[600px] items-center gap-2">
       <input
         className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-primary disabled:opacity-60"
         type="text"
@@ -56,6 +58,7 @@ export function Composer() {
           <Send className="size-4" />
         </button>
       )}
+      </div>
     </div>
   )
 }

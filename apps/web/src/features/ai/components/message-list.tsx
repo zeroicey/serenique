@@ -17,7 +17,9 @@ export function MessageList() {
   }, [messages, activeTurn?.text])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+    // 内容列限宽居中（与闪记一致 max-w-[600px]）：大屏两侧留白，小屏自动全宽。
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+      <div className="mx-auto flex w-full max-w-[600px] flex-col gap-3">
       {messages.map((m, i) =>
         m.role === 'user' ? (
           <div key={i} className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right">{m.text}</div>
@@ -33,6 +35,7 @@ export function MessageList() {
         ),
       )}
       {activeTurn && <TurnView turn={activeTurn} />}
+      </div>
       <div ref={bottomRef} />
     </div>
   )
