@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useCredentials,
   useDeleteCredential,
+  useLogout,
   useProfile,
   useRegister,
   useRenameCredential,
@@ -12,7 +13,13 @@ import {
 import SettingsPage from './settings-page'
 import { useCreateToken, useRevokeToken, useTokens } from '../queries'
 
-// mock 掉设置页用到的所有数据 hooks，页面只测三个 tab 的核心交互。
+const { setTheme } = vi.hoisted(() => ({ setTheme: vi.fn() }))
+
+vi.mock('next-themes', () => ({
+  useTheme: () => ({ setTheme }),
+}))
+
+// mock 掉设置页用到的所有数据 hooks，页面只测各 tab 的核心交互。
 vi.mock('@/features/auth/queries', () => ({
   useProfile: vi.fn(),
   useUpdateProfile: vi.fn(),
@@ -20,6 +27,7 @@ vi.mock('@/features/auth/queries', () => ({
   useDeleteCredential: vi.fn(),
   useRenameCredential: vi.fn(),
   useRegister: vi.fn(),
+  useLogout: vi.fn(),
 }))
 
 vi.mock('../queries', () => ({
@@ -34,6 +42,7 @@ const mockedUseCredentials = vi.mocked(useCredentials)
 const mockedUseDeleteCredential = vi.mocked(useDeleteCredential)
 const mockedUseRenameCredential = vi.mocked(useRenameCredential)
 const mockedUseRegister = vi.mocked(useRegister)
+const mockedUseLogout = vi.mocked(useLogout)
 const mockedUseTokens = vi.mocked(useTokens)
 const mockedUseCreateToken = vi.mocked(useCreateToken)
 const mockedUseRevokeToken = vi.mocked(useRevokeToken)
@@ -51,6 +60,7 @@ const updateProfileMutate = vi.fn()
 const deleteCredentialMutate = vi.fn()
 const renameCredentialMutateAsync = vi.fn().mockResolvedValue({})
 const registerMutateAsync = vi.fn().mockResolvedValue({ authenticated: true, user: null })
+const logoutMutate = vi.fn()
 const revokeTokenMutate = vi.fn()
 const createTokenMutate = vi.fn()
 
@@ -87,6 +97,10 @@ function mockHooks(overrides: {
     isPending: false,
     error: null,
   } as unknown as ReturnType<typeof useRegister>)
+  mockedUseLogout.mockReturnValue({
+    mutate: logoutMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useLogout>)
   mockedUseTokens.mockReturnValue({
     data: overrides.tokens ?? [],
     isPending: false,
@@ -128,6 +142,8 @@ describe('SettingsPage', () => {
     deleteCredentialMutate.mockClear()
     renameCredentialMutateAsync.mockClear()
     registerMutateAsync.mockClear()
+    logoutMutate.mockClear()
+    setTheme.mockClear()
     revokeTokenMutate.mockClear()
     createTokenMutate.mockClear()
     mockHooks()
@@ -244,6 +260,19 @@ describe('SettingsPage', () => {
     expect(screen.getByText('撤销 API 令牌')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '撤销' }))
     expect(revokeTokenMutate).toHaveBeenCalledWith('t1')
+  })
+
+  it('通用 tab：主题切换调用 setTheme，退出登录触发 logout', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    tab('通用').click()
+
+    await user.click(screen.getByRole('button', { name: '主题' }))
+    await user.click(await screen.findByText('深色'))
+    expect(setTheme).toHaveBeenCalledWith('dark')
+
+    await user.click(screen.getByRole('button', { name: '退出登录' }))
+    expect(logoutMutate).toHaveBeenCalled()
   })
 })
 

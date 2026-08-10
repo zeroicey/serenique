@@ -4,13 +4,15 @@ import { cn } from '@/lib/utils'
 import { ProfileForm } from '../components/profile-form'
 import { CredentialsSection } from '../components/credentials-section'
 import { TokensSection } from '../components/tokens-section'
+import { GeneralSection } from '../components/general-section'
 
-// 设置页：个人信息 / 登录凭证 / API 令牌 三个 tab（均需登录，由 AuthGuard 保证）。
+// 设置页：个人信息 / 登录凭证 / API 令牌 / 通用 四个 tab（均需登录，由 AuthGuard 保证）。
 
 const TABS = [
   { id: 'profile', label: '个人信息' },
   { id: 'credentials', label: '登录凭证' },
   { id: 'tokens', label: 'API 令牌' },
+  { id: 'general', label: '通用' },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -48,12 +50,14 @@ export default function SettingsPage() {
               {tab === 'profile' && '修改你的个人资料，保存后立即生效。'}
               {tab === 'credentials' && '管理可以登录本服务的通行密钥设备。'}
               {tab === 'tokens' && '管理 CLI / 脚本 / 移动端使用的访问令牌。'}
+              {tab === 'general' && '界面外观与账号操作。'}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {tab === 'profile' && <ProfileForm />}
             {tab === 'credentials' && <CredentialsSection />}
             {tab === 'tokens' && <TokensSection />}
+            {tab === 'general' && <GeneralSection />}
           </CardContent>
         </Card>
       </div>

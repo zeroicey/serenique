@@ -22,12 +22,12 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 import { Separator } from '@/components/ui/separator'
-import { ThemeToggle } from './theme-toggle'
 import { useSidebarCounts } from '@/app/layout/use-sidebar-counts'
 import { useAuditUnreadCount } from '@/features/audit/queries'
 
-// 全局侧边栏：品牌区 + 模块导航 + 底部设置/主题切换。新增模块在 NAV_ITEMS 追加一项。
+// 全局侧边栏：品牌区 + 模块导航 + 底部设置入口。新增模块在 NAV_ITEMS 追加一项。
 // 顺序与移动端 app_shell.dart 对齐：宁序 → 闪记 → 习惯 → 任务 → 日历 → 素材库 → 日志。
+// 主题切换与退出登录已收敛到设置页（通用 tab）。
 const NAV_ITEMS: { icon: LucideIcon; label: string; path: string }[] = [
   { icon: Sparkles, label: '宁序', path: '/ai' },
   { icon: Zap, label: '闪记', path: '/moment' },
@@ -101,9 +101,6 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               )}
             </NavLink>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <ThemeToggle />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
