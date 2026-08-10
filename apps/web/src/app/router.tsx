@@ -8,6 +8,8 @@ import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
 import { TaskNav } from '@/features/task/components/task-nav'
 import { EventNav } from '@/features/event/components/event-nav'
 import { AuditNav } from '@/features/audit/components/audit-nav'
+import { AiNav } from '@/features/ai/components/ai-nav'
+import { SessionSwitcher } from '@/features/ai/components/session-switcher'
 import { AuthGuard } from '@/features/auth/components/auth-guard'
 
 // 懒加载 + Suspense 包装；handle.nav 注册该路由的动态导航内容。
@@ -58,10 +60,14 @@ const router = createBrowserRouter([
             handle: { nav: <AuditNav /> },
           },
           // 宁序（AI 助手）已接入真实页面；习惯 / 素材库仍为占位模块（开发中）。
+          // header：左侧标题+在线点（AiNav），右侧会话切换浮动下拉（SessionSwitcher）。
           {
             path: 'ai',
             element: lazyPage(() => import('@/features/ai/pages/ai-page')),
-            handle: { nav: <ModuleTitleNav title="宁序" /> },
+            handle: {
+              nav: <AiNav />,
+              headerRight: <SessionSwitcher />,
+            },
           },
           {
             path: 'habit',
