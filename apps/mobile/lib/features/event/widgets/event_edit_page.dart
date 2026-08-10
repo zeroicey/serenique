@@ -1,5 +1,5 @@
-// 日程新建/编辑合一底部弹窗：标题 / 全天 / 开始 / 结束 / 地点 / 备注。
-// [day] 预填创建日期（新建）；[event] 非空 = 编辑。
+// 日程新建/编辑合一全屏页：标题 / 全天 / 开始 / 结束 / 地点 / 备注。
+// [day] 预填创建日期（新建）；[event] 非空 = 编辑。由 /event/edit 路由承载（ShellRoute 外）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
@@ -7,38 +7,29 @@ import '../event_models.dart';
 import '../event_providers.dart';
 import '../event_time.dart';
 
-Future<void> showEventEditSheet(
-  BuildContext context, {
-  String? day,
-  EventEntry? event,
-}) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (_) => Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: _EventEditSheet(day: day, event: event),
-    ),
-  );
+class EventEditArgs {
+  const EventEditArgs({this.day, this.event});
+
+  final String? day; // 新建时预填日期
+  final EventEntry? event; // 编辑时回填
 }
 
-class _EventEditSheet extends ConsumerStatefulWidget {
-  const _EventEditSheet({this.day, this.event});
+class EventEditPage extends ConsumerStatefulWidget {
+  const EventEditPage({super.key, required this.args});
 
-  final String? day;
-  final EventEntry? event;
+  final EventEditArgs args;
 
   @override
-  ConsumerState<_EventEditSheet> createState() => _EventEditSheetState();
+  ConsumerState<EventEditPage> createState() => _EventEditPageState();
 }
 
-class _EventEditSheetState extends ConsumerState<_EventEditSheet> {
+class _EventEditPageState extends ConsumerState<EventEditPage> {
   late final TextEditingController _title =
-      TextEditingController(text: widget.event?.title ?? '');
+      TextEditingController(text: widget.args.event?.title ?? '');
   late final TextEditingController _location =
-      TextEditingController(text: widget.event?.location ?? '');
+      TextEditingController(text: widget.args.event?.location ?? '');
   late final TextEditingController _note =
-      TextEditingController(text: widget.event?.note ?? '');
+      TextEditingController(text: widget.args.event?.note ?? '');
   late bool _allDay;
   late DateTime _start;
   late DateTime _end;
@@ -47,14 +38,14 @@ class _EventEditSheetState extends ConsumerState<_EventEditSheet> {
   @override
   void initState() {
     super.initState();
-    final editing = widget.event;
+    final editing = widget.args.event;
     if (editing != null) {
       // 后端 ISO 归一化 UTC，回填前必须 .toLocal()。
       _allDay = editing.isAllDay;
       _start = DateTime.parse(editing.startAt).toLocal();
       _end = DateTime.parse(editing.endAt).toLocal();
     } else {
-      final d = dayFromKey(widget.day ?? todayKey());
+      final d = dayFromKey(widget.args.day ?? todayKey());
       _allDay = false;
       _start = DateTime(d.year, d.month, d.day, 9);
       _end = DateTime(d.year, d.month, d.day, 10);
@@ -118,16 +109,14 @@ class _EventEditSheetState extends ConsumerState<_EventEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
+    final editing = widget.args.event != null;
+    return Scaffold(
+      appBar: AppBar(title: Text(editing ? '编辑日程' : '新建日程')),
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.event == null ? '新建日程' : '编辑日程',
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
             TextField(
               controller: _title,
               decoration: const InputDecoration(labelText: '标题', border: OutlineInputBorder()),
@@ -170,7 +159,7 @@ class _EventEditSheetState extends ConsumerState<_EventEditSheet> {
             const SizedBox(height: 8),
             FilledButton(
               onPressed: _submitting ? null : _submit,
-              child: Text(widget.event == null ? '创建' : '保存'),
+              child: Text(editing ? '保存' : '创建'),
             ),
           ],
         ),
@@ -201,7 +190,7 @@ class _EventEditSheetState extends ConsumerState<_EventEditSheet> {
     final actions = ref.read(eventActionsProvider);
     setState(() => _submitting = true);
     try {
-      if (widget.event == null) {
+      if (widget.args.event == null) {
         await actions.create(
           title: title,
           startAt: startAt,
@@ -212,7 +201,7 @@ class _EventEditSheetState extends ConsumerState<_EventEditSheet> {
         );
       } else {
         await actions.update(
-          widget.event!.id,
+          widget.args.event!.id,
           title: title,
           startAt: startAt,
           endAt: endAt,

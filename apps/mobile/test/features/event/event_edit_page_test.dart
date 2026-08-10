@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/features/event/event_models.dart';
 import 'package:serenique_mobile/features/event/event_providers.dart';
 import 'package:serenique_mobile/features/event/event_time.dart';
-import 'package:serenique_mobile/features/event/widgets/event_edit_sheet.dart';
+import 'package:serenique_mobile/features/event/widgets/event_edit_page.dart';
 
 /// 记录动作的 EventActions 假实现（EventActions 方法默认虚，可覆写）。
 class _RecordingActions extends EventActions {
@@ -51,29 +51,21 @@ class _RecordingActions extends EventActions {
 }
 
 void main() {
+  /// 直接 pump 全屏编辑页（不再走弹窗）。
+  Future<void> pumpPage(WidgetTester tester, ProviderContainer container, EventEditArgs args) async {
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(home: EventEditPage(args: args)),
+    ));
+  }
+
   testWidgets('新建提交：默认选中日 09:00-10:00，create 收到全字段', (tester) async {
     final container = ProviderContainer(overrides: [
       eventActionsProvider.overrideWith((ref) => _RecordingActions(ref)),
     ]);
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => showEventEditSheet(context, day: '2026-08-12'),
-                child: const Text('打开'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('打开'));
-    await tester.pumpAndSettle();
+    await pumpPage(tester, container, const EventEditArgs(day: '2026-08-12'));
 
     await tester.enterText(find.widgetWithText(TextField, '标题'), '晨会');
     await tester.tap(find.text('创建'));
@@ -95,23 +87,7 @@ void main() {
     ]);
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => showEventEditSheet(context, day: '2026-08-12'),
-                child: const Text('打开'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('打开'));
-    await tester.pumpAndSettle();
+    await pumpPage(tester, container, const EventEditArgs(day: '2026-08-12'));
 
     expect(find.text('09:00'), findsOneWidget); // 时段模式
     await tester.tap(find.byType(Switch));
@@ -126,23 +102,7 @@ void main() {
     ]);
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => showEventEditSheet(context, day: '2026-08-12'),
-                child: const Text('打开'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('打开'));
-    await tester.pumpAndSettle();
+    await pumpPage(tester, container, const EventEditArgs(day: '2026-08-12'));
 
     await tester.enterText(find.widgetWithText(TextField, '标题'), 'x');
     await tester.tap(find.byType(Switch)); // 全天
@@ -180,23 +140,7 @@ void main() {
       createdAt: 't',
       updatedAt: 't',
     );
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => showEventEditSheet(context, event: editing),
-                child: const Text('打开'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('打开'));
-    await tester.pumpAndSettle();
+    await pumpPage(tester, container, EventEditArgs(event: editing));
 
     expect(find.text('编辑日程'), findsOneWidget);
     expect(find.text('晨会'), findsOneWidget); // 标题回填
@@ -215,23 +159,7 @@ void main() {
     ]);
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => showEventEditSheet(context, day: '2026-08-12'),
-                child: const Text('打开'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('打开'));
-    await tester.pumpAndSettle();
+    await pumpPage(tester, container, const EventEditArgs(day: '2026-08-12'));
     await tester.tap(find.text('创建'));
     await tester.pumpAndSettle();
 

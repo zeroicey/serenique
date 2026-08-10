@@ -24,6 +24,18 @@ final eventTodayCountProvider = FutureProvider<int>(
   (ref) => ref.watch(eventApiProvider).countToday(),
 );
 
+/// 选中日期 UI 状态：AppBar 日期导航与 EventPage 列表共享。
+/// 默认今天；只在 /event 相关 widget watch（AppShell 的 title 仅 /event 时构建）。
+class EventUiController extends Notifier<String> {
+  @override
+  String build() => todayKey();
+
+  void select(String day) => state = day;
+}
+
+final eventSelectedDayProvider =
+    NotifierProvider<EventUiController, String>(EventUiController.new);
+
 /// 写操作集中处：成功后整体失效 day/month/count（对齐 Web invalidateQueries(['events'])）。
 class EventActions {
   EventActions(this._ref);

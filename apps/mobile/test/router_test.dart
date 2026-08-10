@@ -14,6 +14,7 @@ import 'package:serenique_mobile/features/auth/auth_providers.dart';
 import 'package:serenique_mobile/features/auth/login_page.dart';
 import 'package:serenique_mobile/features/event/event_page.dart';
 import 'package:serenique_mobile/features/event/event_providers.dart';
+import 'package:serenique_mobile/features/event/event_time.dart';
 import 'package:serenique_mobile/features/moment/moment_list_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
@@ -228,5 +229,7 @@ void main() {
     // 空态文案证明是真实日程页（占位页只会显示「功能开发中」）
     expect(find.byType(EventPage), findsOneWidget);
     expect(find.text('这天没有日程'), findsOneWidget);
+    // AppBar 标题区 = 日期导航（默认今天，eventSelectedDayProvider 无 IO）
+    expect(find.text(dateLabel(todayKey())), findsOneWidget);
   });
 }

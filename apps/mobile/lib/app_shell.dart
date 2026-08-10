@@ -6,6 +6,8 @@ import 'core/network/api_exception.dart';
 import 'features/ai/widgets/session_title.dart';
 import 'features/audit/audit_providers.dart';
 import 'features/event/event_providers.dart';
+import 'features/event/widgets/event_date_nav.dart';
+import 'features/event/widgets/event_edit_page.dart';
 import 'features/moment/moment_providers.dart';
 import 'features/moment/widgets/attachment_picker_sheet.dart';
 import 'features/task/task_providers.dart';
@@ -96,7 +98,9 @@ class AppShell extends ConsumerWidget {
         ),
         title: location.startsWith('/ai')
             ? const AiSessionTitle()
-            : Text(moduleTitle(location)),
+            : location.startsWith('/event')
+                ? const EventDateNav()
+                : Text(moduleTitle(location)),
         // 添加按钮放右上角（不用右下角 FAB，避免挡住评论发送）。
         actions: [
           if (location == '/moments')
@@ -114,6 +118,13 @@ class AppShell extends ConsumerWidget {
                   child: Icon(Icons.add),
                 ),
               ),
+            ),
+          if (location.startsWith('/event'))
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: '新建日程',
+              onPressed: () => context.push('/event/edit',
+                  extra: EventEditArgs(day: ref.read(eventSelectedDayProvider))),
             ),
           // 日志页：全部已读放顶部导航栏右侧（无未读时禁用）。
           if (location.startsWith('/audit'))
