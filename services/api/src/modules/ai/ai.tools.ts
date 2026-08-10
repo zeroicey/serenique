@@ -8,6 +8,8 @@ import {
 } from "@/modules/task/task.types";
 import { eventService } from "@/modules/event/event.service";
 import { momentService } from "@/modules/moment/moment.service";
+import { momentCommentService } from "@/modules/moment/comment.service";
+import { tagService } from "@/modules/tag/tag.service";
 
 // ---------------------------------------------------------------------------
 // AI 助手业务工具：把现有 service 层（task/event/moment）暴露给 agent。
@@ -62,6 +64,30 @@ export function buildAiTools(): ToolDefinition[] {
       description: "创建任务分组",
       parameters: Type.Object({ title: Type.String({ minLength: 1, maxLength: 200 }) }),
       execute: (_id, p, _s, _u, _c) => run(() => taskService.createTaskGroup(p)),
+    }),
+    defineTool({
+      name: "get_task_group",
+      label: "Get Task Group",
+      description: "按 id 获取任务分组详情",
+      parameters: Type.Object({ id: Type.String() }),
+      execute: (_id, p, _s, _u, _c) => run(() => taskService.getTaskGroup(p)),
+    }),
+    defineTool({
+      name: "update_task_group",
+      label: "Update Task Group",
+      description: "重命名任务分组（title 必填，整体覆盖）",
+      parameters: Type.Object({
+        id: Type.String(),
+        title: Type.String({ minLength: 1, maxLength: 200 }),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => taskService.updateTaskGroup(p)),
+    }),
+    defineTool({
+      name: "delete_task_group",
+      label: "Delete Task Group",
+      description: "按 id 删除任务分组（组内任务一并删除）",
+      parameters: Type.Object({ id: Type.String() }),
+      execute: (_id, p, _s, _u, _c) => run(() => taskService.deleteTaskGroup(p)),
     }),
     defineTool({
       name: "list_tasks",
@@ -207,6 +233,157 @@ export function buildAiTools(): ToolDefinition[] {
       description: "创建闪念（纯文本）",
       parameters: Type.Object({ text: Type.String({ maxLength: 10000 }) }),
       execute: (_id, p, _s, _u, _c) => run(() => momentService.create(p)),
+    }),
+    defineTool({
+      name: "update_moment",
+      label: "Update Moment",
+      description:
+        "更新闪念（text 必填，整体覆盖）；location 可选：省略=保持不变，传对象=设置/覆盖位置",
+      parameters: Type.Object({
+        id: Type.String(),
+        text: Type.String({ minLength: 1, maxLength: 10000 }),
+        location: Type.Optional(
+          Type.Object({
+            name: Type.Optional(Type.String()),
+            latitude: Type.Optional(Type.Number()),
+            longitude: Type.Optional(Type.Number()),
+          }),
+        ),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => momentService.update(p)),
+    }),
+    defineTool({
+      name: "delete_moment",
+      label: "Delete Moment",
+      description: "按 id 删除闪念（附件与标签绑定一并移除）",
+      parameters: Type.Object({ id: Type.String() }),
+      execute: (_id, p, _s, _u, _c) => run(() => momentService.delete(p)),
+    }),
+    defineTool({
+      name: "add_moment_tag",
+      label: "Add Moment Tag",
+      description: "给闪念绑定一个标签（重复绑定会报错）",
+      parameters: Type.Object({
+        momentId: Type.String(),
+        tagId: Type.String(),
+      }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() => momentService.addTag(p.momentId, p.tagId)),
+    }),
+    defineTool({
+      name: "remove_moment_tag",
+      label: "Remove Moment Tag",
+      description: "解除闪念上的一个标签绑定",
+      parameters: Type.Object({
+        momentId: Type.String(),
+        tagId: Type.String(),
+      }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() => momentService.removeTag(p.momentId, p.tagId)),
+    }),
+    defineTool({
+      name: "replace_moment_tags",
+      label: "Replace Moment Tags",
+      description: "整体替换闪念的标签集合（幂等；传空数组则清除全部标签）",
+      parameters: Type.Object({
+        momentId: Type.String(),
+        tagIds: Type.Array(Type.String()),
+      }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() => momentService.replaceTags(p.momentId, p.tagIds)),
+    }),
+    defineTool({
+      name: "list_tags",
+      label: "List Tags",
+      description: "列出全部标签（含各自关联的闪念数）",
+      parameters: Type.Object({}),
+      execute: (_id, _p, _s, _u, _c) =>
+        run(() => tagService.list({ page: 1, pageSize: 50 })),
+    }),
+    defineTool({
+      name: "get_tag",
+      label: "Get Tag",
+      description: "按 id 获取标签详情",
+      parameters: Type.Object({ id: Type.String() }),
+      execute: (_id, p, _s, _u, _c) => run(() => tagService.get(p)),
+    }),
+    defineTool({
+      name: "create_tag",
+      label: "Create Tag",
+      description: "创建标签（名称 1-32 字符，同名标签已存在会报错）",
+      parameters: Type.Object({
+        name: Type.String({ minLength: 1, maxLength: 32 }),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => tagService.create(p)),
+    }),
+    defineTool({
+      name: "rename_tag",
+      label: "Rename Tag",
+      description: "重命名标签（名称 1-32 字符，重命名到已存在的名称会报错）",
+      parameters: Type.Object({
+        id: Type.String(),
+        name: Type.String({ minLength: 1, maxLength: 32 }),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => tagService.rename(p)),
+    }),
+    defineTool({
+      name: "delete_tag",
+      label: "Delete Tag",
+      description: "按 id 删除标签（所有闪念上的该标签绑定一并移除）",
+      parameters: Type.Object({ id: Type.String() }),
+      execute: (_id, p, _s, _u, _c) => run(() => tagService.delete(p)),
+    }),
+    defineTool({
+      name: "list_moment_comments",
+      label: "List Moment Comments",
+      description: "按 momentId 列出闪念的全部评论",
+      parameters: Type.Object({ momentId: Type.String() }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() => momentCommentService.list({ momentId: p.momentId })),
+    }),
+    defineTool({
+      name: "add_moment_comment",
+      label: "Add Moment Comment",
+      description: "给闪念添加一条评论（内容 1-2000 字符）",
+      parameters: Type.Object({
+        momentId: Type.String(),
+        content: Type.String({ minLength: 1, maxLength: 2000 }),
+      }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() => momentCommentService.add(p.momentId, { content: p.content })),
+    }),
+    defineTool({
+      name: "update_moment_comment",
+      label: "Update Moment Comment",
+      description: "更新闪念的一条评论（内容 1-2000 字符，整体覆盖）",
+      parameters: Type.Object({
+        momentId: Type.String(),
+        commentId: Type.String(),
+        content: Type.String({ minLength: 1, maxLength: 2000 }),
+      }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() =>
+          momentCommentService.update(
+            { momentId: p.momentId, commentId: p.commentId },
+            { content: p.content },
+          ),
+        ),
+    }),
+    defineTool({
+      name: "delete_moment_comment",
+      label: "Delete Moment Comment",
+      description: "按 commentId 删除闪念的一条评论",
+      parameters: Type.Object({
+        momentId: Type.String(),
+        commentId: Type.String(),
+      }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() =>
+          momentCommentService.remove({
+            momentId: p.momentId,
+            commentId: p.commentId,
+          }),
+        ),
     }),
   ];
 }

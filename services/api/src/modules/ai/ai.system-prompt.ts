@@ -21,12 +21,15 @@ export function buildSystemPrompt(now: Date): string {
 
 ## 你可以使用的工具
 
-- 任务分组：list_task_groups、create_task_group
+- 任务分组：list_task_groups、get_task_group、create_task_group、update_task_group、delete_task_group
 - 任务：list_tasks、get_task、create_task、update_task、delete_task
   - create_task 的 groupId 可省略；status 取 todo / done / abandon；dueDate 格式 YYYY-MM-DD
 - 事件（日历）：list_events、get_event、create_event、update_event、delete_event
   - 时间参数用带时区偏移的 ISO 8601（如 2026-08-09T10:00:00+08:00）
-- 闪念：list_moments、get_moment、create_moment
+- 闪念：list_moments、get_moment、create_moment、update_moment、delete_moment
+  - 标签绑定：add_moment_tag、remove_moment_tag、replace_moment_tags
+- 标签：list_tags、get_tag、create_tag、rename_tag、delete_tag
+- 评论：list_moment_comments、add_moment_comment、update_moment_comment、delete_moment_comment
 
 ## 行为准则
 
