@@ -2,7 +2,7 @@
 
 用户要求补齐 moment 位置的「朋友圈式」前端闭环：创建 moment 时可选位置（附近位置列表 + 搜索），创建后列表显示位置。调研结论：后端存储（`moments.location` jsonb，08-08 已实施）与 CLI 早已支持，缺的是 Web/Flutter 端消费 + POI 选点链路。选点必须依赖第三方 LBS，经调研（高德 vs 腾讯官方文档）选定**高德为主**：官方 Flutter 插件含 POI 搜索、个人超配额可购买；腾讯日配额大但 Flutter 需自封装且个人不能买超量。坐标系统一 GCJ-02（设备 WGS-84 服务端转换）；展示 name 优先、不做展示时逆地理编码（官方定性为估计值）；Apple 免费签名即可用定位（Core Location 非受管能力，无需 $99）。
 
-## 改动（commit 待提交）
+## 改动（commit 7322398 / 0f89cb0 / 6bfde6b，已推送 main 并部署生产）
 
 - **API（services/api/src/modules/location/，新模块，高德 Web 服务代理）**：
   - `location.types.ts`：`NearbyQuerySchema`（lng/lat 范围、radius 1..50000 默认 3000、keyword ≤50）/ `SearchQuerySchema`（keyword 1..50，lng/lat 成对 refine）；`z.coerce` 兼容字符串 query 与数字直调；响应 `{ items: [{ name, latitude, longitude, address?, distance? }] }` + `config: { enabled }`
@@ -23,7 +23,9 @@
 - API：`bun run typecheck` 干净；`bun test src/modules/location/` 24 pass（坐标转换含天安门 WGS-84→GCJ-02 ±0.0001 + 规范向量 bit-exact）；全量 `bun test` 312 pass / 120 skip（DB 集成 gated by RUN_DB_TESTS）
 - Web：`bunx tsc --noEmit` 干净；`bunx vitest run` 46 文件 224 用例全过（新增 16 用例：位置行渲染/深链 href、选点弹窗 geo 失败/防抖/清除、schema 校验）
 - 双端契约已互相核对：config/nearby/search 参数与 items 形状完全一致，无偏差
-- 未做生产联调（本地无 AMAP_KEY；未配置时接口 503、前端隐藏入口，均按设计降级）
+- **本地端到端冒烟（08-10，docker postgres:16-alpine 端口 5433 + PORT=3002 dev server）**：config enabled=true；nearby 天安门坐标返回 20 POI（距离升序）；search 三里屯 10 条；POST /api/moments 带 location 创建成功；列表返回 location；PUT text-only 保留位置；PUT location:null 清除；DELETE 204。本地 `.env`（gitignored）已含 `AMAP_KEY`，`./.data/blobs` 为本地 blob root
+- **生产部署（08-10）**：3 commits 推 main → docker-publish 构建（digest `40b1837e65cd…`）；hpcore `.env` 加 `AMAP_KEY`（先 `cp .env .env.bak.<ts>`）→ digest 精确拉取 + tag latest + `docker compose up -d --force-recreate api` → healthy；`docker exec printenv AMAP_KEY` 确认注入。Web：`VITE_API_BASE_URL=https://api.hcyj.xyz/serenique bun run build` + `wrangler pages deploy dist --project-name=serenique-web --branch main`，线上核验 index hash 与本地构建一致（**首次 curl 命中 CDN 旧缓存，加 `?cb=` 参数破缓存后才是新版本**）。生产 location 端点需登录（UNAUTHORIZED 属预期）；本地 CLI token 是 v0.5.0 前旧体系，不能用于生产验证
+- 未做浏览器端人工验收（选点弹窗 UI + geolocation 授权 + 深链），待用户在 https://serenique.0icey.icu 登录后实测
 
 ## 坑 / 对下一次会话的提示
 
