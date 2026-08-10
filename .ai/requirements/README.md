@@ -13,7 +13,7 @@
 | `2026-08-08-audit-module.md` | 审计模块 | ✅已实施 |
 | `2026-08-08-push-module.md` | 推送模块 | 🔶设计中 |
 | `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | ✅已实施（显示/预览 MVP；上传下阶段） |
-| `2026-08-08-moment-location.md` | Moment 位置信息 | ✅已实施 |
+| `2026-08-08-moment-location.md` | Moment 位置信息 | ✅已实施（API + CLI + Web 选点与展示 2026-08-10；Flutter 端 P2 待排期） |
 | `2026-08-09-ai-agent-module.md` | AI 助手模块（宁序，PI SDK 内嵌） | ✅已实施（后端 + Web 前端 2026-08-09；待部署验收） |
 
 ## 约定
