@@ -8,6 +8,7 @@ import { taskRouter } from "@/modules/task";
 import { eventRouter } from "@/modules/event";
 import { auditRouter } from "@/modules/audit";
 import { tagRouter } from "@/modules/tag";
+import { locationRouter } from "@/modules/location";
 import { authMiddleware, authRouter } from "@/modules/auth";
 import { tokenRouter } from "@/modules/tokens";
 import { createAiRouter } from "@/modules/ai";
@@ -55,7 +56,7 @@ export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSoc
   app.get("/health", (c) => Res.ok("服务运行中", { status: "ok" }).build(c));
   app.get("/", (c) =>
     Res.ok("Serenique API", {
-      modules: ["moment", "blob", "task", "event", "audit", "tags", "auth", "tokens"],
+      modules: ["moment", "blob", "task", "event", "audit", "tags", "auth", "tokens", "location"],
     }).build(c),
   );
 
@@ -71,6 +72,7 @@ export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSoc
   app.route("/api", eventRouter);
   app.route("/api", auditRouter);
   app.route("/api", tagRouter);
+  app.route("/api", locationRouter);
   app.route("/api", createAiRouter(ws.upgradeWebSocket));
 
   // ---- 5. 404 fallback ----------------------------------------------------

@@ -175,6 +175,20 @@ export type {
 } from "@/modules/tokens/token.types";
 export { CreateTokenSchema } from "@/modules/tokens/token.types";
 
+// ---- Location module (AMAP proxy) ----
+export { locationService } from "@/modules/location/location.service";
+export type {
+  LocationConfigEntry,
+  LocationItem,
+  LocationQueryResult,
+  NearbyInput,
+  SearchInput,
+} from "@/modules/location/location.types";
+export {
+  NearbyQuerySchema,
+  SearchQuerySchema,
+} from "@/modules/location/location.types";
+
 // ---- Shared utilities ----
 export { AppError, ErrorCode } from "@/shared/errors";
 export type { ErrorCode as ErrorCodeType } from "@/shared/errors";

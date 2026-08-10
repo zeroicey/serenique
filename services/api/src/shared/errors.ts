@@ -22,6 +22,7 @@ export const ErrorCode = {
   INTERNAL: "INTERNAL",
   UNAUTHORIZED: "UNAUTHORIZED",
   RATE_LIMITED: "RATE_LIMITED",
+  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

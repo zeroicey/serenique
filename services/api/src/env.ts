@@ -41,6 +41,12 @@ const envSchema = z.object({
   AI_SESSION_DIR: z.string().optional(),
   // 模型选择 "provider/modelId"，缺省 deepseek/deepseek-v4-flash。
   AI_MODEL: z.string().optional(),
+  // ---- 位置服务（高德 Web 服务代理，见 .ai/requirements/2026-08-08-moment-location.md）----
+  // 高德 Web 服务 Key。未配置 → GET /api/location/config 返回 enabled=false，
+  // /api/location/nearby|search 返回 503「位置服务未配置」。可选，不参与生产
+  // fail-closed 校验（位置选点是可选项）。schema 只做类型校验与文档化；
+  // location service 直接读 process.env.AMAP_KEY（运行期可注入/变更，便于单测）。
+  AMAP_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
