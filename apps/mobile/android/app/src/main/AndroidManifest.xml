@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 网络：API 请求必需（此前 release 未声明 INTERNET） -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 定位：闪记选点（前台使用，WhenInUse 语义） -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <application
         android:label="Serenique"
         android:name="${applicationName}"

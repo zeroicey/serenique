@@ -27,8 +27,8 @@ class MomentActions {
   final Ref _ref;
   MomentApi get _api => _ref.read(momentApiProvider);
 
-  Future<Moment> create(String text) async {
-    final created = await _api.create(text);
+  Future<Moment> create(String text, {MomentLocation? location}) async {
+    final created = await _api.create(text, location: location);
     _ref.invalidate(momentListProvider);
     return created;
   }
@@ -37,8 +37,9 @@ class MomentActions {
   /// 任一步失败抛错，由页面保留已选附件供重试。
   Future<Moment> createWithMedia(
     String text,
-    List<({Uint8List bytes, String filename, String mimeType})> files,
-  ) async {
+    List<({Uint8List bytes, String filename, String mimeType})> files, {
+    MomentLocation? location,
+  }) async {
     final blobs = <String>[];
     for (var i = 0; i < files.length; i++) {
       final f = files[i];
@@ -53,6 +54,7 @@ class MomentActions {
           MomentAttachmentInput(
               blobId: blobs[i], displayName: files[i].filename, sortOrder: i),
       ],
+      location: location,
     );
     _ref.invalidate(momentListProvider);
     return created;

@@ -111,4 +111,74 @@ void main() {
     // displayName 缺省时回退到 originalName
     expect(image.displayLabel, 'b1.jpg');
   });
+
+  group('MomentLocation', () {
+    test('fromJson 解析全字段', () {
+      final loc = MomentLocation.fromJson(
+          {'name': '星巴克', 'latitude': 39.9827, 'longitude': 116.3162});
+      expect(loc.name, '星巴克');
+      expect(loc.latitude, 39.9827);
+      expect(loc.longitude, 116.3162);
+      expect(loc.hasCoordinates, isTrue);
+    });
+
+    test('fromJson 容忍缺省/部分字段（仅 name）', () {
+      final loc = MomentLocation.fromJson({'name': '未命名地点'});
+      expect(loc.name, '未命名地点');
+      expect(loc.latitude, isNull);
+      expect(loc.longitude, isNull);
+      expect(loc.hasCoordinates, isFalse);
+    });
+
+    test('fromJson 容忍部分坐标字段（仅经纬之一）', () {
+      final loc = MomentLocation.fromJson({'latitude': 39.9});
+      expect(loc.latitude, 39.9);
+      expect(loc.longitude, isNull);
+      expect(loc.hasCoordinates, isFalse);
+    });
+
+    test('toJson 只带非空字段（创建请求体对齐后端 Schema）', () {
+      expect(
+        const MomentLocation(name: 'A', latitude: 39.9, longitude: 116.4)
+            .toJson(),
+        {'name': 'A', 'latitude': 39.9, 'longitude': 116.4},
+      );
+      expect(const MomentLocation(latitude: 39.9).toJson(), {'latitude': 39.9});
+      expect(const MomentLocation().toJson(), isEmpty);
+    });
+
+    test('相等性比较', () {
+      const a = MomentLocation(name: 'A', latitude: 39.9);
+      expect(a, const MomentLocation(name: 'A', latitude: 39.9));
+      expect(a == const MomentLocation(name: 'A', latitude: 39.91), isFalse);
+      expect(a.hashCode,
+          const MomentLocation(name: 'A', latitude: 39.9).hashCode);
+    });
+  });
+
+  group('Moment.location', () {
+    Moment withLocation(Object? location) => Moment.fromJson({
+          'id': 'm1',
+          'text': 'x',
+          'location': location,
+          'createdAt': 't',
+          'updatedAt': 't',
+        });
+
+    test('location 对象被解析', () {
+      final m = withLocation({'name': '公园', 'latitude': 39.9, 'longitude': 116.4});
+      expect(m.location, isNotNull);
+      expect(m.location!.name, '公园');
+      expect(m.location!.hasCoordinates, isTrue);
+    });
+
+    test('location 为 null / 缺省 → null（不抛错）', () {
+      expect(withLocation(null).location, isNull);
+      expect(
+        Moment.fromJson({'id': 'm2', 'text': 'x', 'createdAt': 't', 'updatedAt': 't'})
+            .location,
+        isNull,
+      );
+    });
+  });
 }

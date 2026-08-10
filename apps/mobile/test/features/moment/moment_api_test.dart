@@ -217,5 +217,70 @@ void main() {
     final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
     expect(body['text'], '纯文字');
     expect(body.containsKey('attachments'), isFalse);
+    expect(body.containsKey('location'), isFalse);
+  });
+
+  test('create 带 location 时请求体包含位置对象', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {
+          'id': 'm3',
+          'text': '带位置',
+          'attachments': [],
+          'comments': [],
+          'commentCount': 0,
+          'createdAt': 't',
+          'updatedAt': 't',
+        },
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    await MomentApi(client).create(
+      '带位置',
+      location:
+          const MomentLocation(name: '星巴克', latitude: 39.9827, longitude: 116.3162),
+    );
+    final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
+    expect(body['location'], {
+      'name': '星巴克',
+      'latitude': 39.9827,
+      'longitude': 116.3162,
+    });
+  });
+
+  test('Moment.fromJson 解析响应里的 location', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {
+          'id': 'm4',
+          'text': '带位置',
+          'location': {'name': '公园', 'latitude': 39.9, 'longitude': 116.4},
+          'attachments': [],
+          'comments': [],
+          'commentCount': 0,
+          'createdAt': 't',
+          'updatedAt': 't',
+        },
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    final m = await MomentApi(client).create('带位置');
+    expect(m.location, isNotNull);
+    expect(m.location!.name, '公园');
+    expect(m.location!.longitude, 116.4);
   });
 }

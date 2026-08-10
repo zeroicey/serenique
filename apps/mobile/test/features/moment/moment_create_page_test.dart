@@ -1,16 +1,47 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:serenique_mobile/core/network/api_client.dart';
 import 'package:serenique_mobile/core/network/api_exception.dart';
+import 'package:serenique_mobile/features/location/location_api.dart';
+import 'package:serenique_mobile/features/location/location_providers.dart';
 import 'package:serenique_mobile/features/moment/moment_api.dart';
 import 'package:serenique_mobile/features/moment/moment_create_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
 import 'package:serenique_mobile/features/moment/widgets/local_attachment_grid.dart';
+
+/// mock geolocator 原生通道：测试环境无原生实现，不 mock 会一直挂起。
+/// 权限 granted（whileInUse）+ 固定坐标，让选点 sheet 走通完整定位流程。
+void mockGeolocator(WidgetTester tester) {
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    const MethodChannel('flutter.baseflow.com/geolocator'),
+    (call) async {
+      switch (call.method) {
+        case 'checkPermission':
+        case 'requestPermission':
+          return 2; // LocationPermission.whileInUse
+        case 'getCurrentPosition':
+          return {
+            'latitude': 39.98,
+            'longitude': 116.31,
+            'accuracy': 10.0,
+            'altitude': 0.0,
+            'altitudeAccuracy': 5.0,
+            'heading': 0.0,
+            'headingAccuracy': 0.0,
+            'speed': 0.0,
+            'speedAccuracy': 0.0,
+            'timestamp': 0,
+          };
+        default:
+          return null;
+      }
+    },
+  );
+}
 
 /// 假 MomentApi：记录 uploadBlob 调用与 create 收到的附件；
 /// 配置 uploadError 后 uploadBlob 抛错（模拟上传失败）。
@@ -22,6 +53,7 @@ class _FakeMomentApi extends MomentApi {
   int uploadCount = 0;
   String? createText;
   List<MomentAttachmentInput>? createAttachments;
+  MomentLocation? createLocation;
 
   @override
   Future<MomentBlob> uploadBlob(Uint8List bytes,
@@ -41,12 +73,15 @@ class _FakeMomentApi extends MomentApi {
 
   @override
   Future<Moment> create(String text,
-      {List<MomentAttachmentInput> attachments = const []}) async {
+      {List<MomentAttachmentInput> attachments = const [],
+      MomentLocation? location}) async {
     createText = text;
     createAttachments = attachments;
+    createLocation = location;
     return Moment(
       id: 'm1',
       text: text,
+      location: location,
       comments: const [],
       commentCount: 0,
       createdAt: '',
@@ -55,12 +90,39 @@ class _FakeMomentApi extends MomentApi {
   }
 }
 
+/// 假 LocationApi：搜索返回可配置结果（用于选点流程；定位在测试环境自然失败）。
+class _FakeLocationApi extends LocationApi {
+  _FakeLocationApi()
+      : super(ApiClient(baseUrl: 'http://localhost', tokenReader: () => null));
+
+  List<LocationPoi> searchResult = [];
+
+  @override
+  Future<List<LocationPoi>> search(String keyword,
+      {double? lng, double? lat}) async {
+    return searchResult;
+  }
+
+  @override
+  Future<List<LocationPoi>> nearby(double lng, double lat,
+      {int radius = 3000}) async {
+    return searchResult;
+  }
+}
+
 void main() {
   Future<void> pumpCreate(WidgetTester tester,
-      {List<PickedAttachment>? initial, _FakeMomentApi? api}) async {
+      {List<PickedAttachment>? initial,
+      _FakeMomentApi? api,
+      _FakeLocationApi? locationApi,
+      bool? locationEnabled}) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         momentListProvider.overrideWith((ref) async => []),
+        if (locationEnabled != null)
+          locationConfigProvider.overrideWith((ref) async => locationEnabled),
+        if (locationApi != null)
+          locationApiProvider.overrideWithValue(locationApi),
         if (initial != null)
           pickedAttachmentsProvider
               .overrideWith(() => PickedAttachments(initial: initial)),
@@ -170,5 +232,85 @@ void main() {
     expect(container.read(pickedAttachmentsProvider), hasLength(1)); // 附件保留
     expect(find.byType(MomentCreatePage), findsOneWidget); // 页面未 pop
     expect(find.byType(LocalAttachmentGrid), findsOneWidget);
+  });
+
+  group('所在位置', () {
+    testWidgets('config enabled=false 时不显示入口', (tester) async {
+      await pumpCreate(tester, locationEnabled: false);
+      expect(find.text('不显示位置'), findsNothing);
+    });
+
+    testWidgets('enabled=true 时显示「不显示位置」，点开选点并选中', (tester) async {
+      mockGeolocator(tester); // 测试环境无原生定位，mock 后走通完整定位→附近列表流程
+      final locationApi = _FakeLocationApi()
+        ..searchResult = [
+          const LocationPoi(
+              name: '星巴克', latitude: 39.9827, longitude: 116.3162),
+        ];
+      final api = _FakeMomentApi();
+      await pumpCreate(tester,
+          locationEnabled: true, locationApi: locationApi, api: api);
+
+      expect(find.text('不显示位置'), findsOneWidget);
+
+      // 打开选点 sheet → 定位成功 → 附近列表直接出现 → 点击选中
+      await tester.tap(find.text('不显示位置'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ListTile, '星巴克'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ListTile, '星巴克'));
+      await tester.pumpAndSettle();
+
+      // 选中后行显示「📍 名称」
+      expect(find.text('📍 星巴克'), findsOneWidget);
+      expect(find.text('不显示位置'), findsNothing);
+    });
+
+    testWidgets('选中后 × 清除恢复「不显示位置」', (tester) async {
+      mockGeolocator(tester);
+      final locationApi = _FakeLocationApi()
+        ..searchResult = [
+          const LocationPoi(name: '公园', latitude: 39.9, longitude: 116.4),
+        ];
+      final api = _FakeMomentApi();
+      await pumpCreate(tester,
+          locationEnabled: true, locationApi: locationApi, api: api);
+
+      await tester.tap(find.text('不显示位置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, '公园'));
+      await tester.pumpAndSettle();
+      expect(find.text('📍 公园'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('清除位置'));
+      await tester.pump();
+      expect(find.text('不显示位置'), findsOneWidget);
+      expect(find.text('📍 公园'), findsNothing);
+    });
+
+    testWidgets('发表时把选中的位置传给 create', (tester) async {
+      mockGeolocator(tester);
+      final locationApi = _FakeLocationApi()
+        ..searchResult = [
+          const LocationPoi(
+              name: '星巴克', latitude: 39.9827, longitude: 116.3162),
+        ];
+      final api = _FakeMomentApi();
+      await pumpCreate(tester,
+          locationEnabled: true, locationApi: locationApi, api: api);
+
+      await tester.tap(find.text('不显示位置'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, '星巴克'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, '带位置');
+      await tester.tap(find.text('发表'));
+      await tester.pumpAndSettle();
+
+      expect(api.createLocation,
+          const MomentLocation(
+              name: '星巴克', latitude: 39.9827, longitude: 116.3162));
+    });
   });
 }

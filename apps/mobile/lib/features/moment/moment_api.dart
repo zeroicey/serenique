@@ -39,11 +39,14 @@ class MomentApi {
   }
 
   Future<Moment> create(String text,
-      {List<MomentAttachmentInput> attachments = const []}) async {
+      {List<MomentAttachmentInput> attachments = const [],
+      MomentLocation? location}) async {
     final data = await _client.postData('/api/moments', body: {
       'text': text,
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
+      // 后端 Create 不接受 null：location == null 时不带该字段
+      if (location != null) 'location': location.toJson(),
     });
     return Moment.fromJson(data as Map<String, dynamic>);
   }

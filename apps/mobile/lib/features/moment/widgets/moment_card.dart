@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/network/api_exception.dart';
+import '../../location/location_format.dart';
 import '../media_preview.dart';
 import '../moment_models.dart';
 import '../moment_providers.dart';
@@ -86,6 +88,16 @@ class _MomentCardState extends ConsumerState<MomentCard> {
     }
   }
 
+  /// 有坐标时打开高德深链（经度,纬度 顺序由 amapDeepLink 保证）。
+  Future<void> _openLocation(MomentLocation location) async {
+    final ok = await launchUrl(Uri.parse(amapDeepLink(location)),
+        mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('无法打开地图')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -144,6 +156,30 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                 ),
               ),
             ],
+            // 位置行：附件下方、时间行上方（朋友圈样式，对齐 event_tile）。
+            // name 优先展示；有坐标时整行可点打开高德；无 location 不渲染。
+            if (moment.location != null)
+              GestureDetector(
+                onTap: moment.location!.hasCoordinates
+                    ? () => _openLocation(moment.location!)
+                    : null,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(children: [
+                    Icon(Icons.place_outlined,
+                        size: 13, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 3),
+                    Expanded(
+                      child: Text(locationLabel(moment.location!),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12, color: scheme.onSurfaceVariant)),
+                    ),
+                  ]),
+                ),
+              ),
             // 时间行：时间靠左，⋮ 菜单在最右。
             Row(
               children: [

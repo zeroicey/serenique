@@ -72,4 +72,50 @@ void main() {
       expect(find.byType(InteractiveViewer), findsOneWidget);
     });
   });
+
+  testWidgets('有 location 时显示位置行（name 优先，对齐 event_tile 样式）', (tester) async {
+    final m = Moment(
+      id: 'm3',
+      text: '带位置',
+      location: const MomentLocation(name: '星巴克', latitude: 39.9827, longitude: 116.3162),
+      comments: const [],
+      commentCount: 0,
+      createdAt: 't',
+      updatedAt: 't',
+    );
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MomentCard(moment: m))));
+    expect(find.text('星巴克'), findsOneWidget);
+    expect(find.byIcon(Icons.place_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.more_horiz), findsOneWidget); // 时间行仍渲染
+  });
+
+  testWidgets('无 name 时位置行显示坐标；无 location 时不渲染位置行', (tester) async {
+    final withCoords = Moment(
+      id: 'm4',
+      text: '只有坐标',
+      location: const MomentLocation(latitude: 39.90871, longitude: 116.3975),
+      comments: const [],
+      commentCount: 0,
+      createdAt: 't',
+      updatedAt: 't',
+    );
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: MomentCard(moment: withCoords))));
+    expect(find.text('39.9087, 116.3975'), findsOneWidget);
+
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: MomentCard(
+                moment: const Moment(
+              id: 'm5',
+              text: '无位置',
+              comments: [],
+              commentCount: 0,
+              createdAt: 't',
+              updatedAt: 't',
+            )))));
+    await tester.pump();
+    expect(find.byIcon(Icons.place_outlined), findsNothing);
+  });
 }

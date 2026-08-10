@@ -142,10 +142,47 @@ List<MomentAttachment> sortedAttachments(List<MomentAttachment> attachments) {
     });
 }
 
+/// 闪记位置（对齐 services/api 的 MomentLocationSchema）：name/latitude/longitude 均可选，
+/// 至少一个字段；后端校验空对象会被拒绝。坐标是 GCJ-02（后端统一转换），直接存储/深链。
+class MomentLocation {
+  const MomentLocation({this.name, this.latitude, this.longitude});
+
+  final String? name;
+  final double? latitude;
+  final double? longitude;
+
+  /// 是否有坐标（深链与可点击行依赖它；仅 name 的位置不可打开地图）。
+  bool get hasCoordinates => latitude != null && longitude != null;
+
+  factory MomentLocation.fromJson(Map<String, dynamic> json) => MomentLocation(
+        name: json['name'] as String?,
+        latitude: (json['latitude'] as num?)?.toDouble(),
+        longitude: (json['longitude'] as num?)?.toDouble(),
+      );
+
+  /// 创建请求体（对齐 Create 的 MomentLocationSchema；空对象由后端拒绝）。
+  Map<String, dynamic> toJson() => {
+        if (name != null) 'name': name,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      other is MomentLocation &&
+      other.name == name &&
+      other.latitude == latitude &&
+      other.longitude == longitude;
+
+  @override
+  int get hashCode => Object.hash(name, latitude, longitude);
+}
+
 class Moment {
   const Moment({
     required this.id,
     required this.text,
+    this.location,
     this.attachments = const [],
     required this.comments,
     required this.commentCount,
@@ -155,6 +192,9 @@ class Moment {
 
   final String id;
   final String text;
+
+  /// 可选位置；后端响应 location 为 null 或缺省时为空。
+  final MomentLocation? location;
   final List<MomentAttachment> attachments;
   final List<MomentComment> comments;
   final int commentCount;
@@ -164,6 +204,9 @@ class Moment {
   factory Moment.fromJson(Map<String, dynamic> json) => Moment(
         id: json['id'] as String,
         text: json['text'] as String,
+        location: json['location'] is Map<String, dynamic>
+            ? MomentLocation.fromJson(json['location'] as Map<String, dynamic>)
+            : null,
         attachments: (json['attachments'] as List<dynamic>? ?? const [])
             .map((e) => MomentAttachment.fromJson(e as Map<String, dynamic>))
             .toList(),
