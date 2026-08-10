@@ -19,10 +19,11 @@ export function Composer() {
 
   return (
     // 输入区与消息区同宽居中（max-w-[600px]）：大屏两侧留白，小屏自动全宽。
-    <div className="shrink-0 border-t border-border p-3">
+    // 无背景、无分界线；输入框胶囊形（rounded-full）呈现悬浮感。
+    <div className="shrink-0 p-3">
       <div className="mx-auto flex w-full max-w-[600px] items-center gap-2">
       <input
-        className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-primary disabled:opacity-60"
+        className="h-9 flex-1 rounded-full border border-input bg-background px-4 text-sm outline-none focus:border-primary disabled:opacity-60"
         type="text"
         value={text}
         disabled={busy}
