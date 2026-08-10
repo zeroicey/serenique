@@ -12,6 +12,8 @@ import 'package:serenique_mobile/features/audit/audit_page.dart';
 import 'package:serenique_mobile/features/audit/audit_providers.dart';
 import 'package:serenique_mobile/features/auth/auth_providers.dart';
 import 'package:serenique_mobile/features/auth/login_page.dart';
+import 'package:serenique_mobile/features/event/event_page.dart';
+import 'package:serenique_mobile/features/event/event_providers.dart';
 import 'package:serenique_mobile/features/moment/moment_list_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
@@ -75,6 +77,7 @@ void main() {
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -89,6 +92,7 @@ void main() {
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -110,6 +114,7 @@ void main() {
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -134,6 +139,7 @@ void main() {
           (ref) async => const AuditLogPage(items: [], total: 0)),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -156,6 +162,7 @@ void main() {
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
     ]);
     addTearDown(container.dispose);
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
@@ -177,6 +184,7 @@ void main() {
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
       aiClientFactoryProvider.overrideWithValue(() => AiClient(
             baseUrl: 'https://api.example.com',
             tokenReader: () => null,
@@ -197,5 +205,28 @@ void main() {
     // 空态/输入框证明是真实聊天页（占位页只显示「功能开发中」）
     expect(find.byType(AiPage), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets('已登录：/event 渲染真实日程页（非占位）', (tester) async {
+    final container = ProviderContainer(overrides: [
+      tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
+      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      countsProvider.overrideWith((ref) async => 0),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
+      eventsForDayProvider.overrideWith((ref, day) async => const []),
+      eventsInMonthProvider.overrideWith((ref, month) async => const []),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
+    await tester.pumpAndSettle();
+
+    container.read(appRouterProvider).go('/event');
+    await tester.pumpAndSettle();
+
+    // 空态文案证明是真实日程页（占位页只会显示「功能开发中」）
+    expect(find.byType(EventPage), findsOneWidget);
+    expect(find.text('这天没有日程'), findsOneWidget);
   });
 }
