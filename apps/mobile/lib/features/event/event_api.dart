@@ -1,29 +1,75 @@
 import '../../../core/network/api_client.dart';
+import 'event_models.dart';
+import 'event_time.dart';
 
-/// 日历（Event）模块的 HTTP 封装（当前只接了计数，列表/增删改后续补）。
+/// 日历（Event）模块的 HTTP 封装。
 class EventApi {
   EventApi(this._client);
 
   final ApiClient _client;
 
-  /// 今天的事件数：按本地日界取时间窗 [今天00:00, 明天00:00)，数返回的裸数组长度。
+  /// 今天的事件数：本地日窗 [今天00:00, 明天00:00)，数裸数组长度。
   Future<int> countToday() async {
-    final now = DateTime.now();
-    final from = DateTime(now.year, now.month, now.day);
-    final to = from.add(const Duration(days: 1));
-    final data = await _client.getData('/api/events', query: {
-      'from': _withOffset(from),
-      'to': _withOffset(to),
-    });
+    final day = todayKey();
+    final (from, to) = dayWindow(day);
+    final data = await _client.getData('/api/events', query: {'from': from, 'to': to});
     return (data as List<dynamic>).length;
   }
 
-  /// 后端要求 ISO 带时区偏移（offset: true），本地 DateTime 的 toIso8601String 无偏移，手动补。
-  static String _withOffset(DateTime t) {
-    final offset = t.timeZoneOffset;
-    final sign = offset.isNegative ? '-' : '+';
-    final h = offset.inHours.abs().toString().padLeft(2, '0');
-    final m = (offset.inMinutes.abs() % 60).toString().padLeft(2, '0');
-    return '${t.toIso8601String()}$sign$h:$m';
+  /// 时间窗内事件（裸数组）。后端重叠语义 [from, to)。
+  Future<List<EventEntry>> listRange({required String from, required String to}) async {
+    final data = await _client.getData('/api/events', query: {'from': from, 'to': to});
+    return (data as List<dynamic>)
+        .map((e) => EventEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
+
+  /// 某日事件（本地日窗）。
+  Future<List<EventEntry>> listByDay(String day) async {
+    final (from, to) = dayWindow(day);
+    return listRange(from: from, to: to);
+  }
+
+  /// location/note 传空串即置空（对齐后端：z.string().trim().optional() 接受空串）。
+  Future<EventEntry> create({
+    required String title,
+    required DateTime startAt,
+    required DateTime endAt,
+    required bool isAllDay,
+    String location = '',
+    String note = '',
+  }) async {
+    final data = await _client.postData('/api/events', body: {
+      'title': title,
+      'startAt': withOffset(startAt),
+      'endAt': withOffset(endAt),
+      'isAllDay': isAllDay,
+      'location': location,
+      'note': note,
+    });
+    return EventEntry.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// 全量更新（后端部分更新语义完全兼容）；location/note 空串即清空。
+  Future<EventEntry> update(
+    String id, {
+    required String title,
+    required DateTime startAt,
+    required DateTime endAt,
+    required bool isAllDay,
+    String location = '',
+    String note = '',
+  }) async {
+    final data = await _client.putData('/api/events/$id', body: {
+      'title': title,
+      'startAt': withOffset(startAt),
+      'endAt': withOffset(endAt),
+      'isAllDay': isAllDay,
+      'location': location,
+      'note': note,
+    });
+    return EventEntry.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> delete(String id) async => _client.deleteData('/api/events/$id');
 }
