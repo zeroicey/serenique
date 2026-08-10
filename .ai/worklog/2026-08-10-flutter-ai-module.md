@@ -19,7 +19,7 @@
 
 ## 验证
 
-- `flutter analyze` 无 issue；`flutter test` **180/180 全部通过**（新增 ai_client / ai_controller / ai_models / ai_protocol / ai_page / session_sheet / tool_card / composer_bar / message_list 测试 + router_test）
+- `flutter analyze` 无 issue；`flutter test` **180/180 全部通过**（新增 ai_client / ai_controller / ai_models / ai_protocol / ai_page / session_sheet / tool_card / composer_bar / message_list 测试 + router_test）→ 最终评审修复后 **189/189**（commit `f3a218e`：401 握手提示 / offline 发送门禁 / connecting 进度条 / 空轮断言，SDD 复审 4/4 通过）
 - 假通道测试模式：测试注入 FakeWsChannel 驱动真实事件路径（聚合 / turn 归并 / 工具卡 / 错误 / 乐观追加全覆盖）
 - **真机手测未做**（iOS 真机 + dev server）——见下方清单
 
