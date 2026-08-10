@@ -3,6 +3,7 @@
 - 日期：2026-08-09
 - 状态：✅已实施（后端 2026-08-09 + Web 前端 2026-08-09 + 移动端 2026-08-10 均完成）
   - 2026-08-10 更新：✅移动端（Flutter `apps/mobile`）AI 聊天模块已实施 — `/ai` 占位页替换为真实聊天页（WS Bearer 握手、流式 Markdown、thinking 折叠、工具卡、会话弹层、断线横幅 + 回前台重连），后端零改动。设计稿 `.ai/architecture/2026-08-10-flutter-ai-module-design.md`；实现记录 `.ai/worklog/2026-08-10-flutter-ai-module.md`
+  - 2026-08-10 更新：✅AI 工具权限扩展 — 工具从 15 个扩到 32 个：任务组补齐 get/update/delete、闪念补 update/delete、标签全量（list/get/create/rename/delete）、闪念标签绑定（add/remove/replace）、闪念评论全量 CRUD。实现记录 `.ai/worklog/2026-08-10-ai-tools-expansion.md`
 - 范围：services/api（新增 ai 模块，PI SDK 内嵌）+ apps/web（/ai 页面聊天 UI）+ apps/mobile（Flutter /ai 聊天页）；后端为第一优先级
 - 前置记录：`.ai/decisions/2026-08-08-mcp-sunset.md`（MCP 停更冻结，AI 能力不再走 MCP/外部工具层）；`apps/web` 侧边栏已有 `/ai`「宁序」占位路由
 - 参考原型：`~/workspace/tests/pi-test`（PI SDK + WebSocket 最小对话服务，含会话持久化/切换 + e2e 测试）
@@ -21,7 +22,7 @@
 - **暂不做**弹窗确认（用户说需求 → AI 确认 → 才执行），第一版直接执行。
 - 暂不做 skills 系统，系统提示词 + 工具描述足够。
 
-**长期方向（暂不实施）：** 标签系统、moment 整理等交予 AI；习惯模块上线后加入打卡工具。
+**长期方向（暂不实施）：** 习惯模块上线后加入打卡工具；moment 附件（blob 上传）暂不放开。
 
 ## 2. 技术选型：PI SDK（@earendil-works/pi-coding-agent）
 
@@ -56,16 +57,22 @@
 
 `exports.ts` **不导出** `aiService`（无外部消费方；避免把 pi 依赖拖进 workspace 导出图）。
 
-### 4.2 工具集（第一批）
+### 4.2 工具集（第一批 + 2026-08-10 扩展）
 
-写操作直接执行（无确认弹窗），**读写全量开放**——查询类工具不仅是操作需要，平时闲聊（如"我今天有哪些任务"）也要用。第一批范围：
+写操作直接执行（无确认弹窗），**读写全量开放**——查询类工具不仅是操作需要，平时闲聊（如"我今天有哪些任务"）也要用。第一批范围（2026-08-10 更新：任务组补齐、闪念写操作、标签、评论已放开）：
 
 | 工具 | 说明 | 对应 service |
 |------|------|-------------|
+| `list_task_groups` / `create_task_group` / `get_task_group` / `update_task_group` / `delete_task_group` | 任务组全量 CRUD | taskService |
 | `list_tasks` / `get_task` / `create_task` / `update_task` / `delete_task` | 任务全量 CRUD（含 status 流转） | taskService |
 | `list_events` / `get_event` / `create_event` / `update_event` / `delete_event` | 事件（日历）全量 CRUD | eventService |
-| `list_moments` / `get_moment` / `create_moment` | 闪念查询 + 创建（后续再放开整理/标签） | momentService |
+| `list_moments` / `get_moment` / `create_moment` / `update_moment` / `delete_moment` | 闪念全量 CRUD | momentService |
+| `add_moment_tag` / `remove_moment_tag` / `replace_moment_tags` | 闪念标签绑定（replace 幂等，传空数组清空） | momentService |
+| `list_tags` / `get_tag` / `create_tag` / `rename_tag` / `delete_tag` | 标签全量 CRUD（名称 1-32 字符） | tagService |
+| `list_moment_comments` / `add_moment_comment` / `update_moment_comment` / `delete_moment_comment` | 闪念评论全量 CRUD（内容 1-2000 字符） | momentCommentService |
 | 打卡（习惯） | **待习惯模块实施后**加入 | （暂无） |
+
+未放开：blob 上传/附件（`addAttachment`/`deleteAttachment`）、审计、token、auth —— 对话场景暂不需要，后续按需加。
 
 权限边界：agent 可用的工具 = customTools 白名单，内置 bash/read/edit/write 全部排除；单用户部署 + WS 级认证（session cookie / Bearer token），"逃逸"风险仅剩业务工具本身（只操作业务数据，无文件/命令能力）。
 
@@ -126,7 +133,7 @@
 
 1. ~~会话持久化目录~~ ✅ 已定：独立卷 `/data/sessions`
 2. ~~生产模型~~ ✅ 已定：`opencode-go/deepseek-v4-flash` 默认（opencode 网关，`OPENCODE_API_KEY`），`PI_MODEL` 可覆盖
-3. ~~工具范围~~ ✅ 已定：task/event 全量 CRUD + moment 查询/创建，含删除类工具
+3. ~~工具范围~~ ✅ 已定：task/event 全量 CRUD + moment 查询/创建，含删除类工具；2026-08-10 扩展：任务组补齐、闪念 update/delete、标签全量 + 绑定、评论全量 CRUD（32 个工具）
 4. ~~语音输入~~ ✅ 已定：不做，输入法自带语音转文字
 5. ~~会话实例模型~~ ✅ 已定：进程内同会话单实例注册表
 6. ~~前端聊天页~~ ✅ 已定：二级会话侧边栏 + streamdown（Vercel）+ zustand store + thinking 默认折叠
