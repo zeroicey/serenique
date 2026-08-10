@@ -31,3 +31,13 @@
 - [ ] 月历弹窗：圆点标记、切月（‹›/横滑）、相邻月灰点直跳、今天
 - [ ] 抽屉 /event 徽标 = 今天事件数
 - [ ] 下拉刷新、网络错误重试
+
+## 真机反馈改造（同日稍后，commit 406ddf3..ab7d003，已合并 main 24d2e72 并推送）
+
+真机实测 Event 模块后按反馈改造（设计文档的「编辑=底部弹窗」已过时，以本段为准）：
+
+1. **顶部导航栏**：◀ 日期 今天 ▶ 移入 AppBar 标题区（去掉「日历」标题名）；新建按钮移入 AppBar 右上角 actions（右下 FAB 删除）。选中日期状态提升为 `eventSelectedDayProvider`（`NotifierProvider<String>`，AppShell 与 EventPage 共享）——这是 AppBar 与列表页共享状态的关键。
+2. **编辑页**：新建/编辑从 `showModalBottomSheet` 改为独立全屏页 `/event/edit`（`EventEditPage` + `EventEditArgs{day?, event?}`，go_router `extra` 传参，ShellRoute 外同 `/moments/create` 模式）。表单逻辑整体迁移不变。
+3. **布局修正**：时间标签 `maxLines:1 + ellipsis` 保持一行（去掉 `height:1.3` 行高覆盖修复与标题首行对齐）；月历圆点与日期圆之间留间距（SizedBox 4→10）。
+
+验证：`flutter analyze` No issues + `flutter test` 234/234。真机已重装验证。
