@@ -1,4 +1,4 @@
-# 2026-08-10 — Moment 位置功能前端闭环 P1（朋友圈式选点 + 展示）
+# 2026-08-10 — Moment 位置功能前端闭环（朋友圈式选点 + 展示，Web P1 + Flutter P2）
 
 用户要求补齐 moment 位置的「朋友圈式」前端闭环：创建 moment 时可选位置（附近位置列表 + 搜索），创建后列表显示位置。调研结论：后端存储（`moments.location` jsonb，08-08 已实施）与 CLI 早已支持，缺的是 Web/Flutter 端消费 + POI 选点链路。选点必须依赖第三方 LBS，经调研（高德 vs 腾讯官方文档）选定**高德为主**：官方 Flutter 插件含 POI 搜索、个人超配额可购买；腾讯日配额大但 Flutter 需自封装且个人不能买超量。坐标系统一 GCJ-02（设备 WGS-84 服务端转换）；展示 name 优先、不做展示时逆地理编码（官方定性为估计值）；Apple 免费签名即可用定位（Core Location 非受管能力，无需 $99）。
 
@@ -26,6 +26,27 @@
 - **本地端到端冒烟（08-10，docker postgres:16-alpine 端口 5433 + PORT=3002 dev server）**：config enabled=true；nearby 天安门坐标返回 20 POI（距离升序）；search 三里屯 10 条；POST /api/moments 带 location 创建成功；列表返回 location；PUT text-only 保留位置；PUT location:null 清除；DELETE 204。本地 `.env`（gitignored）已含 `AMAP_KEY`，`./.data/blobs` 为本地 blob root
 - **生产部署（08-10）**：3 commits 推 main → docker-publish 构建（digest `40b1837e65cd…`）；hpcore `.env` 加 `AMAP_KEY`（先 `cp .env .env.bak.<ts>`）→ digest 精确拉取 + tag latest + `docker compose up -d --force-recreate api` → healthy；`docker exec printenv AMAP_KEY` 确认注入。Web：`VITE_API_BASE_URL=https://api.hcyj.xyz/serenique bun run build` + `wrangler pages deploy dist --project-name=serenique-web --branch main`，线上核验 index hash 与本地构建一致（**首次 curl 命中 CDN 旧缓存，加 `?cb=` 参数破缓存后才是新版本**）。生产 location 端点需登录（UNAUTHORIZED 属预期）；本地 CLI token 是 v0.5.0 前旧体系，不能用于生产验证
 - 未做浏览器端人工验收（选点弹窗 UI + geolocation 授权 + 深链），待用户在 https://serenique.0icey.icu 登录后实测
+
+## Flutter 端 P2（08-10，commit 待提交）
+
+用户确认 Web 端验收通过后实施移动端。**定位用 geolocator（WGS-84）而非高德 SDK**：用户已有高德 Key 是「Web服务」类型（SDK 用不了），且架构决策 #7 = 移动端统一走后端代理；geolocator 无 SDK 隐私合规负担、免新高德 Key。POI 选点复用 P1 后端接口。
+
+- **apps/mobile**：
+  - `lib/features/location/`（新平铺 feature）：`location_api.dart`（`LocationApi.config/nearby/search`，传设备 WGS-84，响应解包 `{ items }`）、`location_format.dart` 纯函数（`locationLabel` name 优先/坐标 4 位小数、`formatDistance` ≥1000m→km、`amapDeepLink` position=经度,纬度）、`location_providers.dart`（`locationConfigProvider` FutureProvider 缓存）、`widgets/location_picker_sheet.dart`（`showLocationPickerSheet`：isScrollControlled+viewInsets；`locate` 可注入，默认 geolocator checkPermission→requestPermission→8s 超时 getCurrentPosition；失败提示「无法获取当前位置，可直接搜索」；300ms 防抖搜索）
+  - `moment_models.dart`：`MomentLocation`（name/latitude/longitude 均可选 + hasCoordinates + toJson 只带非空字段）+ `Moment.location`
+  - `moment_api.dart` / `moment_providers.dart`：create/createWithMedia 透传 location（**null 时 body 不带字段**，后端 Create 拒绝 null）
+  - `moment_card.dart`：位置行在附件网格与时间行之间（对齐 event_tile：Icons.place_outlined 13 + onSurfaceVariant 12px）；有坐标整行可点 → url_launcher 高德深链，失败提示「无法打开地图」
+  - `moment_create_page.dart`：「所在位置」行（config gate 隐藏入口；默认「不显示位置」灰字；选中「📍 name」+ × 清除）
+  - 权限：Info.plist `NSLocationWhenInUseUsageDescription`「用于闪记选择所在位置」（未加 Always key）；AndroidManifest 补 `INTERNET`/`ACCESS_COARSE_LOCATION`/`ACCESS_FINE_LOCATION`（**主 manifest 原本一个权限都没有，release 连 INTERNET 都缺**，本次补齐）
+  - 依赖：`geolocator: ^14.0.3`
+- **验证**：`flutter analyze` 无 issue；`flutter test` 267/267 全绿（新增 9 用例：模型序列化、格式化、LocationApi 请求形状、选点 sheet 全链路含 mock geolocator 原生通道、创建页 config gate/选点/清除/提交、卡片位置行）
+- 未做 iOS 真机人工验收（需用户连 iPhone 跑 `flutter run -d hpcell`）
+
+## 坑 / 对下一次会话的提示（P2 追加）
+
+- **项目用 Swift Package Manager 而非 CocoaPods**（ios/ 无 Podfile；Flutter 3.44 SPM 默认开启）：geolocator 文档建议的 `BYPASS_PERMISSION_LOCATION_ALWAYS=1` Podfile 宏**不适用**。已核实 geolocator_apple 2.3.14 源码：`requestAlwaysAuthorization` 只在 WhenInUse key 缺失时可达，我们声明了 WhenInUse → Always 路径是死代码，宏目标已达成。勿新增 Podfile（会把项目推入「同时用 CocoaPods + SPM」冲突态）
+- geolocator 14.x 的 `LocationSettings` 用 `LocationAccuracy.medium`（无 `balanced` 档）
+- 移动端测试 mock geolocator 方式：`TestDefaultBinaryMessengerBinding` 拦截 `flutter.baseflow.com/geolocator` 原生通道
 
 ## 坑 / 对下一次会话的提示
 

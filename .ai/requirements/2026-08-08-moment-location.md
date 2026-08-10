@@ -1,8 +1,8 @@
 # Moment 位置信息需求文档
 
-- 日期：2026-08-08（08-10 更新：补充前端展示 + POI 选点闭环）
-- 状态：✅已实施（API + CLI + Web 展示与选点；MCP 已停更不涉及；Flutter 端 P2 待排期）
-- 范围：services/api（moment 模块 + location 代理模块）、apps/cli、apps/web
+- 日期：2026-08-08（08-10 更新：补充前端展示 + POI 选点闭环，Flutter 端 P2 完成）
+- 状态：✅已实施（API + CLI + Web + Flutter；MCP 已停更不涉及）
+- 范围：services/api（moment 模块 + location 代理模块）、apps/cli、apps/web、apps/mobile
 - 前置记录：无
 
 ---
