@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/features/event/event_models.dart';
 import 'package:serenique_mobile/features/event/event_providers.dart';
+import 'package:serenique_mobile/features/event/event_time.dart';
 import 'package:serenique_mobile/features/event/widgets/event_edit_sheet.dart';
 
 /// 记录动作的 EventActions 假实现（EventActions 方法默认虚，可覆写）。
@@ -171,8 +172,8 @@ void main() {
     final editing = EventEntry(
       id: 'e1',
       title: '晨会',
-      startAt: '2026-08-05T09:00:00+08:00',
-      endAt: '2026-08-05T10:00:00+08:00',
+      startAt: withOffset(DateTime(2026, 8, 5, 9)),
+      endAt: withOffset(DateTime(2026, 8, 5, 10)),
       isAllDay: false,
       location: '会议室',
       note: '带笔',

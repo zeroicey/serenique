@@ -71,7 +71,9 @@ void main() {
   });
 
   testWidgets('点日期文字：弹月历并跳到所选日期', (tester) async {
-    final c = container(events: [dayEvent('2026-08-15')]);
+    // 月历打开在「当前月」：目标日取当月 15 号（每月都有，且在 42 格网格内唯一）。
+    final target = '${todayKey().substring(0, 7)}-15';
+    final c = container(events: [dayEvent(target)]);
     addTearDown(c.dispose);
     // 真实手机竖屏视口：默认 600px 高的测试面让月历 6 行网格超出 modal 半屏高度而 overflow
     // （同 month_calendar_sheet_test）。
@@ -87,8 +89,8 @@ void main() {
 
     await tester.tap(find.text('15'));
     await tester.pumpAndSettle();
-    // 月历 pop 后页面选中 8/15，列表显示该日事件
-    expect(find.text('2026-08-15 的事件'), findsOneWidget);
+    // 月历 pop 后页面选中当月 15 号，列表显示该日事件
+    expect(find.text('$target 的事件'), findsOneWidget);
   });
 
   testWidgets('FAB 打开新建弹窗（预填当前选中日）', (tester) async {
