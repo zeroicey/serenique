@@ -120,6 +120,7 @@ function makeMoment(i: number) {
   return {
     id: `m${i}`,
     text: `t${i}`,
+    location: null,
     attachments: [],
     comments: [],
     commentCount: 0,

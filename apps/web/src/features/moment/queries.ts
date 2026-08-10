@@ -19,6 +19,7 @@ import {
   type CreateMomentInput,
   type MomentCommentEntry,
   type MomentEntry,
+  type MomentLocation,
 } from './api'
 
 // Moment 数据 hooks。读取走 useInfiniteQuery（滚动分页），写入走 useMutation + invalidate。
@@ -69,11 +70,11 @@ export function useRemoveMomentAttachment(): UseMutationResult<
 export function useCreateMomentWithMedia(): UseMutationResult<
   MomentEntry,
   Error,
-  { text: string; files: MediaFile[] }
+  { text: string; files: MediaFile[]; location: MomentLocation | null }
 > {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ text, files }) => {
+    mutationFn: async ({ text, files, location }) => {
       const blobs: string[] = []
       for (const file of files) {
         if (!file.file) throw new Error('文件数据缺失')
@@ -82,6 +83,8 @@ export function useCreateMomentWithMedia(): UseMutationResult<
       }
       return createMoment({
         text,
+        // 后端 CreateMomentSchema.location 为 optional（不接受 null），null 时省略。
+        location: location ?? undefined,
         attachments: blobs.map((blobId, i) => ({
           blobId,
           displayName: files[i]?.name,

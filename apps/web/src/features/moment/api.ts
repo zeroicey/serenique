@@ -38,9 +38,18 @@ export interface MomentCommentEntry {
   updatedAt: string
 }
 
+// 位置对象（微信朋友圈式）：name / 坐标均可选，至少一个字段。
+// 坐标直接存储后端返回的 GCJ-02 值，客户端不做坐标系转换。
+export interface MomentLocation {
+  name?: string
+  latitude?: number
+  longitude?: number
+}
+
 export interface MomentEntry {
   id: string
   text: string
+  location: MomentLocation | null
   attachments: MomentAttachmentEntry[]
   // 列表接口 comments 恒为 []（只带数量）；详情接口内嵌完整评论。
   comments: MomentCommentEntry[]
@@ -58,6 +67,7 @@ export interface MomentAttachmentInput {
 export interface CreateMomentInput {
   text: string
   attachments?: MomentAttachmentInput[]
+  location?: MomentLocation | null
 }
 
 export interface ListMomentsParams {

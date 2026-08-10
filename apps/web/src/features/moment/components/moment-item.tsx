@@ -1,4 +1,4 @@
-import { Clock, MessageCircle, MoreHorizontal, Trash2 } from 'lucide-react'
+import { Clock, MapPin, MessageCircle, MoreHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { formatDate } from '@/lib/format'
 import {
@@ -6,7 +6,8 @@ import {
   useDeleteMoment,
   useMomentComments,
 } from '@/features/moment/queries'
-import type { MomentEntry } from '@/features/moment/api'
+import type { MomentEntry, MomentLocation } from '@/features/moment/api'
+import { formatLocationLabel, locationAmapUrl } from '@/features/location/format'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -85,6 +86,8 @@ export function MomentItem({ moment }: MomentItemProps) {
       </div>
 
       <MomentAttachmentGrid attachments={moment.attachments} />
+
+      {moment.location && <MomentLocationLine location={moment.location} />}
 
       <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
         <div className="flex items-center gap-1">
@@ -199,4 +202,29 @@ export function MomentItem({ moment }: MomentItemProps) {
       />
     </div>
   )
+}
+
+// 位置行：附件网格与元信息行之间；有坐标时整行可点击打开高德深链（新窗口）。
+function MomentLocationLine({ location }: { location: MomentLocation }) {
+  const label = formatLocationLabel(location)
+  const url = locationAmapUrl(location)
+  const content = (
+    <>
+      <MapPin size={13} strokeWidth={1.8} />
+      <span className="break-words">{label}</span>
+    </>
+  )
+  if (url) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+      >
+        {content}
+      </a>
+    )
+  }
+  return <div className="flex items-center gap-1 text-xs text-muted-foreground">{content}</div>
 }

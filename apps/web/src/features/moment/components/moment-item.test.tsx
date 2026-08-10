@@ -24,6 +24,7 @@ function makeMoment(overrides: Partial<MomentEntry> = {}): MomentEntry {
   return {
     id: 'm1',
     text: '今天很开心',
+    location: null,
     attachments: [],
     comments: [],
     commentCount: 0,
@@ -128,5 +129,40 @@ describe('MomentItem', () => {
     renderWithProviders(<MomentItem moment={makeMoment({ commentCount: 1 })} />)
     expect(screen.getByText('评论内容')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '删除评论' })).not.toBeInTheDocument()
+  })
+
+  it('有位置 name 时显示 name，整行可点击打开高德深链', () => {
+    renderWithProviders(
+      <MomentItem
+        moment={makeMoment({
+          location: { name: '北京·三里屯', latitude: 39.9087, longitude: 116.3975 },
+        })}
+      />,
+    )
+    const link = screen.getByRole('link', { name: '北京·三里屯' })
+    expect(link).toHaveAttribute(
+      'href',
+      'https://uri.amap.com/marker?position=116.3975,39.9087&name=%E5%8C%97%E4%BA%AC%C2%B7%E4%B8%89%E9%87%8C%E5%B1%AF&callnative=1',
+    )
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('无 name 时显示坐标文本（lat, lng）', () => {
+    renderWithProviders(
+      <MomentItem moment={makeMoment({ location: { latitude: 39.90872, longitude: 116.39751 } })} />,
+    )
+    expect(screen.getByRole('link', { name: '39.9087, 116.3975' })).toBeInTheDocument()
+  })
+
+  it('无 location 时不渲染位置行', () => {
+    renderWithProviders(<MomentItem moment={makeMoment()} />)
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText('未知位置')).not.toBeInTheDocument()
+  })
+
+  it('只有 name 无坐标时显示 name 但不渲染链接', () => {
+    renderWithProviders(<MomentItem moment={makeMoment({ location: { name: '某个地方' } })} />)
+    expect(screen.getByText('某个地方')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 })

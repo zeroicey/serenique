@@ -9,6 +9,7 @@ export {
 } from './api'
 export type {
   MomentEntry,
+  MomentLocation,
   MomentAttachmentEntry,
   MomentBlobEntry,
   MomentCommentEntry,
@@ -24,5 +25,5 @@ export {
   useCreateMomentComment,
   useDeleteMomentComment,
 } from './queries'
-export { momentCreateSchema } from './schemas'
+export { momentCreateSchema, momentLocationSchema } from './schemas'
 export type { MomentCreateFormValues } from './schemas'
