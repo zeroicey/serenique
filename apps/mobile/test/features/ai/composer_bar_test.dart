@@ -30,9 +30,21 @@ class RecordingAiController extends AiController {
 
 AiState idle() => const AiState.initial();
 
+/// 在线空闲状态：发送按钮可用（offline/connecting 时按钮禁用）。
+AiState onlineIdle() => const AiState(
+      status: AiConnStatus.online,
+      busy: false,
+      lastError: null,
+      currentSessionId: null,
+      model: '',
+      sessions: [],
+      messages: [],
+      activeTurn: null,
+    );
+
 void main() {
   testWidgets('输入并点发送：send 收到 trim 后的文本且输入框清空', (tester) async {
-    final controller = RecordingAiController(idle());
+    final controller = RecordingAiController(onlineIdle());
     final container = ProviderContainer(overrides: [
       aiControllerProvider.overrideWith(() => controller),
     ]);
@@ -93,5 +105,27 @@ void main() {
     await tester.tap(find.byIcon(Icons.stop));
     await tester.pump();
     expect(busyController.aborts, 1);
+  });
+
+  testWidgets('offline 状态发送按钮禁用（onPressed == null）', (tester) async {
+    final controller = RecordingAiController(idle()); // idle = offline
+    final container = ProviderContainer(overrides: [
+      aiControllerProvider.overrideWith(() => controller),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ComposerBar())),
+    ));
+
+    final sendButton = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byIcon(Icons.send),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(sendButton.onPressed, isNull);
+    expect(find.byIcon(Icons.stop), findsNothing);
   });
 }

@@ -49,6 +49,9 @@ class _AiPageState extends ConsumerState<AiPage> {
     return Column(
       children: [
         Expanded(child: MessageList()),
+        // 重连（回前台自动重连）期间无离线横幅，用细进度条指示连接中。
+        if (status == AiConnStatus.connecting)
+          const LinearProgressIndicator(minHeight: 2),
         if (status == AiConnStatus.offline)
           _OfflineBanner(
             onRetry: () => ref.read(aiControllerProvider.notifier).connect(),

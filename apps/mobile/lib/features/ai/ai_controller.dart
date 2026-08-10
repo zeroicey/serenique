@@ -222,6 +222,9 @@ class AiController extends Notifier<AiState> {
   }
 
   void send(String text) {
+    // 未连接（connecting/offline）时禁止发送：AiClient.send 会静默丢弃，
+    // 否则乐观追加的 user 消息永不送达（幽灵消息）。
+    if (state.status != AiConnStatus.online) return;
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     // 乐观追加：后端事件流无 user 回显，不本地追加则实时对话中用户消息不显示。

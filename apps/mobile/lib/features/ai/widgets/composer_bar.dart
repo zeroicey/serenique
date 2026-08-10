@@ -2,6 +2,7 @@
 // - 空闲：发送按钮；AI 回复中：输入框禁用 + 停止按钮（abort）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../ai_client.dart';
 import '../ai_providers.dart';
 
 class ComposerBar extends ConsumerStatefulWidget {
@@ -31,6 +32,8 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
   @override
   Widget build(BuildContext context) {
     final busy = ref.watch(aiControllerProvider.select((s) => s.busy));
+    // 未连接（connecting/offline）时禁发：离线时 controller.send 会丢弃消息。
+    final status = ref.watch(aiControllerProvider.select((s) => s.status));
     final scheme = Theme.of(context).colorScheme;
 
     return SafeArea(
@@ -71,7 +74,8 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                 : IconButton.filled(
                     tooltip: '发送',
                     icon: const Icon(Icons.send, size: 20),
-                    onPressed: _send,
+                    onPressed:
+                        busy || status != AiConnStatus.online ? null : _send,
                   ),
           ],
         ),

@@ -11,6 +11,20 @@ import 'ai_protocol.dart';
 
 enum AiConnStatus { connecting, online, offline }
 
+/// 握手失败文案：HTTP 401（token 失效/未授权）→ 登录提示；其余 → 网络重试提示。
+/// dart:io 的 WebSocketException 各 SDK 版本的 message 大小写形式不同
+/// （`http status code: 401` / `HTTP status code: 401`），故匹配公共子串
+/// `status code: 401`；WebSocketChannelException.from 包装形式（message 内嵌
+/// 原始异常 toString）同样命中。
+String handshakeErrorText(Object error) {
+  final msg = error.toString();
+  if (msg.contains('http status code: 401') ||
+      msg.contains('status code: 401')) {
+    return '登录已失效，请重新登录';
+  }
+  return '无法连接服务器，请检查网络后重试';
+}
+
 typedef WsChannelFactory =
     WebSocketChannel Function(Uri uri, Map<String, String> headers);
 
@@ -64,9 +78,9 @@ class AiClient {
       await channel.ready; // 握手：失败/401 在此抛错
       _setStatus(AiConnStatus.online);
       _sub = channel.stream.listen(_onData, onDone: _onClosed, onError: _onError);
-    } catch (_) {
+    } catch (e) {
       _channel = null;
-      _lastError = '无法连接服务器，请检查网络后重试';
+      _lastError = handshakeErrorText(e);
       _setStatus(AiConnStatus.offline);
     }
   }

@@ -185,7 +185,7 @@ void main() {
     expect(h.state.activeTurn, isNull);
   });
 
-  test('空轮不追加；thinking_delta 进 thinking', () async {
+  test('thinking-only 轮归并进 messages', () async {
     final h = TestHarness();
     addTearDown(h.container.dispose);
     await h.connect();
@@ -201,6 +201,20 @@ void main() {
     expect(h.state.messages, hasLength(1));
     expect(h.state.messages.single.thinking, '想一下');
     expect(h.state.messages.single.text, '');
+  });
+
+  test('空轮（turn_start → turn_end 无任何 delta/工具事件）：不追加、activeTurn 复位',
+      () async {
+    final h = TestHarness();
+    addTearDown(h.container.dispose);
+    await h.connect();
+
+    h.channel.emit(jsonEncode({'type': 'turn_start'}));
+    h.channel.emit(jsonEncode({'type': 'turn_end'}));
+    await pumpEventQueue();
+
+    expect(h.state.messages, isEmpty);
+    expect(h.state.activeTurn, isNull);
   });
 
   test('agent_start/agent_end：busy 切换 + agent_end 兜底归并', () async {
@@ -250,6 +264,20 @@ void main() {
     expect(h.state.messages.single.text, '帮我加个任务');
     expect(jsonDecode(h.channel.sent.single as String),
         {'type': 'prompt', 'text': '帮我加个任务'});
+  });
+
+  test('offline 状态 send：不追加 user 消息、不发 prompt（防幽灵消息）', () async {
+    final h = TestHarness();
+    addTearDown(h.container.dispose);
+    await h.connect();
+
+    h.channel.closeIncoming();
+    await Future<void>.delayed(Duration.zero);
+    expect(h.state.status, AiConnStatus.offline);
+
+    h.notifier.send('离线时的消息');
+    expect(h.state.messages, isEmpty);
+    expect(h.channel.sent, isEmpty);
   });
 
   test('会话动作消息序列', () async {

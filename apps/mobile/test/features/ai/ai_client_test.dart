@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/features/ai/ai_client.dart';
@@ -140,5 +141,63 @@ void main() {
     await buildClient().connect();
     await client.connect();
     expect(client.status, AiConnStatus.online);
+  });
+
+  group('handshakeErrorText：401 → 登录提示，其余 → 网络重试提示', () {
+    test('dart:io WebSocketException（HTTP status code: 401）', () {
+      // 本 SDK 的 dart:io 为 'HTTP status code: 401'（大写）；旧版为小写，见下例。
+      final err = WebSocketException(
+        'Connection to "wss://api.example.com/api/ai/ws" was not upgraded '
+        'to websocket',
+        401,
+      );
+      expect(handshakeErrorText(err), '登录已失效，请重新登录');
+    });
+
+    test('旧版小写形式 http status code: 401', () {
+      expect(
+        handshakeErrorText(
+          WebSocketException(
+            'Connection to "wss://api.example.com/api/ai/ws" was not '
+            'upgraded to websocket, http status code: 401',
+          ),
+        ),
+        '登录已失效，请重新登录',
+      );
+    });
+
+    test('WebSocketChannelException.from 包装形式（message 内嵌原始 toString）', () {
+      final wrapped = WebSocketChannelException.from(WebSocketException(
+        'Connection to "wss://api.example.com/api/ai/ws" was not upgraded '
+        'to websocket',
+        401,
+      ));
+      expect(wrapped.toString(), contains('WebSocketChannelException:'));
+      expect(handshakeErrorText(wrapped), '登录已失效，请重新登录');
+    });
+
+    test('普通网络错误（SocketException）→ 重试提示', () {
+      expect(
+        handshakeErrorText(SocketException('Connection refused')),
+        '无法连接服务器，请检查网络后重试',
+      );
+    });
+  });
+
+  test('握手 401：connect 失败 → offline + lastError 登录提示', () async {
+    client = AiClient(
+      baseUrl: 'https://api.example.com',
+      tokenReader: () => 'expired-token',
+      channelFactory: (uri, headers) => throw WebSocketChannelException.from(
+        WebSocketException(
+          'Connection to "wss://api.example.com/api/ai/ws" was not upgraded '
+          'to websocket',
+          401,
+        ),
+      ),
+    );
+    await client.connect();
+    expect(client.status, AiConnStatus.offline);
+    expect(client.lastError, '登录已失效，请重新登录');
   });
 }
