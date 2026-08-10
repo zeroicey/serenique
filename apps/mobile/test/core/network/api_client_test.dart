@@ -227,4 +227,14 @@ void main() {
     expect(sendTimeout, const Duration(seconds: 300));
     expect(receiveTimeout, const Duration(seconds: 300));
   });
+
+  test('204 无 body：deleteData 返回 null 不抛 BAD_RESPONSE', () async {
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = _FakeAdapter(204, ''),
+    );
+    expect(await client.deleteData('/api/events/e1'), isNull);
+  });
 }

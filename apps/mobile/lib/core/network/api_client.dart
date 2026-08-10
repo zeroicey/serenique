@@ -86,6 +86,8 @@ class ApiClient {
   Future<dynamic> _guard(Future<Response<dynamic>> future) async {
     try {
       final res = await future;
+      // 204 No Content：后端删除接口无 body，跳过统一解包（否则空串抛 BAD_RESPONSE）。
+      if (res.statusCode == 204) return null;
       return unwrapResponse(res.data);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
