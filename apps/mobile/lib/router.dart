@@ -7,6 +7,8 @@ import 'features/auth/login_page.dart';
 import 'features/auth/splash_page.dart';
 import 'features/ai/ai_page.dart';
 import 'features/audit/audit_page.dart';
+import 'features/event/event_page.dart';
+import 'features/event/widgets/event_edit_page.dart';
 import 'features/moment/moment_create_page.dart';
 import 'features/moment/moment_detail_page.dart';
 import 'features/moment/moment_list_page.dart';
@@ -37,7 +39,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/moments', builder: (context, state) => const MomentListPage()),
           GoRoute(path: '/task', builder: (context, state) => const TaskPage()),
-          GoRoute(path: '/event', builder: (context, state) => const PlaceholderPage(title: '日历', icon: Icons.calendar_today_outlined)),
+          GoRoute(path: '/event', builder: (context, state) => const EventPage()),
           GoRoute(path: '/habit', builder: (context, state) => const PlaceholderPage(title: '习惯', icon: Icons.repeat)),
           GoRoute(path: '/files', builder: (context, state) => const PlaceholderPage(title: '素材库', icon: Icons.photo_library_outlined)),
           GoRoute(path: '/audit', builder: (context, state) => const AuditPage()),
@@ -46,6 +48,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(path: '/moments/create', builder: (context, state) => const MomentCreatePage()),
+      // 日程新建/编辑全屏页：ShellRoute 之外，自持 Scaffold/AppBar。
+      GoRoute(
+        path: '/event/edit',
+        builder: (context, state) => EventEditPage(
+            args: (state.extra as EventEditArgs?) ?? const EventEditArgs()),
+      ),
       GoRoute(
         path: '/moments/:id',
         builder: (context, state) => MomentDetailPage(id: state.pathParameters['id']!),
