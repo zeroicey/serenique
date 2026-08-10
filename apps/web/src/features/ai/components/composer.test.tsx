@@ -18,13 +18,22 @@ describe('Composer', () => {
     expect(sent).toBe('你好')
   })
 
-  test('busy 时按钮文案变为打断', () => {
-    useAiStore.setState({ busy: true })
+  test('空文本时发送按钮禁用', () => {
+    useAiStore.setState({ busy: false })
     render(<Composer />)
-    expect(screen.getByText('打断')).toBeTruthy()
+    expect(screen.getByText('发送').hasAttribute('disabled')).toBe(true)
   })
 
-  test('停止按钮触发 abort', () => {
+  test('busy 时输入框禁用且按钮变为停止图标', () => {
+    useAiStore.setState({ busy: true })
+    render(<Composer />)
+    const input = screen.getByPlaceholderText(/AI 正在回复/) as HTMLTextAreaElement
+    expect(input.disabled).toBe(true)
+    expect(screen.queryByText('发送')).toBeNull()
+    expect(screen.getByLabelText('停止')).toBeTruthy()
+  })
+
+  test('点击停止触发 abort', () => {
     let aborted = false
     useAiStore.setState({
       busy: true,
@@ -33,7 +42,7 @@ describe('Composer', () => {
       },
     })
     render(<Composer />)
-    fireEvent.click(screen.getByText('停止'))
+    fireEvent.click(screen.getByLabelText('停止'))
     expect(aborted).toBe(true)
   })
 

@@ -222,13 +222,13 @@ export const useAiStore = create<AiState>((set, get) => ({
 
   send: (text) => {
     if (!text.trim()) return
-    const { busy } = get()
     // 乐观追加：后端事件流（forwardEvents）只转发 assistant 侧事件，无 user 回显，
     // 不本地追加则实时对话中用户消息永不显示（直到重载/切会话才有历史）。
     // 若未来后端加 user 回显，此处需去重（按 text+时间或等回显替代）。
+    // 交互简化（2026-08-10）：AI 回复中输入框禁用，send 只发 prompt（不再 busy→steer）。
     const userMsg: RenderMessage = { role: 'user', text, thinking: '', toolCalls: [] }
     set((s) => ({ messages: [...s.messages, userMsg] }))
-    sendMsg(busy ? { type: 'steer', text } : { type: 'prompt', text })
+    sendMsg({ type: 'prompt', text })
   },
   abort: () => sendMsg({ type: 'abort' }),
   newSession: () => sendMsg({ type: 'new_session' }),

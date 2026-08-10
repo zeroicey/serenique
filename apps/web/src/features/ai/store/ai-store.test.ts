@@ -52,7 +52,7 @@ describe('ai-store', () => {
     expect(useAiStore.getState().currentSessionId).toBe('s1')
   })
 
-  test('busy 时 send 发 steer，否则发 prompt；均乐观追加 user 消息', () => {
+  test('send 恒发 prompt 并乐观追加 user 消息（交互简化：不再 busy→steer）', () => {
     useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
     useAiStore.getState().connect()
     const ws = FakeSocket.instances[0]
@@ -61,8 +61,7 @@ describe('ai-store', () => {
     useAiStore.setState({ busy: true })
     useAiStore.getState().send('停一下')
     const types = ws.sent.map((s) => JSON.parse(s).type)
-    expect(types).toEqual(['prompt', 'steer'])
-    // busy 与否都乐观追加 user 消息（steer 的打断内容也要显示）
+    expect(types).toEqual(['prompt', 'prompt'])
     const { messages } = useAiStore.getState()
     expect(messages).toHaveLength(2)
     expect(messages[0]).toMatchObject({ role: 'user', text: '你好', thinking: '', toolCalls: [] })
