@@ -1,11 +1,11 @@
 ---
 name: mcp-agent
-description: 已停用（DISABLED）— Serenique MCP 服务器专家（services/mcp）。不要使用：MCP 服务已停更冻结（2026-08-08 sunset），不要为 MCP 派发任何工作。涉及「AI 工具暴露」的需求改用 CLI Agent 或 API Agent。
+description: 已停用（DISABLED）— Serenique MCP 服务器专家（services/mcp）。不要使用：MCP 服务已停更冻结（2026-08-08 sunset），不要为 MCP 派发任何工作。涉及「AI 工具暴露」的需求改用 CLI Agent 或 API Agent。该 agent 已在 .claude/settings.json 通过 permissions.deny 正式禁用。
 ---
 
 # 停用（frozen）— 不要派发
 
-`services/mcp` 已于 2026-08-08 停更冻结（`.ai/decisions/2026-08-08-mcp-sunset.md`）：不再维护、不再修改、不随发布构建。**本 agent 已停用，不要派发**。涉及「AI 工具暴露」的需求改为走 CLI（`apps/cli`）或 API 服务层。
+`services/mcp` 已于 2026-08-08 停更冻结（`.ai/decisions/2026-08-08-mcp-sunset.md`）：不再维护、不再修改、不随发布构建。**本 agent 已通过 `permissions.deny: ["Agent(mcp-agent)"]` 正式禁用**，不要派发。涉及「AI 工具暴露」的需求改为走 CLI（`apps/cli`）或 API 服务层。
 
 以下为历史内容，仅供追溯：
 

@@ -10,22 +10,49 @@ Serenique is a personal journaling and note-taking API. It is a monorepo with tw
   - `services/api` — the REST API (Bun + Hono + Drizzle + PostgreSQL)
   - `services/mcp` — an MCP server exposing the API's service layer to AI agents (**frozen — do not modify or schedule work on it**, see `.ai/decisions/2026-08-08-mcp-sunset.md`)
 - `apps/` — client-side applications:
+  - `apps/web` — React browser app (React 19 + Vite + TanStack Query + Zustand + shadcn/ui)
   - `apps/cli` — a Go CLI client (cobra), modeled after GitHub's `gh`, for humans and AI agents
+  - `apps/mobile` — Flutter mobile app (iOS/Android, in development)
 
 **API stack:** Bun runtime, Hono web framework, PostgreSQL via Drizzle ORM, Zod validation, Pino logging, TypeScript with strict mode.
+**Web stack:** React 19 + Vite + TanStack Query v5 + Zustand v5 + shadcn/ui.
 **CLI stack:** Go (1.26+), cobra, yaml.v3.
+**Mobile stack:** Flutter (iOS/Android), dio + web_socket_channel.
 
-Before starting work on a subsystem, read the project memory in `.ai/` (below).
+Before starting work on a subsystem, read the project memory in `.ai/` (below). A `SessionStart` hook auto-injects a memory digest into context at session start (see "记忆纪律" below).
 
 ## Project memory (`.ai/`)
 
-`.ai/` at the repo root is the project's memory — treat it as documentation of record. It holds:
+`.ai/` at the repo root is the project's memory — treat it as documentation of record. **It is an auto-capturing system**: hooks + skills capture knowledge as work happens. Read `.ai/README.md` first (index + rules), then the latest documents relevant to the change.
 
 - `worklog/` — dated work logs: what was built, evaluated, and fixed each day, plus explicit pitfalls ("tips for the next session").
-- `architecture/` — architecture design docs. Later docs supersede earlier ones (e.g. `2026-08-05-cli-tool-architecture-updates.md` explicitly marks itself as the finalized CLI architecture over the 08-04 design).
 - `decisions/` — decision records with **Why** / **How to apply** rationale, including rejected/deferred options.
+- `requirements/` — requirement docs, each with a status line (✅已实施 / ⏳待实施 / 🔶设计中 / 🪦已否决); status board in `requirements/README.md`.
+- `architecture/` — architecture design docs. Later docs supersede earlier ones (e.g. `2026-08-05-cli-tool-architecture-updates.md` explicitly marks itself as the finalized CLI architecture over the 08-04 design).
+- `runbooks/` — **standard procedures live here only** (deploy / upload / install / build / release). Worklogs never duplicate a procedure — they link to the runbook.
+- `archive/` — dead documents (implemented plans).
+- `inbox/` — raw session captures from the memory hooks; consumed by the memory skills and emptied.
 
-Read the latest relevant docs before changing a subsystem. The CLI's evaluation history and hardening contracts live in the 08-05 worklog/architecture/decisions files and are condensed into the CLI section below.
+### 记忆纪律（自动捕获）
+
+| 场景 | 动作 |
+|------|------|
+| 解决新问题 / 踩坑 | 写 worklog（`remember-worklog` skill） |
+| 完成珍贵/难的需求或流程 | 写 worklog + 可复现则写 runbook（`remember-runbook` skill） |
+| 与用户讨论需求 | 边讨论边写 requirements（`remember-requirement` skill） |
+| 做出决策 | 写 decisions（`remember-decision` skill） |
+
+自动化（Claude Code 原生 hooks，配置见 `.claude/settings.json`，脚本见 `.claude/hooks/`）：
+
+- `SessionStart` — 自动读取 `.ai/README.md` + 最新 worklog + 未消化 inbox，注入上下文。
+- `Stop` — 每轮实质对话后，把最后一条 assistant 消息捕获到 `.ai/inbox/YYYY-MM-DD.md`（按消息去重）。
+
+纪律：
+
+- 技能定义在 `.claude/skills/remember-*`；`memory-consolidate` skill 手动整理 inbox。
+- **先去重再写**：同主题文档已存在 → 更新不新建；写完更新 `.ai/README.md` 索引 + 清空已消化的 `inbox/` 片段。
+- 标准流程只放 `.ai/runbooks/`，worklog 不重复收录。
+- **Commit messages 一律英文**（conventional-commit：`feat:`/`fix:`/`docs:`/`chore:`…）。中文只出现在 `.ai/` 文档内容里，绝不进 commit message。
 
 ## AI agent team (multi-agent collaboration)
 
@@ -38,11 +65,11 @@ Serenique uses a "captain + domain-expert agents" collaboration model: **the mai
 | CLI Agent | `.claude/agents/cli-agent.md` | `apps/cli`: Go command-line client |
 | Web Agent | `.claude/agents/web-agent.md` | `apps/web`: React browser app |
 | Deploy Agent | `.claude/agents/deploy-agent.md` | Docker, GitHub Actions, releases, servers |
-| Flutter Agent | `.claude/agents/flutter-agent.md` | Mobile Flutter (iOS/Android, planned) |
+| Flutter Agent | `.claude/agents/flutter-agent.md` | Mobile Flutter (iOS/Android, in development) |
 
 Dispatching rule: a requirement often touches multiple subsystems at once (e.g. "adding a drive module" involves API + CLI + Web). **`services/mcp` is frozen (sunset 2026-08-08) and is never an affected subsystem** — "AI tool exposure" requirements go through the CLI or the API service layer instead. The captain first breaks down which subsystems are affected, then **dispatches the relevant agents in parallel**, each developing within its own domain; the captain owns cross-client contract alignment (with the `services/api` source as the source of truth: field names, response shapes, the `exports.ts` export surface) and final acceptance.
 
-All agents have the same permissions as the captain (omitting the `tools` field = inheriting all tools), the tech stacks are constrained to each client's current stack, and using the project memory is mandatory (read `.ai/` before starting work, write to the worklog after finishing). Team charter: `.claude/agents/README.md`; decision record: `.ai/decisions/2026-08-06-ai-agent-team.md`.
+All agents have the same permissions as the captain (omitting the `tools` field = inheriting all tools), the tech stacks are constrained to each client's current stack, and using the project memory is mandatory (read `.ai/` before starting work, write to the worklog via `remember-worklog` after finishing). Team charter: `.claude/agents/README.md`; decision record: `.ai/decisions/2026-08-06-ai-agent-team.md`.
 
 ## Commands
 
@@ -68,6 +95,7 @@ bun run typecheck    # Type-check the api package alone
 bun run db:generate  # Generate Drizzle migrations from schema changes (requires TTY)
 bun run db:migrate   # Apply pending migrations to the database
 bun run db:push      # Push schema directly to DB (bypasses migrations, works in CI)
+bun scripts/bootstrap-user.ts  # Create the first users row (idempotent). Users are NOT created by the register endpoint — see Authentication
 ```
 
 CLI commands run from `apps/cli/`:
@@ -82,6 +110,13 @@ go vet ./...         # Static check
 go test -count=1 ./...  # Full test run (use -count=1 to bypass cache)
 ```
 
+Mobile commands run from `apps/mobile/`:
+
+```sh
+flutter analyze      # Static analysis
+flutter test         # Dart/Flutter unit + widget tests
+```
+
 Network note: pulling Go modules requires the China mirror `GOPROXY=https://goproxy.cn,direct` (`proxy.golang.org` is unreachable on this network).
 
 Docker build network note: the build container cannot reach `registry.npmjs.org` directly — `docker build` fails at `bun install` with `ConnectionRefused` on every tarball. Rebuild with the host proxy injected as build args (Docker's predefined proxy args, no Dockerfile change):
@@ -93,7 +128,7 @@ docker build --build-arg http_proxy=http://host.docker.internal:7897 \
   -t serenique-api -f services/api/Dockerfile .
 ```
 
-`host.docker.internal:7897` is the host's local HTTP proxy (see the `http_proxy` env on this machine); adjust the port if it changes. Running an already-built image (`docker run`) does not need it — only rebuilds. The Dockerfile itself stays registry-agnostic so it builds on any network.
+`host.docker.internal:7897` is the host's local HTTP proxy (see the `http_proxy` env on this machine); adjust the port if it changes. Running an already-built image (`docker run`) does not need it — only rebuilds. The Dockerfile itself stays registry-agnostic so it builds on any network. Full procedure: `.ai/runbooks/docker-local-build.md`.
 
 The runtime environment is passed via `docker run -e` flags (expected keys in `.env.example`). Service-local `.env` files are not used. Keep secrets out of images; root `.dockerignore` excludes `.env` files from the build context.
 
@@ -103,10 +138,12 @@ The runtime environment is passed via `docker run -e` flags (expected keys in `.
 
 ```
 apps/cli/             Go CLI client (cobra) — see "CLI module" below
+apps/web/             React browser app (Vite + TanStack Query + shadcn/ui)
+apps/mobile/          Flutter mobile app (iOS/Android, in development)
 services/api/         REST API — Bun + Hono + Drizzle + PostgreSQL
 services/mcp/         MCP server exposing API service layer over streamable-http (frozen — see sunset decision)
 scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.docker.internal)
-.ai/                  Project memory: worklog/ architecture/ decisions/
+.ai/                  Project memory: worklog/ decisions/ requirements/ architecture/ runbooks/ archive/ inbox/
 ```
 
 ### services/api
@@ -115,7 +152,7 @@ scripts/              docker-entrypoint.sh (rewrites localhost DB host to host.d
 services/api/src/
 ├── index.ts          — Entry point: validates env, initialises blob root, creates app
 ├── app.ts            — App factory: wires middleware, routes, error handler, 404
-├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, SESSION_SECRET, SETUP_TOKEN, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, WEBAUTHN_ORIGINS, SESSION_TTL, PORT, NODE_ENV)
+├── env.ts            — Zod-validated env (DATABASE_URL, BLOB_ROOT, BLOB_MAX_SIZE, BLOB_SIGNING_SECRET, SESSION_SECRET, SETUP_TOKEN, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, WEBAUTHN_ORIGINS, SESSION_TTL, AUDIT_RETENTION_DAYS, AUDIT_MAX_ROWS, AI_SESSION_DIR, AI_MODEL, PORT, NODE_ENV)
 ├── exports.ts        — Public workspace exports for @serenique/api (service layer only, no Hono)
 ├── db/
 │   ├── connection.ts — Single Drizzle client + Postgres pool (shared across all modules)
@@ -130,12 +167,27 @@ services/api/src/
 │   ├── index.ts      — Barrel export for middleware
 │   └── logger.ts     — Request logging (method, path, status, duration)
 └── modules/
+    ├── ai/           — AI assistant (宁序): PI SDK agent loop, business tools (defineTool → service layer), /api/ai/ws WebSocket chat, jsonl sessions in AI_SESSION_DIR (see `.ai/requirements/2026-08-09-ai-agent-module.md`)
+    ├── audit/        — Server-side audit logs (auth.* / token.* events; retention sweep via AUDIT_RETENTION_DAYS / AUDIT_MAX_ROWS)
+    ├── auth/         — WebAuthn (passkey) auth + users/me profile + credentials
+    ├── tokens/       — API token create/list/revoke (Bearer auth for CLI/mobile)
     ├── blob/         — Generic binary storage layer (all MIME types, SHA-256 dedup)
-    ├── diary/        — Diary entries (one per day, dated; fields: content, diaryDate)
-    ├── moment/       — Flash notes (≤10000 chars; field: text; media attachments via blob refs; nested self-comments in `comment.*`, ≤2000 chars)
+    ├── moment/       — Flash notes (≤10000 chars; field: text; media attachments via blob refs; nested self-comments in `comment.*`, ≤2000 chars; tags)
+    ├── tag/          — Tag CRUD + attach/detach (shared by moments)
     ├── task/         — Task groups (custom) + simple tasks (fields: groupId/title/status; completedAt synced by status)
     └── event/        — Calendar events (fields: title/startAt/endAt/isAllDay/location/note; time-range list, bare array)
 ```
+
+> **`diary` was removed on 2026-08-09** (merged into moment). Do not reintroduce it — see `.ai/worklog/2026-08-09-api-remove-diary-module.md`.
+
+#### AI 助手模块（宁序）
+
+A WebSocket-based AI chat assistant inside the API (no separate service). Key facts:
+
+- Endpoint: `WS /api/ai/ws` — session CRUD + `prompt`/`steer`/`followUp`/`abort`, streaming events over a text/JSON protocol.
+- Runs a **PI SDK agent loop** with business tools defined via `defineTool` calling the same service layer other modules use.
+- Sessions are persisted as **jsonl files** in `AI_SESSION_DIR` (default: prod `/data/sessions`, dev `./.data/sessions`), not in the DB.
+- Env: `AI_SESSION_DIR` (optional), `AI_MODEL` (optional, default `opencode-go/deepseek-v4-flash`). The model credential **`OPENCODE_API_KEY` is read by the PI SDK directly from `process.env`** — it is intentionally NOT in the env schema (see `src/env.ts`).
 
 ### Module structure
 
@@ -156,6 +208,8 @@ When a module has pure business rules or row→entry conversion, they live in de
 |------|---------|
 | `*.domain.ts` | Pure business rules/calculations/validations — **no DB/IO imports**, unit-testable in milliseconds |
 | `*.mappers.ts` | row→entry conversion, pure functions |
+
+Special files: `auth/*.domain.ts` + `auth.flows.ts` hold passkey/credential logic; `ai/` adds `ai.tools.ts` (business tools) and `ai.system-prompt.ts` (prompt building).
 
 Services never use repository interfaces or factories/DI — the DB is an implementation detail of the service, and testable logic is extracted as pure functions into `*.domain.ts`.
 
@@ -183,7 +237,7 @@ Each module is a self-contained Hono instance. Modules are wired in `app.ts` via
 
 ### Blob module (low-level binary storage)
 
-The blob module is intended as a **shared storage layer** for other modules (diary, moment, and future modules like drive/netdisk). It has no business-level constraints on file types — any MIME type is accepted.
+The blob module is intended as a **shared storage layer** for other modules (moment, and future modules like drive/netdisk). It has no business-level constraints on file types — any MIME type is accepted.
 
 - **Disk layout:** `{BLOB_ROOT}/objects/{mime-main-type}/{YYYY}/{MM}/{uuid}.{ext}`. Reads/deletes also fall back to the old direct-root layout for compatibility.
   - Example: `objects/image/2026/08/a1b2c3d4.jpg`, `objects/application/2026/08/b2c3d4e5.pdf`
@@ -202,23 +256,27 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 |--------|------|--------|
 | GET | `/health` | Health check |
 | GET | `/` | API info |
-| POST | `/api/auth/register/start` | WebAuthn registration start (`{ setupToken?, userInfo? }`; empty users table = guided bootstrap needing SETUP_TOKEN, users exist = add a device, session required) |
-| POST | `/api/auth/register/finish` | Registration finish (validate attestation → create user/credential → auto-login cookie) |
+| POST | `/api/auth/register/start` | WebAuthn registration start (`{ setupToken? }`; credential count 0 = bootstrap phase needs SETUP_TOKEN, ≥1 = session required to add device; the `users` row must already exist via the bootstrap script) |
+| POST | `/api/auth/register/finish` | Registration finish (validate attestation → create credential → auto-login cookie) |
 | POST | `/api/auth/login/start` | WebAuthn login start (returns challenge + allowCredentials) |
-| POST | `/api/auth/login/finish` | Login finish (validate signature + counter → session cookie) |
+| POST | `/api/auth/login/finish` | Login finish (validate signature + monotonic counter → session cookie) |
 | POST | `/api/auth/logout` | Logout (clears the cookie) |
 | GET | `/api/auth/me` | Auth state + user info (`{ authenticated, user }`) |
-| GET, DELETE | `/api/auth/credentials[/:id]` | Credential list / delete (last credential delete → 409) |
+| GET, PATCH, DELETE | `/api/auth/credentials[/:id]` | Credential list / rename / delete (last credential delete → 409) |
 | GET, PUT | `/api/users/me` | Profile read/update (name/email/birthday, session required) |
 | POST, GET, DELETE | `/api/tokens[/:id]` | API token create (plaintext once) / list (prefix only) / revoke |
-| GET, POST | `/api/diaries` | Diary list / create |
-| GET | `/api/diaries/by-date/:date` | Diary by date (404 if none; registered before `:id`) |
-| GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
+| GET | `/api/audit/logs` | Audit log list (session required) |
+| GET | `/api/audit/logs/unread-count` | Unread audit log count |
+| PUT | `/api/audit/logs/read` | Mark audit logs as read |
 | GET, POST | `/api/moments` | Moment list / create (create accepts optional `attachments[]`) |
 | GET, PUT, DELETE | `/api/moments/:id` | Moment detail / update / delete |
 | POST, DELETE | `/api/moments/:id/attachments[/:attachmentId]` | Moment attachment create / delete |
 | GET, POST | `/api/moments/:id/comments` | Moment comment list / create (body `{ content }`, ≤2000) |
 | PUT, DELETE | `/api/moments/:id/comments/:commentId` | Moment comment update / delete |
+| POST, PUT, DELETE | `/api/moments/:id/tags[/:tagId]` | Moment tag add / replace / remove |
+| GET, POST | `/api/tags` | Tag list / create |
+| GET, PUT, DELETE | `/api/tags/:id` | Tag detail / rename / delete |
+| POST, DELETE | `/api/tags/:id/attach` · `/api/tags/:id/detach` | Tag attach / detach |
 | POST | `/api/blobs/upload` | Blob upload (multipart, field: `file`) |
 | POST | `/api/blobs/cleanup-orphans` | Delete disk files not referenced by blob rows |
 | GET | `/api/blobs` | Blob list (`?mimeType=image/&page=&pageSize=`) |
@@ -234,19 +292,26 @@ The blob module is intended as a **shared storage layer** for other modules (dia
 | GET, PUT, DELETE | `/api/tasks/:id` | Task detail / update (status syncs `completedAt`) / delete |
 | GET, POST | `/api/events` | Event list (`?from=&to=` time window, **bare array**) / create |
 | GET, PUT, DELETE | `/api/events/:id` | Event detail / partial update / delete |
+| WS | `/api/ai/ws` | AI assistant (宁序) WebSocket chat: session CRUD + prompt/steer/followUp/abort, streaming events |
 
-Field-naming gotcha: diary uses `content`/`diaryDate`, but moment uses `text`. Don't confuse them — the CLI contract follows the API source: moment body is `{ "text": ... }`. Event uses `title`/`startAt`/`endAt`/`isAllDay`/`location`/`note`; its list is a time-window query returning a **bare array** (not `{ items, total }`).
+Field-naming gotchas: moment uses `text` (there is no `diary` module anymore — don't confuse it with the removed diary's `content`/`diaryDate`). Event uses `title`/`startAt`/`endAt`/`isAllDay`/`location`/`note`; its list is a time-window query returning a **bare array** (not `{ items, total }`).
 
 User-facing messages are in Chinese.
 
 ### Authentication (Passkey + API tokens)
 
-Standard **WebAuthn (Passkey)** auth with manageable API tokens for CLI/scripts (GitHub PAT mode). Single-user design (the deployer), multi-device via multiple passkey credentials.
+Standard **WebAuthn (Passkey)** auth with manageable API tokens for CLI/scripts (GitHub PAT mode). Single-user design (the deployer), multi-device via multiple passkey credentials. See `.ai/requirements/2026-08-09-passkey-auth.md`.
 
-- **Browser (Web):** `navigator.credentials` ceremony against `/api/auth/register/*` (bootstrap registration requires `SETUP_TOKEN`) and `/api/auth/login/*` → HttpOnly **HMAC-signed cookie** (`serenique_session`, stateless, signed with `SESSION_SECRET`, payload carries `userId`; no session table).
+- **Browser (Web):** `navigator.credentials` ceremony against `/api/auth/register/*` and `/api/auth/login/*` → HttpOnly **HMAC-signed cookie** (`serenique_session`, stateless, signed with `SESSION_SECRET`, payload carries `userId`; no session table).
+- **No public first registration.** The `users` row is created **only** by the bootstrap script `bun scripts/bootstrap-user.ts` (idempotent; `--name/--email/--birthday` args or `FIRST_USER_*` env; only needs `DATABASE_URL`). The frontend has no registration form — only a hidden `/setup?setupToken=` page for the first passkey.
+- **Registration gate (credential-count based):** `passkey_credentials` count == 0 → `SETUP_TOKEN` constant-time compare required (bootstrap phase; the `users` row must already exist, else 500 with a script hint); count ≥ 1 → session required (the same endpoint adds a new device). Deleting the last credential → 409.
+- **Login counter:** strict monotonic check (new counter > stored counter) — regression = clone suspicion, audited.
 - **CLI / scripts / mobile:** `Authorization: Bearer <API token>` — tokens created via `POST /api/tokens` (plaintext shown once, only SHA-256 hash stored, `revoked_at` soft-revoke).
-- **env:** `SESSION_SECRET` (cookie signing), `SETUP_TOKEN` (bootstrap registration; removable after first registration), `WEBAUTHN_RP_ID` (RP ID = **front-end domain**, not the API domain; changing it invalidates all passkeys), `WEBAUTHN_RP_NAME`, `WEBAUTHN_ORIGINS` (comma-separated ceremony origin allowlist).
+- **Challenges:** single-process in-memory Map, 5-minute TTL, one-time consume.
+- **Audit logs:** 登录成功/失败、注册、token 创建/撤销、凭证删除 → `auditLogs`（`auth.*` / `token.*` 事件）。
+- **env:** `SESSION_SECRET` (cookie signing), `SETUP_TOKEN` (bootstrap registration; removable after first registration), `FIRST_USER_NAME/FIRST_USER_EMAIL/FIRST_USER_BIRTHDAY` (bootstrap script), `WEBAUTHN_RP_ID` (RP ID = **front-end domain**, not the API domain; changing it invalidates all passkeys), `WEBAUTHN_RP_NAME`, `WEBAUTHN_ORIGINS` (comma-separated ceremony origin allowlist).
 - **Middleware allowlist:** `/health`, `/`, `/api/auth/register/start|finish`, `/api/auth/login/start|finish`, `/api/auth/logout`, signed blob file links (`/api/blobs/:id/file?expires=&signature=`). Ceremony endpoints still resolve session vars best-effort (add-device flow needs the logged-in userId).
+- **Fail-closed:** production refuses to start without `SESSION_SECRET` + `WEBAUTHN_RP_ID`, and with auth enabled + empty `users` table (hint: run `bun scripts/bootstrap-user.ts` first); dev skips auth entirely when `WEBAUTHN_RP_ID` is unset (zero friction).
 - **Rotating `SESSION_SECRET` invalidates all session cookies; revoking a token kills that Bearer immediately.**
 - Session cookie defaults to 30 days (`SESSION_TTL`, in seconds). Production cross-origin setups (e.g. pages.dev → api.zeroicey.me) need `CORS_ORIGIN` explicitly set to the web domain — credentialed cross-origin forbids `*`.
 
@@ -287,11 +352,11 @@ git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-- `.github/workflows/docker-publish.yml` — multi-arch (linux/amd64+arm64) build pushed to Docker Hub. tag `v*` → `{version}` / `v{version}` / `latest`; main push → `main`; `workflow_dispatch` supported. Requires GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (a Docker Hub access token, **unrelated to `gh`'s GitHub login**).
+- `.github/workflows/docker-publish.yml` — multi-arch (linux/amd64+arm64) build pushed to Docker Hub. tag `v*` → `{version}` / `v{version}` / `latest`; main push → `main`; `workflow_dispatch` supported. Requires GitHub secrets `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` (a Docker Hub access token, **unrelated to `gh`'s GitHub login`).
 - `.github/workflows/release-cli.yml` — on tag `v*`, cloud-compiles for 5 platforms (matching the Makefile `build-all`) + `checksums.txt` + `gh release create --generate-notes`.
 - Docker Hub namespace: `zeroicey` — `zeroicey/serenique-api` only (`serenique-mcp` is no longer built/pushed, see the MCP sunset decision).
 - Images run as **non-root (UID 10001)**: fresh named volumes automatically inherit the in-image owner; existing volumes need a one-time chown to 10001 (`docker run --rm -v <vol>:/data alpine chown -R 10001:10001 /data`), otherwise the container cannot write to `/data/blobs`.
-- Key pitfalls (bun `--production` implicitly freezing the lockfile, `--filter` being incompatible with `--frozen-lockfile`, the metadata-action `enable` expression syntax) are detailed in `.ai/worklog/2026-08-05-release-pipeline.md`.
+- Full runbook: `.ai/runbooks/release-process.md` (Docker Hub secrets, UID 10001 chown, bun `--production` lockfile freeze pitfall); server deployment: `.ai/runbooks/hpcore-deploy.md`.
 
 ## Docker
 
@@ -310,10 +375,13 @@ docker run -p 3000:3000 \
   -e WEBAUTHN_RP_ID=your-web-domain \
   -e WEBAUTHN_ORIGINS=https://your-web-domain \
   -e CORS_ORIGIN=https://your-web-domain \
+  -e OPENCODE_API_KEY=<gateway key for the AI assistant> \
+  -e AI_MODEL=opencode-go/deepseek-v4-flash \
   -v /host/path:/data/blobs \
+  -v /host/sessions:/data/sessions \
   serenique-api
 ```
 
-The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed to `/data/blobs` inside the container and persisted through a host volume. `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites localhost database hosts to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access-link feature. Passkey auth is optional in dev (skipped when `WEBAUTHN_RP_ID` is unset), required in production (fail-closed on missing `SESSION_SECRET` / `WEBAUTHN_RP_ID`). `SETUP_TOKEN` is only needed until the first registration completes.
+The `-e` env keys are documented in `.env.example`. `BLOB_ROOT` is fixed to `/data/blobs` inside the container and persisted through a host volume; `/data/sessions` holds the AI assistant's jsonl sessions (mount a volume in production). `DATABASE_URL` is required; the entrypoint (`scripts/docker-entrypoint.sh`) rewrites localhost database hosts to `host.docker.internal` for container access. `BLOB_SIGNING_SECRET` (≥32 chars) is required for the `blob link` / signed access-link feature. Passkey auth is optional in dev (skipped when `WEBAUTHN_RP_ID` is unset), required in production (fail-closed on missing `SESSION_SECRET` / `WEBAUTHN_RP_ID`). `SETUP_TOKEN` is only needed until the first registration completes. Before the first registration, the `users` row must exist — run `bun scripts/bootstrap-user.ts` (the image includes `services/api/scripts/`).
 
 Default values in Dockerfiles: `NODE_ENV=production`, `BLOB_ROOT=/data/blobs`, `BLOB_MAX_SIZE=104857600` (100 MB), API `PORT=3000`, MCP `PORT=3001`, MCP `MCP_TRANSPORT=streamable-http`.

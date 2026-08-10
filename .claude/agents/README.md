@@ -11,7 +11,7 @@
 | CLI Agent | `cli-agent.md` | `apps/cli`（Go + cobra） | 命令功能、新增模块、配置、输出、传输 |
 | Web Agent | `web-agent.md` | `apps/web`（React 19 + Vite + shadcn/ui） | 页面、路由、feature、表单、服务端状态 |
 | Deploy Agent | `deploy-agent.md` | Docker / GitHub Actions / 发布 | 镜像、compose、CI 工作流、tag 发布、服务器 |
-| Flutter Agent | `flutter-agent.md` | 移动端 Flutter（规划中，iOS/Android） | 移动端需求、移动端架构设计 |
+| Flutter Agent | `flutter-agent.md` | `apps/mobile`（Flutter，iOS 优先 + Android；Riverpod 3 + dio + go_router） | iOS 真机、移动端需求、移动端 feature、AI WS 对接 |
 
 ## 队长工作流
 
@@ -24,6 +24,7 @@
 ## 共同规则（已内建于每个 Agent 的 prompt）
 
 - **权限**：所有 Agent 省略 `tools` 字段 = 继承全部工具（与队长一致）；`permissionMode` 默认继承会话设置
+- **停用**：mcp-agent 已通过 `permissions.deny: ["Agent(mcp-agent)"]` 正式禁用（Claude Code 官方机制，非 `disable: true`），不要再派发
 - **技术栈**：各自 prompt 限定为当前项目各端技术栈
 - **记忆**：动工前读 `.ai/architecture|decisions|worklog` 最新文档；完成后写 worklog 沉淀坑与提示
 - **语言**：用户可见文案一律中文

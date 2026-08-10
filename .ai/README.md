@@ -12,12 +12,12 @@ Serenique 的项目记忆，正式文档。进 `.ai/` 前先读本文件。
 | `architecture/` | 当前有效的架构/设计文档；被取代的加「已被 XX 取代」横幅 | 过期进 `archive/` |
 | `runbooks/` | **标准流程手册，唯一事实源**（部署/上传/装机/构建/发布） | 流程变化时原地更新 |
 | `archive/` | 死文档（实施完的 plan、被取代的设计） | 只进不出 |
-| `inbox/` | memory 插件自动捕获的原始会话片段 | 由记忆 skill 消化后清空 |
+| `inbox/` | `Stop` hook 自动捕获的原始会话片段（见 `.claude/hooks/capture-inbox.mjs`） | 由记忆 skill 消化后清空 |
 
 ## 规则
 
 1. **标准流程只在 `runbooks/`**：worklog 发现可复现流程 → 写 runbook + worklog 留一行指针，不重复收录。
-2. **自动捕获**：4 类场景由 `remember-*` skill 自动触发（见 `.opencode/skills/`）；插件把会话片段写入 `inbox/`。
+2. **自动捕获**：4 类场景由 `remember-*` skill 自动触发（见 `.claude/skills/`）；`Stop` hook 把每轮实质对话片段写入 `inbox/`。
 3. **先去重再写**：同主题文档已存在 → 更新不新建。
 4. **收尾动作**：写完任何记忆 → 更新本文件相关条目 + 清空已消化的 `inbox/` 片段。
 

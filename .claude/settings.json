@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "deny": ["Agent(mcp-agent)"]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}\"/.claude/hooks/load-memory.mjs 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}\"/.claude/hooks/capture-inbox.mjs 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

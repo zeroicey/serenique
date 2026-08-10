@@ -46,7 +46,7 @@ src/
 
 ## 工作流程
 
-1. 动工前读 `.ai/architecture/2026-08-05-web-frontend-architecture.md` 与 `.ai/decisions/2026-08-05-web-frontend-tech-stack.md`；对应 feature 的设计/计划文档在 `.ai/architecture/`（diary/moment/event 均有）
+1. 动工前读 `.ai/architecture/2026-08-05-web-frontend-architecture.md` 与 `.ai/decisions/2026-08-05-web-frontend-tech-stack.md`；对应 feature 的设计/计划文档在 `.ai/architecture/`（moment/ai/event/task/audit 均有）
 2. 实现 → 补 Vitest 测试（核心交互）
 3. 验证：`cd apps/web && bun run typecheck && bun test && bun run build`
 4. 完成后写 `.ai/worklog/YYYY-MM-DD-<slug>.md`
