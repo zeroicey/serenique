@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'core/network/api_exception.dart';
+import 'features/ai/widgets/session_title.dart';
 import 'features/audit/audit_providers.dart';
 import 'features/moment/moment_providers.dart';
 import 'features/moment/widgets/attachment_picker_sheet.dart';
@@ -88,7 +89,9 @@ class AppShell extends ConsumerWidget {
             },
           ),
         ),
-        title: Text(moduleTitle(location)),
+        title: location.startsWith('/ai')
+            ? const AiSessionTitle()
+            : Text(moduleTitle(location)),
         // 添加按钮放右上角（不用右下角 FAB，避免挡住评论发送）。
         actions: [
           if (location == '/moments')

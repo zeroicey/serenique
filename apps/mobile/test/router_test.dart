@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/app.dart';
+import 'package:serenique_mobile/features/ai/ai_client.dart';
+import 'package:serenique_mobile/features/ai/ai_page.dart';
+import 'package:serenique_mobile/features/ai/ai_providers.dart';
 import 'package:serenique_mobile/features/audit/audit_models.dart';
 import 'package:serenique_mobile/features/audit/audit_page.dart';
 import 'package:serenique_mobile/features/audit/audit_providers.dart';
@@ -14,7 +19,43 @@ import 'package:serenique_mobile/features/settings/settings_page.dart';
 import 'package:serenique_mobile/features/task/task_providers.dart';
 import 'package:serenique_mobile/providers.dart';
 import 'package:serenique_mobile/router.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'helpers.dart';
+
+class _AiFakeWsChannel implements WebSocketChannel {
+  final _incoming = StreamController<Object?>.broadcast();
+  @override
+  Stream get stream => _incoming.stream;
+  @override
+  WebSocketSink get sink => _Sink();
+  @override
+  Future<void> get ready => Future.value();
+  @override
+  int? get closeCode => null;
+  @override
+  String? get closeReason => null;
+  @override
+  String? get protocol => null;
+
+  // WebSocketChannel 在 web_socket_channel 3.x 中同时实现 StreamChannelMixin，
+  // 其余成员（pipe/transform/cast 等）测试中不会用到，运行时调用即报错。
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
+      '_AiFakeWsChannel.${invocation.memberName} not used in tests');
+}
+
+class _Sink implements WebSocketSink {
+  @override
+  void add(Object? data) {}
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+  @override
+  Future<void> addStream(Stream stream) async {}
+  @override
+  Future<void> close([int? closeCode, String? closeReason]) async {}
+  @override
+  Future<void> get done => Future.value();
+}
 
 void main() {
   testWidgets('无 token：落在 /login', (tester) async {
@@ -126,5 +167,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MomentListPage), findsOneWidget);
+  });
+
+  testWidgets('已登录：/ai 渲染真实聊天页（非占位）', (tester) async {
+    final channels = <dynamic>[];
+    final container = ProviderContainer(overrides: [
+      tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
+      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      countsProvider.overrideWith((ref) async => 0),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
+      aiClientFactoryProvider.overrideWithValue(() => AiClient(
+            baseUrl: 'https://api.example.com',
+            tokenReader: () => null,
+            channelFactory: (uri, headers) {
+              final ch = _AiFakeWsChannel();
+              channels.add(ch);
+              return ch;
+            },
+          )),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
+    await tester.pumpAndSettle();
+
+    container.read(appRouterProvider).go('/ai');
+    await tester.pumpAndSettle();
+
+    // 空态/输入框证明是真实聊天页（占位页只显示「功能开发中」）
+    expect(find.byType(AiPage), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
   });
 }
