@@ -73,12 +73,18 @@ export interface CreateMomentInput {
 export interface ListMomentsParams {
   page?: number
   pageSize?: number
+  /** 搜索关键词（中文 / 拼音 / 英文，服务端 ILIKE 三列匹配）。trim 后为空则省略（全量列表）。 */
+  q?: string
 }
 
 export async function listMoments(params?: ListMomentsParams): Promise<Paged<MomentEntry>> {
-  const res = await api.get(apiUrl('moments'), {
-    searchParams: { page: String(params?.page ?? 1), pageSize: String(params?.pageSize ?? 10) },
-  })
+  const searchParams: Record<string, string> = {
+    page: String(params?.page ?? 1),
+    pageSize: String(params?.pageSize ?? 10),
+  }
+  const q = params?.q?.trim()
+  if (q) searchParams.q = q
+  const res = await api.get(apiUrl('moments'), { searchParams })
   return unwrap<Paged<MomentEntry>>(res)
 }
 

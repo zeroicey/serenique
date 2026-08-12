@@ -68,6 +68,27 @@ describe('useMoments', () => {
     await waitFor(() => expect(result.current.data?.pages).toHaveLength(3))
     expect(result.current.hasNextPage).toBe(false)
   })
+
+  it('keyword 变化后带 q 从第 1 页重新拉取（不沿用旧分页）', async () => {
+    mockedList
+      .mockResolvedValueOnce({ items: [makeMoment(0)], total: 1 })
+      .mockResolvedValueOnce({ items: [makeMoment(1)], total: 1 })
+
+    const { result, rerender } = renderHook(({ kw }) => useMoments(10, kw), {
+      initialProps: { kw: '' },
+      wrapper,
+    })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(mockedList).toHaveBeenCalledTimes(1)
+    expect(result.current.data?.pages[0]?.items[0]?.id).toBe('m0')
+
+    rerender({ kw: 'beijing' })
+    await waitFor(() => expect(result.current.data?.pages[0]?.items[0]?.id).toBe('m1'))
+    expect(mockedList).toHaveBeenCalledTimes(2)
+    expect(mockedList).toHaveBeenLastCalledWith({ page: 1, pageSize: 10, q: 'beijing' })
+    expect(result.current.data?.pages).toHaveLength(1)
+  })
 })
 
 describe('useMomentComments', () => {

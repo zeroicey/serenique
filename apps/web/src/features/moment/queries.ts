@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -24,11 +25,16 @@ import {
 
 // Moment 数据 hooks。读取走 useInfiniteQuery（滚动分页），写入走 useMutation + invalidate。
 
-export function useMoments(pageSize = 10) {
+// keyword 进入 queryKey：关键词变化 → 新 queryKey → useInfiniteQuery 自动从第 1 页重建
+// pages；现有 invalidateQueries({ queryKey: ['moments'] }) 前缀失效逻辑依然兼容。
+export function useMoments(pageSize = 10, keyword = '') {
   return useInfiniteQuery({
-    queryKey: ['moments', pageSize],
-    queryFn: ({ pageParam }) => listMoments({ page: pageParam, pageSize }),
+    queryKey: ['moments', keyword, pageSize],
+    queryFn: ({ pageParam }) =>
+      listMoments({ page: pageParam, pageSize, ...(keyword ? { q: keyword } : {}) }),
     initialPageParam: 1,
+    // 切换关键词时保留旧列表占位，避免列表闪烁（对齐 audit-page 先例）。
+    placeholderData: keepPreviousData,
     getNextPageParam: (lastPage, allPages) => {
       if (lastPage.items.length === 0) return undefined
       const loaded = allPages.reduce((n, p) => n + p.items.length, 0)
