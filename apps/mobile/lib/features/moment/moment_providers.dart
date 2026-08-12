@@ -9,10 +9,67 @@ import 'moment_models.dart';
 final momentApiProvider =
     Provider<MomentApi>((ref) => MomentApi(ref.watch(apiClientProvider)));
 
-/// 闪记列表（服务端状态，≈ TanStack Query 的 query）。
-final momentListProvider = FutureProvider<List<Moment>>((ref) async {
-  return ref.watch(momentApiProvider).list();
-});
+/// 搜索关键词（已输入、经防抖后的实际搜索词；空 = 全量列表）。
+class MomentSearchKeywordNotifier extends Notifier<String> {
+  @override
+  String build() => '';
+
+  void set(String value) => state = value;
+}
+
+final momentSearchKeywordProvider =
+    NotifierProvider<MomentSearchKeywordNotifier, String>(
+        MomentSearchKeywordNotifier.new);
+
+/// 闪记列表（服务端状态 + 分页，≈ TanStack Query 的 query）。
+/// 搜索词变化 → notifier 重建 → 重新从第 1 页拉取（分页状态天然重置）。
+class MomentListNotifier extends AsyncNotifier<MomentPage> {
+  static const _pageSize = 50;
+
+  /// 当前已加载到的页码（build 重建时重置回 1）。
+  int _page = 1;
+
+  /// 是否正在加载下一页（防滚动事件重复触发）。
+  bool _fetching = false;
+
+  @override
+  Future<MomentPage> build() async {
+    final keyword = ref.watch(momentSearchKeywordProvider);
+    _page = 1;
+    return ref.watch(momentApiProvider).listPage(query: keyword);
+  }
+
+  /// 滚动到底部附近时加载下一页，追加到已加载列表。
+  /// 失败：保留已加载数据（页码不变），错误抛给页面提示。
+  Future<void> loadMore() async {
+    if (_fetching) return;
+    final current = state.value;
+    if (current == null || current.items.length >= current.total) return;
+    // 捕获请求时的关键词：若期间用户改了搜索词，build 已重建，
+    // 本次结果过期，直接丢弃（不污染新搜索词的结果）。
+    final keyword = ref.read(momentSearchKeywordProvider);
+    final nextPage = _page + 1;
+    _fetching = true;
+    try {
+      final next = await ref
+          .read(momentApiProvider)
+          .listPage(page: nextPage, pageSize: _pageSize, query: keyword);
+      if (ref.read(momentSearchKeywordProvider) != keyword) return;
+      _page = nextPage;
+      state = AsyncData(MomentPage(
+        items: [...current.items, ...next.items],
+        total: next.total,
+      ));
+    } on Exception catch (e, st) {
+      Error.throwWithStackTrace(e, st);
+    } finally {
+      _fetching = false;
+    }
+  }
+}
+
+final momentListProvider =
+    AsyncNotifierProvider<MomentListNotifier, MomentPage>(MomentListNotifier.new);
 
 /// 闪记详情（含评论）。
 final momentDetailProvider =

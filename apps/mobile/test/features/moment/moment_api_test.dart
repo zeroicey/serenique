@@ -28,12 +28,13 @@ class _FakeAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-/// 记录最近一次请求的 body（JSON 请求时 options.data 是 Map，需 jsonEncode）。
+/// 记录最近一次请求的 body 与 query（JSON 请求时 options.data 是 Map，需 jsonEncode）。
 class _RecordingAdapter implements HttpClientAdapter {
   _RecordingAdapter(this.onRequest);
 
   final String Function(RequestOptions options) onRequest;
   String? lastBody;
+  Map<String, dynamic>? lastQuery;
 
   @override
   Future<ResponseBody> fetch(
@@ -45,6 +46,7 @@ class _RecordingAdapter implements HttpClientAdapter {
     if (data is Map<String, dynamic>) {
       lastBody = jsonEncode(data);
     }
+    lastQuery = options.queryParameters;
     return ResponseBody.fromString(
       onRequest(options),
       200,
@@ -282,5 +284,61 @@ void main() {
     expect(m.location, isNotNull);
     expect(m.location!.name, '公园');
     expect(m.location!.longitude, 116.4);
+  });
+
+  test('listPage：query 非空时拼 q，返回 items + total', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {
+          'items': [
+            {
+              'id': 'm1',
+              'text': '北京 meeting',
+              'attachments': [],
+              'comments': [],
+              'commentCount': 0,
+              'createdAt': 't',
+              'updatedAt': 't',
+            },
+          ],
+          'total': 42,
+        },
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    final page = await MomentApi(client).listPage(query: '  beijing  ');
+    expect(page.items.single.text, '北京 meeting');
+    expect(page.total, 42);
+    expect(adapter.lastQuery, {
+      'page': 1,
+      'pageSize': 50,
+      'q': 'beijing', // trim 后拼入
+    });
+  });
+
+  test('listPage：query 空白时不含 q 参数', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {'items': [], 'total': 0},
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    final page = await MomentApi(client).listPage(query: '   ');
+    expect(page.total, 0);
+    expect(adapter.lastQuery, {'page': 1, 'pageSize': 50}); // 无 q 键
   });
 }

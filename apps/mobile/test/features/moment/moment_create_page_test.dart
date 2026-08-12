@@ -12,6 +12,7 @@ import 'package:serenique_mobile/features/moment/moment_create_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
 import 'package:serenique_mobile/features/moment/widgets/local_attachment_grid.dart';
+import '../../helpers.dart';
 
 /// mock geolocator 原生通道：测试环境无原生实现，不 mock 会一直挂起。
 /// 权限 granted（whileInUse）+ 固定坐标，让选点 sheet 走通完整定位流程。
@@ -118,7 +119,7 @@ void main() {
       bool? locationEnabled}) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
-        momentListProvider.overrideWith((ref) async => []),
+        momentListProvider.overrideWith(() => FakeMomentListNotifier(const [])),
         if (locationEnabled != null)
           locationConfigProvider.overrideWith((ref) async => locationEnabled),
         if (locationApi != null)

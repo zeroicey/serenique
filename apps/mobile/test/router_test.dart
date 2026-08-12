@@ -74,7 +74,7 @@ void main() {
   testWidgets('有 token：落在 /moments', (tester) async {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
-      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
@@ -89,7 +89,7 @@ void main() {
   testWidgets('已登录：/login 重定向到 /moments', (tester) async {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
-      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
@@ -111,7 +111,7 @@ void main() {
   testWidgets('已登录：/settings 显示已登录态（登出口）', (tester) async {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
-      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
@@ -134,7 +134,7 @@ void main() {
   testWidgets('已登录：/audit 渲染真实日志页（非占位）', (tester) async {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
-      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
       countsProvider.overrideWith((ref) async => 0),
       auditListProvider.overrideWith(
           (ref) async => const AuditLogPage(items: [], total: 0)),
@@ -159,7 +159,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
       verifyTokenProvider.overrideWithValue((token) async {}),
-      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
@@ -181,7 +181,7 @@ void main() {
     final channels = <dynamic>[];
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
-      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),
@@ -211,7 +211,7 @@ void main() {
   testWidgets('已登录：/event 渲染真实日程页（非占位）', (tester) async {
     final container = ProviderContainer(overrides: [
       tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
-      momentListProvider.overrideWith((ref) async => const <Moment>[]),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
       countsProvider.overrideWith((ref) async => 0),
       auditUnreadCountProvider.overrideWith((ref) async => 0),
       taskTodoCountProvider.overrideWith((ref) async => 0),

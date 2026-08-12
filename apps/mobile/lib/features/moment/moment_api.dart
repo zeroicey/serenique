@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import '../../../core/network/api_client.dart';
-import '../../../core/network/unwrap.dart';
 import 'blob_access.dart';
 import 'moment_models.dart';
 
@@ -11,12 +10,34 @@ class MomentApi {
 
   final ApiClient _client;
 
-  Future<List<Moment>> list({int page = 1, int pageSize = 50}) async {
-    final data = await _client
-        .getData('/api/moments', query: {'page': page, 'pageSize': pageSize});
-    return unwrapItems(data)
-        .map((e) => Moment.fromJson(e as Map<String, dynamic>))
-        .toList();
+  /// 列表（一页的 items，总数用 [listPage] 拿）。
+  Future<List<Moment>> list({
+    int page = 1,
+    int pageSize = 50,
+    String? query,
+  }) async {
+    return (await listPage(page: page, pageSize: pageSize, query: query)).items;
+  }
+
+  /// 分页列表：条目 + 服务端 total。
+  /// [query] 非空才拼 `q` 参数（对齐 Web：空白关键词 = 全量列表）。
+  Future<MomentPage> listPage({
+    int page = 1,
+    int pageSize = 50,
+    String? query,
+  }) async {
+    final data = await _client.getData('/api/moments', query: {
+      'page': page,
+      'pageSize': pageSize,
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+    });
+    final map = data as Map<String, dynamic>;
+    return MomentPage(
+      items: (map['items'] as List<dynamic>? ?? const [])
+          .map((e) => Moment.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (map['total'] as num?)?.toInt() ?? 0,
+    );
   }
 
   /// 轻量取总数：只拉一页 pageSize=1，读响应里的 total。

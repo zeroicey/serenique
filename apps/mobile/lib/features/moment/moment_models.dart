@@ -219,6 +219,16 @@ class Moment {
       );
 }
 
+/// 闪记分页结果（对齐 GET /api/moments 的 { items, total }）。
+class MomentPage {
+  const MomentPage({required this.items, required this.total});
+
+  final List<Moment> items;
+
+  /// 服务端过滤后的总数（load-more 判断依据）。
+  final int total;
+}
+
 /// 已选附件：bytes 供上传，localPath 供本地缩略图预览。
 class PickedAttachment {
   const PickedAttachment({

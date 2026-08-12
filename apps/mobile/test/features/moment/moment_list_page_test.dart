@@ -4,6 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/features/moment/moment_list_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
+import '../../helpers.dart';
+
+/// 评论输入框：搜索栏（SearchBar 内部也是 TextField）常驻，必须用 hint 区分。
+Finder get _commentInput =>
+    find.byWidgetPredicate((w) =>
+        w is TextField && w.decoration?.hintText == '写评论…');
 
 void main() {
   final sample = Moment(
@@ -17,7 +23,9 @@ void main() {
 
   testWidgets('列表页渲染数据', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [momentListProvider.overrideWith((ref) async => [sample])],
+      overrides: [
+        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
+      ],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
@@ -26,7 +34,9 @@ void main() {
 
   testWidgets('空列表显示引导', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [momentListProvider.overrideWith((ref) async => const [])],
+      overrides: [
+        momentListProvider.overrideWith(() => FakeMomentListNotifier(const [])),
+      ],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
@@ -46,7 +56,10 @@ void main() {
       updatedAt: 't',
     );
     await tester.pumpWidget(ProviderScope(
-      overrides: [momentListProvider.overrideWith((ref) async => [withComments])],
+      overrides: [
+        momentListProvider
+            .overrideWith(() => FakeMomentListNotifier([withComments])),
+      ],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
@@ -69,7 +82,9 @@ void main() {
       updatedAt: 't',
     );
     await tester.pumpWidget(ProviderScope(
-      overrides: [momentListProvider.overrideWith((ref) async => [long])],
+      overrides: [
+        momentListProvider.overrideWith(() => FakeMomentListNotifier([long])),
+      ],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
@@ -83,7 +98,9 @@ void main() {
 
   testWidgets('卡片 ⋮ 菜单包含评论与删除', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [momentListProvider.overrideWith((ref) async => [sample])],
+      overrides: [
+        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
+      ],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
@@ -95,22 +112,26 @@ void main() {
 
   testWidgets('评论输入默认隐藏，点 ⋮ →「评论」才显示', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [momentListProvider.overrideWith((ref) async => [sample])],
+      overrides: [
+        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
+      ],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsNothing); // 默认不显示输入框
+    expect(_commentInput, findsNothing); // 默认不显示评论输入框（搜索栏除外）
 
     await tester.tap(find.byIcon(Icons.more_horiz));
     await tester.pumpAndSettle();
     await tester.tap(find.text('评论'));
     await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsOneWidget); // 点「评论」后出现
+    expect(_commentInput, findsOneWidget); // 点「评论」后出现
   });
 
   testWidgets('再点一次「评论」关闭输入框', (tester) async {
     await tester.pumpWidget(ProviderScope(
-      overrides: [momentListProvider.overrideWith((ref) async => [sample])],
+      overrides: [
+        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
+      ],
       child: const MaterialApp(home: MomentListPage()),
     ));
     await tester.pumpAndSettle();
@@ -120,13 +141,84 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('评论'));
     await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsOneWidget);
+    expect(_commentInput, findsOneWidget);
 
     // 再点 ⋮ →「评论」→ 关闭
     await tester.tap(find.byIcon(Icons.more_horiz));
     await tester.pumpAndSettle();
     await tester.tap(find.text('评论'));
     await tester.pumpAndSettle();
-    expect(find.byType(TextField), findsNothing);
+    expect(_commentInput, findsNothing);
+  });
+
+  testWidgets('搜索栏：输入后 300ms 防抖触发过滤，无结果显示空态', (tester) async {
+    final second = Moment(
+      id: 'm2',
+      text: '第二条闪记',
+      comments: const [],
+      commentCount: 0,
+      createdAt: 't',
+      updatedAt: 't',
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        momentListProvider
+            .overrideWith(() => FakeMomentListNotifier([sample, second])),
+      ],
+      child: const MaterialApp(home: MomentListPage()),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('第一条闪记'), findsOneWidget);
+    expect(find.text('第二条闪记'), findsOneWidget);
+
+    // 输入未到 300ms：不触发搜索（列表不变）。
+    await tester.enterText(find.byType(SearchBar), '第一条');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('第一条闪记'), findsOneWidget);
+    expect(find.text('第二条闪记'), findsOneWidget);
+
+    // 满 300ms 防抖：触发搜索，仅剩匹配项。
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(find.text('第一条闪记'), findsOneWidget);
+    expect(find.text('第二条闪记'), findsNothing);
+
+    // 换成不存在的词：空态。
+    await tester.enterText(find.byType(SearchBar), '不存在的关键词');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.text('未找到匹配的闪记'), findsOneWidget);
+  });
+
+  testWidgets('搜索栏：清除按钮清空关键词并恢复全量', (tester) async {
+    final second = Moment(
+      id: 'm2',
+      text: '第二条闪记',
+      comments: const [],
+      commentCount: 0,
+      createdAt: 't',
+      updatedAt: 't',
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        momentListProvider
+            .overrideWith(() => FakeMomentListNotifier([sample, second])),
+      ],
+      child: const MaterialApp(home: MomentListPage()),
+    ));
+    await tester.pumpAndSettle();
+
+    // 有输入时清除按钮出现；点击后关键词清空、列表恢复全量。
+    await tester.enterText(find.byType(SearchBar), '第一条');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(find.text('第二条闪记'), findsNothing);
+    expect(find.byIcon(Icons.close), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+    expect(find.text('第一条闪记'), findsOneWidget);
+    expect(find.text('第二条闪记'), findsOneWidget);
+    expect(find.byIcon(Icons.close), findsNothing);
   });
 }
