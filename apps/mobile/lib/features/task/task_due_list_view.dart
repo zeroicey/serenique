@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/async_view.dart';
-import 'task_edit_sheet.dart';
+import 'task_edit_page.dart';
 import 'task_models.dart';
 import 'task_providers.dart';
 import 'task_time.dart';
@@ -71,7 +72,7 @@ class TaskDueListView extends ConsumerWidget {
       groupTitle: groupTitle,
       showOverdue: showOverdue,
       onToggle: () => ref.read(taskActionsProvider).toggleDone(t.id, t.status != 'done'),
-      onTap: () => showTaskEditSheet(context, task: t),
+      onTap: () => context.push('/task/edit', extra: TaskEditArgs(task: t)),
     );
   }
 }

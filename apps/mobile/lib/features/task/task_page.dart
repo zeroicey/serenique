@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'task_due_list_view.dart';
-import 'task_edit_sheet.dart';
+import 'task_edit_page.dart';
 import 'task_group_list_view.dart';
 import 'task_providers.dart';
 import 'task_time.dart';
@@ -58,7 +59,7 @@ class _TaskPageState extends ConsumerState<TaskPage> {
         2 => weekRange().$1,
         _ => monthRange().$1,
       };
-      showTaskEditSheet(context, presetDueDate: preset);
+      context.push('/task/edit', extra: TaskEditArgs(presetDueDate: preset));
     }
   }
 }

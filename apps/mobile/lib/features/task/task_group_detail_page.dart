@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/async_view.dart';
-import 'task_edit_sheet.dart';
+import 'task_edit_page.dart';
 import 'task_providers.dart';
 import 'widgets/task_tile.dart';
 
@@ -22,7 +23,7 @@ class TaskGroupDetailPage extends ConsumerWidget {
       appBar: AppBar(title: Text(groupTitle ?? '任务组')),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          await showTaskEditSheet(context, groupId: groupId);
+          await context.push('/task/edit', extra: TaskEditArgs(groupId: groupId));
           if (context.mounted) ref.invalidate(groupTasksProvider(groupId));
         },
         child: const Icon(Icons.add),
@@ -50,7 +51,7 @@ class TaskGroupDetailPage extends ConsumerWidget {
                     if (context.mounted) ref.invalidate(groupTasksProvider(groupId)); // 家族 provider 不走全局 invalidate
                   },
                   onTap: () async {
-                    await showTaskEditSheet(context, task: t);
+                    await context.push('/task/edit', extra: TaskEditArgs(task: t));
                     if (context.mounted) ref.invalidate(groupTasksProvider(groupId));
                   },
                 );

@@ -15,6 +15,7 @@ import 'features/moment/moment_list_page.dart';
 import 'features/placeholder/placeholder_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/task/task_group_detail_page.dart';
+import 'features/task/task_edit_page.dart';
 import 'features/task/task_page.dart';
 import 'providers.dart';
 
@@ -53,6 +54,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/event/edit',
         builder: (context, state) => EventEditPage(
             args: (state.extra as EventEditArgs?) ?? const EventEditArgs()),
+      ),
+      // 任务新建/编辑全屏页：与 /event/edit 同模型（ShellRoute 之外，自持 Scaffold/AppBar）。
+      GoRoute(
+        path: '/task/edit',
+        builder: (context, state) =>
+            TaskEditPage(args: (state.extra as TaskEditArgs?) ?? const TaskEditArgs()),
       ),
       GoRoute(
         path: '/moments/:id',

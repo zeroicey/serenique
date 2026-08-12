@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/async_view.dart';
-import 'task_edit_sheet.dart';
+import 'task_edit_page.dart';
 import 'task_providers.dart';
 
 /// Tab 1 任务组：组卡片列表（组名 + 未完成数），点击进组详情。
