@@ -364,4 +364,218 @@ describe.skipIf(!RUN_DB_TESTS)("moment service DB integration", () => {
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
   });
+
+  // ---- Global search (?q=) ------------------------------------------------
+
+  /** Create a searchable moment with a pinned future createdAt for ordering. */
+  async function createSearchable(
+    text: string,
+    createdAt: string,
+  ): Promise<{ id: string; text: string }> {
+    const created = await momentService.create({ text });
+    createdMomentIds.push(created.id);
+    await db
+      .update(momentsTable)
+      .set({ createdAt: new Date(createdAt) })
+      .where(eq(momentsTable.id, created.id));
+    return { id: created.id, text: created.text };
+  }
+
+  test("search: Chinese keyword matches text directly", async () => {
+    const a = await createSearchable(
+      uniqueTitle("搜索-北京天气不错"),
+      "2031-01-01T00:00:00.000Z",
+    );
+    const b = await createSearchable(
+      uniqueTitle("搜索-上海见客户"),
+      "2031-01-02T00:00:00.000Z",
+    );
+
+    const result = await momentService.list({ page: 1, pageSize: 50, q: "北京" });
+    const ids = result.items.map((m) => m.id);
+    expect(ids).toContain(a.id);
+    expect(ids).not.toContain(b.id);
+    expect(result.total).toBeGreaterThanOrEqual(1);
+  });
+
+  test("search: full pinyin matches pinyin column (beijing → 北京)", async () => {
+    const a = await createSearchable(
+      uniqueTitle("搜索-北京下雨了"),
+      "2031-01-03T00:00:00.000Z",
+    );
+    const b = await createSearchable(
+      uniqueTitle("搜索-上海有太阳"),
+      "2031-01-04T00:00:00.000Z",
+    );
+
+    const result = await momentService.list({ page: 1, pageSize: 50, q: "beijing" });
+    const ids = result.items.map((m) => m.id);
+    expect(ids).toContain(a.id);
+    expect(ids).not.toContain(b.id);
+  });
+
+  test("search: pinyin initials match pinyin_initial column (bj → 北京)", async () => {
+    const a = await createSearchable(
+      uniqueTitle("搜索-北京出差"),
+      "2031-01-05T00:00:00.000Z",
+    );
+    const b = await createSearchable(
+      uniqueTitle("搜索-上海开会"),
+      "2031-01-06T00:00:00.000Z",
+    );
+
+    const result = await momentService.list({ page: 1, pageSize: 50, q: "bj" });
+    const ids = result.items.map((m) => m.id);
+    expect(ids).toContain(a.id);
+    expect(ids).not.toContain(b.id);
+  });
+
+  test("search: English keyword matches text directly", async () => {
+    const a = await createSearchable(
+      uniqueTitle("搜索-meeting with team"),
+      "2031-01-07T00:00:00.000Z",
+    );
+    const b = await createSearchable(
+      uniqueTitle("搜索-lunch break"),
+      "2031-01-08T00:00:00.000Z",
+    );
+
+    const result = await momentService.list({ page: 1, pageSize: 50, q: "meeting" });
+    const ids = result.items.map((m) => m.id);
+    expect(ids).toContain(a.id);
+    expect(ids).not.toContain(b.id);
+  });
+
+  test("search: mixed pinyin+English substring hits inside the compact run", async () => {
+    const a = await createSearchable(
+      uniqueTitle("搜索-北京 meeting"),
+      "2031-01-09T00:00:00.000Z",
+    );
+
+    // "jing" is a substring of "beijing meeting"; "eet" spans inside "meeting".
+    for (const q of ["jing", "eet"]) {
+      const result = await momentService.list({ page: 1, pageSize: 50, q });
+      const ids = result.items.map((m) => m.id);
+      expect(ids).toContain(a.id);
+    }
+  });
+
+  test("search: no match returns empty items and zero total", async () => {
+    const result = await momentService.list({
+      page: 1,
+      pageSize: 10,
+      q: uniqueTitle("搜索-绝无此词"),
+    });
+    expect(result.items).toHaveLength(0);
+    expect(result.total).toBe(0);
+  });
+
+  test("search: total reflects the filtered set and pagination still applies", async () => {
+    // Marker word unique to this test's rows, so total never leaks counts from
+    // other tests that also create 「北京」 moments.
+    for (let i = 1; i <= 5; i++) {
+      await createSearchable(
+        `搜索-专用分页词-北京${i} ${RUN_TOKEN}`,
+        `2032-01-0${i}T00:00:00.000Z`,
+      );
+    }
+    const unrelated = await createSearchable(
+      `搜索-上海无关词 ${RUN_TOKEN}`,
+      "2032-01-06T00:00:00.000Z",
+    );
+
+    const page1 = await momentService.list({
+      page: 1,
+      pageSize: 2,
+      q: "专用分页词",
+    });
+    const page3 = await momentService.list({
+      page: 3,
+      pageSize: 2,
+      q: "专用分页词",
+    });
+    expect(page1.items).toHaveLength(2);
+    expect(page3.items).toHaveLength(1);
+    expect(page1.total).toBe(5);
+    expect(page3.total).toBe(5);
+    expect(page1.items.map((m) => m.id)).not.toContain(unrelated.id);
+  });
+
+  test("search: orthogonal with tag filter (q + tag)", async () => {
+    const tagged = await createSearchable(
+      uniqueTitle("搜索-北京带标签"),
+      "2033-01-01T00:00:00.000Z",
+    );
+    const untagged = await createSearchable(
+      uniqueTitle("搜索-北京无标签"),
+      "2033-01-02T00:00:00.000Z",
+    );
+
+    const tagService = (await import("@/modules/tag/tag.service")).tagService;
+    const tag = await tagService.create({ name: uniqueTitle("搜索标签") });
+    await momentService.addTag(tagged.id, tag.id);
+
+    const result = await momentService.list({
+      page: 1,
+      pageSize: 50,
+      q: "北京",
+      tag: tag.id,
+    });
+    const ids = result.items.map((m) => m.id);
+    expect(ids).toContain(tagged.id);
+    expect(ids).not.toContain(untagged.id);
+    expect(result.total).toBe(1);
+  });
+
+  test("search: ILIKE wildcards % and _ are treated literally", async () => {
+    const literalPercent = await createSearchable(
+      `搜索-进度100%完成 ${RUN_TOKEN}`,
+      "2034-01-01T00:00:00.000Z",
+    );
+    // Contains "100" but NOT "100%": with a broken (unescaped) pattern this
+    // row would match %100%% — the escape must keep it out.
+    const wildcardSink = await createSearchable(
+      `搜索-100通配 ${RUN_TOKEN}`,
+      "2034-01-02T00:00:00.000Z",
+    );
+    const literalUnderscore = await createSearchable(
+      `搜索-a_b字面量 ${RUN_TOKEN}`,
+      "2034-01-03T00:00:00.000Z",
+    );
+    // Contains "a!b" but NOT "a_b": with a broken pattern %a_b% would match.
+    const underscoreSink = await createSearchable(
+      `搜索-a!b字面量 ${RUN_TOKEN}`,
+      "2034-01-04T00:00:00.000Z",
+    );
+
+    const pct = await momentService.list({ page: 1, pageSize: 50, q: "100%" });
+    const pctIds = pct.items.map((m) => m.id);
+    expect(pctIds).toContain(literalPercent.id);
+    expect(pctIds).not.toContain(wildcardSink.id);
+
+    const us = await momentService.list({ page: 1, pageSize: 50, q: "a_b" });
+    const usIds = us.items.map((m) => m.id);
+    expect(usIds).toContain(literalUnderscore.id);
+    expect(usIds).not.toContain(underscoreSink.id);
+  });
+
+  test("search: create/update keep the pinyin columns in sync", async () => {
+    const created = await momentService.create({
+      text: uniqueTitle("搜索-同步北京"),
+    });
+    createdMomentIds.push(created.id);
+
+    const byPinyin = await momentService.list({
+      page: 1,
+      pageSize: 50,
+      q: "beijing",
+    });
+    expect(byPinyin.items.map((m) => m.id)).toContain(created.id);
+
+    await momentService.update({ id: created.id, text: "搜索-上海新文本" });
+    const stale = await momentService.list({ page: 1, pageSize: 50, q: "beijing" });
+    expect(stale.items.map((m) => m.id)).not.toContain(created.id);
+    const fresh = await momentService.list({ page: 1, pageSize: 50, q: "shanghai" });
+    expect(fresh.items.map((m) => m.id)).toContain(created.id);
+  });
 });

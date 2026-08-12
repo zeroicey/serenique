@@ -57,6 +57,78 @@ describe("moment domain — sort order", () => {
   });
 });
 
+describe("moment domain — pinyin derived columns", () => {
+  test("toPinyinColumns: Chinese maps to compact full pinyin + initials", async () => {
+    setTestEnv();
+    const { toPinyinColumns } = await import("./moment.domain");
+
+    expect(toPinyinColumns("北京")).toEqual({
+      pinyin: "beijing",
+      pinyinInitial: "bj",
+    });
+  });
+
+  test("toPinyinColumns: mixed Chinese/English keeps English verbatim", async () => {
+    setTestEnv();
+    const { toPinyinColumns } = await import("./moment.domain");
+
+    expect(toPinyinColumns("hello 中文")).toEqual({
+      pinyin: "hello zhongwen",
+      pinyinInitial: "hello zw",
+    });
+    expect(toPinyinColumns("北京 meeting")).toEqual({
+      pinyin: "beijing meeting",
+      pinyinInitial: "bj meeting",
+    });
+  });
+
+  test("toPinyinColumns: polyphonic characters use the common reading", async () => {
+    setTestEnv();
+    const { toPinyinColumns } = await import("./moment.domain");
+
+    expect(toPinyinColumns("银行")).toEqual({
+      pinyin: "yinhang",
+      pinyinInitial: "yh",
+    });
+  });
+
+  test("toPinyinColumns: v:true maps ü to v so 'lv' matches 吕", async () => {
+    setTestEnv();
+    const { toPinyinColumns } = await import("./moment.domain");
+
+    expect(toPinyinColumns("吕").pinyin).toBe("lv");
+  });
+
+  test("toPinyinColumns: empty/whitespace-only text yields empty strings", async () => {
+    setTestEnv();
+    const { toPinyinColumns } = await import("./moment.domain");
+
+    expect(toPinyinColumns("")).toEqual({ pinyin: "", pinyinInitial: "" });
+    expect(toPinyinColumns("  ")).toEqual({ pinyin: "", pinyinInitial: "" });
+  });
+
+  test("toPinyinColumns: output is lowercase and ASCII (no tone marks)", async () => {
+    setTestEnv();
+    const { toPinyinColumns } = await import("./moment.domain");
+
+    const { pinyin: full } = toPinyinColumns("中文 Hello 北京");
+    expect(full).toBe(full.toLowerCase());
+    expect(full).not.toMatch(/[éǚüā]/);
+  });
+});
+
+describe("moment domain — LIKE pattern escaping", () => {
+  test("toLikePattern wraps the keyword in %…% and escapes % _ \\", async () => {
+    setTestEnv();
+    const { toLikePattern } = await import("./moment.domain");
+
+    expect(toLikePattern("beijing")).toBe("%beijing%");
+    expect(toLikePattern("100%")).toBe("%100\\%%");
+    expect(toLikePattern("a_b")).toBe("%a\\_b%");
+    expect(toLikePattern("c\\d")).toBe("%c\\\\d%");
+  });
+});
+
 describe("moment mappers", () => {
   function makeAttachmentEntry(id: string, sortOrder: number, createdAt: string) {
     return {
@@ -178,6 +250,17 @@ describe("moment mappers", () => {
 
     const plain = toMomentEntry(fakeMomentRow());
     expect(plain.location).toBeNull();
+  });
+
+  test("toMomentEntry never exposes the derived pinyin columns", async () => {
+    setTestEnv();
+    const { toMomentEntry } = await import("./moment.mappers");
+
+    const entry = toMomentEntry(
+      fakeMomentRow({ pinyin: "beijing", pinyinInitial: "bj" }),
+    );
+    expect(entry).not.toHaveProperty("pinyin");
+    expect(entry).not.toHaveProperty("pinyinInitial");
   });
 
   test("groupAttachmentsByMomentId groups by ownerId and sorts each group", async () => {
@@ -328,5 +411,26 @@ describe("moment schemas", () => {
 
     expect(ListMomentSchema.parse({})).toMatchObject({ page: 1, pageSize: 10 });
     expect(ListMomentSchema.parse({ page: "2" })).toMatchObject({ page: 2 });
+  });
+
+  test("ListMomentSchema q: optional, trimmed, 1-100 chars", async () => {
+    setTestEnv();
+    const { ListMomentSchema } = await import("./moment.types");
+
+    // absent → full list (existing behavior)
+    expect(ListMomentSchema.parse({}).q).toBeUndefined();
+    expect(ListMomentSchema.parse({ q: "beijing" }).q).toBe("beijing");
+    // trimmed before validation
+    expect(ListMomentSchema.parse({ q: "  beijing  " }).q).toBe("beijing");
+    // empty-after-trim rejected
+    expect(ListMomentSchema.safeParse({ q: "" }).success).toBe(false);
+    expect(ListMomentSchema.safeParse({ q: "   " }).success).toBe(false);
+    // length bound
+    expect(
+      ListMomentSchema.safeParse({ q: "x".repeat(100) }).success,
+    ).toBe(true);
+    expect(
+      ListMomentSchema.safeParse({ q: "x".repeat(101) }).success,
+    ).toBe(false);
   });
 });
