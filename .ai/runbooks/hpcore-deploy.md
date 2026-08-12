@@ -52,6 +52,7 @@ docker compose up -d --force-recreate api
 - 生产 fail-closed：缺 `SESSION_SECRET` 或 `WEBAUTHN_RP_ID` → 容器拒绝启动（app.ts）；**认证启用且 `users` 表为空 → 拒绝启动**，报错提示先跑引导脚本（见下）。
 - `AUTH_TOKEN` 已退役（v0.5.0 迁移时从 .env 删除）；旧客户端 401。
 - 数据库迁移 `0014_rapid_stone_men`（users / passkey_credentials / api_tokens 三表）已于 2026-08-09 应用到生产（drizzle 记录 id=15，hash 450a3cdd…）。
+- 数据库迁移 `0015_add_moment_pinyin`（moments 加 pinyin / pinyin_initial 两列，全局搜索用）已于 2026-08-13 应用到生产（drizzle 记录 id=16，hash 0bcc286c…）；回填已执行（`docker exec -w /app/services/api serenique-api bun scripts/backfill-moment-pinyin.ts`，107 条全部更新，幂等）。
 
 ## 全新安装（引导首个用户 + 首个凭证，v0.5.1 起）
 
