@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:serenique_mobile/app_shell.dart';
 import 'package:serenique_mobile/features/moment/moment_create_page.dart';
+import 'package:serenique_mobile/features/task/task_edit_page.dart';
 import 'package:serenique_mobile/providers.dart';
 
 void main() {
@@ -14,11 +15,17 @@ void main() {
             builder: (context, state, child) => AppShell(child: child),
             routes: [
               GoRoute(path: '/moments', builder: (_, _) => const Scaffold(body: Text('闪记'))),
+              GoRoute(path: '/task', builder: (_, _) => const Scaffold(body: Text('任务页'))),
               GoRoute(path: '/settings', builder: (_, _) => const Scaffold(body: Text('设置页'))),
             ],
           ),
-          // 与真实 router.dart 一致：发布页在 ShellRoute 之外，自持 Scaffold/AppBar。
+          // 与真实 router.dart 一致：发布/编辑页在 ShellRoute 之外，自持 Scaffold/AppBar。
           GoRoute(path: '/moments/create', builder: (_, _) => const MomentCreatePage()),
+          GoRoute(
+            path: '/task/edit',
+            builder: (_, state) =>
+                TaskEditPage(args: (state.extra as TaskEditArgs?) ?? const TaskEditArgs()),
+          ),
         ],
       );
 
@@ -45,6 +52,20 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, '闪记'));
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.add), findsOneWidget); // 仍在 /moments
+  });
+
+  testWidgets('任务页 AppBar 显示新建任务按钮并跳转编辑页', (tester) async {
+    await tester.pumpWidget(ProviderScope(overrides: [countsProvider.overrideWith((ref) async => 3)], child: MaterialApp.router(routerConfig: shellRouter())));
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ListTile, '任务'));
+    await tester.pumpAndSettle();
+    // 右上角出现新建任务按钮
+    expect(find.byTooltip('新建任务'), findsOneWidget);
+    await tester.tap(find.byTooltip('新建任务'));
+    await tester.pumpAndSettle();
+    // 进入全屏编辑页（AppBar 标题 = 新建任务）
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('新建任务')), findsOneWidget);
   });
 
   testWidgets('点击设置：跳转设置页且侧边栏自动关闭', (tester) async {

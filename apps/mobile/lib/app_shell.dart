@@ -11,6 +11,7 @@ import 'features/event/widgets/event_edit_page.dart';
 import 'features/moment/moment_providers.dart';
 import 'features/moment/widgets/attachment_picker_sheet.dart';
 import 'features/task/task_providers.dart';
+import 'features/task/task_edit_page.dart';
 import 'providers.dart';
 
 /// 主壳：AppBar + Drawer 侧栏，包住各模块页面。
@@ -125,6 +126,13 @@ class AppShell extends ConsumerWidget {
               tooltip: '新建日程',
               onPressed: () => context.push('/event/edit',
                   extra: EventEditArgs(day: ref.read(eventSelectedDayProvider))),
+            ),
+          // 任务页：新建任务放右上角（与闪记/日程一致；FAB 保留任务组 tab 的新建组）。
+          if (location == '/task')
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: '新建任务',
+              onPressed: () => context.push('/task/edit', extra: TaskEditArgs()),
             ),
           // 日志页：全部已读放顶部导航栏右侧（无未读时禁用）。
           if (location.startsWith('/audit'))
