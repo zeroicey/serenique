@@ -57,6 +57,11 @@ export const ListMomentSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(50).default(10),
   /** Filter by tag id (additive — MCP `.extend()` inherits it automatically). */
   tag: z.string().uuid().optional(),
+  /**
+   * Global search keyword — matches text / pinyin / pinyin-initial (additive).
+   * Empty-after-trim is rejected; omit the param for the full list.
+   */
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 export const AddMomentAttachmentSchema = MomentAttachmentInputSchema;

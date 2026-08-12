@@ -1,3 +1,4 @@
+import { pinyin } from "pinyin-pro";
 import { AppError, ErrorCode } from "@/shared/errors";
 
 // ---------------------------------------------------------------------------
@@ -41,4 +42,50 @@ export function normalizeSortOrder(value: unknown, fallback: number): number {
     throw new AppError(ErrorCode.VALIDATION, "附件排序值必须是整数", 400);
   }
   return sortOrder;
+}
+
+// ---------------------------------------------------------------------------
+// Pinyin derived columns (global search) — see
+// .ai/requirements/2026-08-13-moment-global-search.md. The exact pinyin-pro
+// config below is validated against v3.28.2: toneType 'none' keeps the output
+// pure ASCII, separator '' produces compact runs, nonZh 'consecutive' keeps
+// English/digits verbatim instead of letter-splitting, v:true maps ü → v so
+// typing "lv" matches 「吕」. Whitespace from consecutive runs is normalized.
+// ---------------------------------------------------------------------------
+
+const normalizePinyin = (s: string): string =>
+  s.replace(/\s+/g, " ").trim().toLowerCase();
+
+export type PinyinColumns = { pinyin: string; pinyinInitial: string };
+
+/** Compute the two derived pinyin search columns for a moment's text. */
+export function toPinyinColumns(text: string): PinyinColumns {
+  return {
+    pinyin: normalizePinyin(
+      pinyin(text, {
+        toneType: "none",
+        separator: "",
+        nonZh: "consecutive",
+        v: true,
+      }),
+    ),
+    pinyinInitial: normalizePinyin(
+      pinyin(text, {
+        pattern: "first",
+        toneType: "none",
+        separator: "",
+        nonZh: "consecutive",
+        v: true,
+      }),
+    ),
+  };
+}
+
+/**
+ * Escape ILIKE wildcards (% _ \) so user input is matched literally, then wrap
+ * in %…% for substring matching. PostgreSQL default escape char is backslash.
+ */
+export function toLikePattern(keyword: string): string {
+  const escaped = keyword.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+  return `%${escaped}%`;
 }

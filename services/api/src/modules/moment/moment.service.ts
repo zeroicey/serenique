@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { blobAttachments, blobs } from "@/modules/blob/blob.schema";
@@ -9,6 +9,8 @@ import {
   assertAllowedMomentBlob,
   MOMENT_ATTACHMENT_OWNER_TYPE,
   normalizeSortOrder,
+  toLikePattern,
+  toPinyinColumns,
 } from "@/modules/moment/moment.domain";
 import {
   groupAttachmentsByMomentId,
@@ -164,6 +166,20 @@ async function createMomentAttachment(
   return toMomentAttachmentEntry({ attachment: row, blob });
 }
 
+/**
+ * Keyword search condition: text / pinyin / pinyin-initial match with ILIKE.
+ * The keyword is wildcard-escaped (literal % _ \) and parameterized — never
+ * string-concatenated — so user input cannot inject pattern characters.
+ */
+function buildSearchCondition(keyword: string): SQL | undefined {
+  const pattern = sql`${toLikePattern(keyword)} escape '\\'`;
+  return or(
+    ilike(moments.text, pattern),
+    ilike(moments.pinyin, pattern),
+    ilike(moments.pinyinInitial, pattern),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Moment service — a plain singleton object with methods over `db`.
 // ---------------------------------------------------------------------------
@@ -174,9 +190,14 @@ export const momentService = {
       const requestedAttachments = input.attachments ?? [];
       const requestedTags = input.tags ?? [];
       const blobById = await resolveAttachmentBlobs(tx, requestedAttachments);
+      const pinyinCols = toPinyinColumns(input.text);
       const [row] = await tx
         .insert(moments)
-        .values({ text: input.text, location: input.location ?? null })
+        .values({
+          text: input.text,
+          ...pinyinCols,
+          location: input.location ?? null,
+        })
         .returning();
 
       const attachments: MomentAttachmentEntry[] = [];
@@ -214,7 +235,12 @@ export const momentService = {
       if (tagOwnerIds.length === 0) return { items: [], total: 0 };
     }
 
-    const where = tagOwnerIds ? inArray(moments.id, tagOwnerIds) : undefined;
+    // ?q= search: text / pinyin / pinyin-initial ILIKE match; orthogonal to tag.
+    const conditions: (SQL | undefined)[] = [];
+    if (tagOwnerIds) conditions.push(inArray(moments.id, tagOwnerIds));
+    if (input.q !== undefined) conditions.push(buildSearchCondition(input.q));
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
     const [items, [{ count }]] = await Promise.all([
       db
         .select()
@@ -275,7 +301,11 @@ export const momentService = {
     const { id, ...data } = input;
     const [row] = await db
       .update(moments)
-      .set({ ...data, updatedAt: new Date() })
+      .set({
+        ...data,
+        ...toPinyinColumns(data.text),
+        updatedAt: new Date(),
+      })
       .where(eq(moments.id, id))
       .returning();
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, "闪念不存在", 404);
