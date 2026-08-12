@@ -15,6 +15,7 @@
 | `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | ✅已实施（显示/预览 MVP；上传下阶段） |
 | `2026-08-08-moment-location.md` | Moment 位置信息 | ✅已实施（API + CLI + Web + Flutter 2026-08-10） |
 | `2026-08-09-ai-agent-module.md` | AI 助手模块（宁序，PI SDK 内嵌） | ✅已实施（后端 + Web 前端 2026-08-09；待部署验收） |
+| `2026-08-13-moment-global-search.md` | Moment 全局搜索（中文/拼音/英文） | ✅已实施（API + Web + Flutter + CLI 四端 2026-08-13；待 db:migrate + 回填后部署验收） |
 
 ## 约定
 
