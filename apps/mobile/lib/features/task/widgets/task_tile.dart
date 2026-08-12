@@ -4,9 +4,9 @@ import '../task_time.dart';
 
 /// 任务条目：勾选圈 + 标题 + 组名/截止徽标；done 划线。
 ///
-/// 对齐规则：勾选图标中心 = 内容块（标题+副标题整体）的竖直中心。
-/// 用 IntrinsicHeight + stretch 让图标区高度跟随内容自适应——带组名时
-/// 图标对「标题+组名」整体居中，组详情（无组名副标题）时对标题行居中。
+/// 对齐规则：勾选图标中心 = 标题「第一行」的竖直中心（标题过长自动换行时
+/// 勾选框固定在首行，不随内容块整体居中）。用 IntrinsicHeight + stretch
+/// 让徽标区撑满内容高度并整体居中；标题不限行数，过长换行不省略。
 class TaskTile extends StatelessWidget {
   const TaskTile({
     super.key,
@@ -26,6 +26,7 @@ class TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final titleStyle = Theme.of(context).textTheme.bodyLarge!;
     final done = task.status == 'done';
     final overdue =
         showOverdue && task.dueDate != null && task.dueDate!.compareTo(todayStr()) < 0;
@@ -40,13 +41,15 @@ class TaskTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 勾选圈：宽 40 的点击区，高度自适应内容，图标居中于内容块。
+              // 勾选圈：宽 40 的点击区，图标顶对齐内容块顶边 → 与标题第一行
+              // 水平居中对齐（bodyLarge 行高 24 ≈ 图标 24）。
               InkWell(
                 onTap: onToggle,
                 borderRadius: BorderRadius.circular(20),
                 child: SizedBox(
                   width: 40,
-                  child: Center(
+                  child: Align(
+                    alignment: Alignment.topCenter,
                     child: Icon(
                       done ? Icons.check_circle : Icons.radio_button_unchecked,
                       size: 24,
@@ -59,18 +62,16 @@ class TaskTile extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     Text(
                       task.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: done
-                          ? TextStyle(
+                          ? titleStyle.copyWith(
                               decoration: TextDecoration.lineThrough,
                               color: scheme.outline,
                             )
-                          : Theme.of(context).textTheme.bodyLarge,
+                          : titleStyle,
                     ),
                     if (showSubtitle)
                       Text(
