@@ -28,6 +28,7 @@ var (
 	momentListPageSize int
 	momentListAll      bool
 	momentListTag      string
+	momentListQuery    string
 )
 
 // moment create
@@ -378,12 +379,15 @@ func init() {
 	momentListCmd = paginatedListCommand[client.MomentEntry](listSpec[client.MomentEntry]{
 		use:   "list",
 		short: "列出闪念",
-		long: `分页查询闪念列表。使用 --all 一次返回全部记录，--tag 按标签过滤。
+		long: `分页查询闪念列表。使用 --all 一次返回全部记录，--tag 按标签过滤，
+--query 按关键词搜索（支持中文/拼音/英文，与 --tag 正交组合）。
 
 示例:
   serenique moment list
   serenique moment list --all
   serenique moment list --tag a1b2c3d4
+  serenique moment list --query "beijing"
+  serenique moment list --query "北京" --tag a1b2c3d4
   serenique moment list --page 1 --page-size 50
   serenique moment list --json`,
 		path:     "/api/moments",
@@ -402,12 +406,16 @@ func init() {
 			if momentListTag != "" {
 				q.Set("tag", momentListTag)
 			}
+			if momentListQuery != "" {
+				q.Set("q", momentListQuery)
+			}
 		},
 	}, &momentListPage, &momentListPageSize, &momentListAll)
 	momentListCmd.Flags().IntVarP(&momentListPage, "page", "p", 1, "页码")
 	momentListCmd.Flags().IntVarP(&momentListPageSize, "page-size", "l", 50, "每页条数")
 	momentListCmd.Flags().BoolVar(&momentListAll, "all", false, "一次返回全部记录（自动翻页）")
 	momentListCmd.Flags().StringVar(&momentListTag, "tag", "", "按标签 ID 过滤")
+	momentListCmd.Flags().StringVarP(&momentListQuery, "query", "q", "", "按关键词搜索（支持中文/拼音/英文）")
 
 	// moment create flags
 	momentCreateCmd.Flags().StringVarP(&momentCreateText, "text", "m", "", "闪念内容，最长 10000 字 (必填)")

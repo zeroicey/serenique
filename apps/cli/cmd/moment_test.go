@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -730,6 +731,97 @@ func TestMomentListSendsTagFilter(t *testing.T) {
 	})
 	if !strings.Contains(gotQuery, "tag=t1") {
 		t.Fatalf("query = %q, want tag=t1", gotQuery)
+	}
+}
+
+// TestMomentListSendsQueryFilter verifies `moment list --query beijing` adds
+// the additive ?q= keyword filter the API uses for global search (Chinese /
+// pinyin / English), an empty query omits the parameter entirely (old-server
+// compatible — the q param is additive), and q combines orthogonally with the
+// existing tag filter (the API composes them with and()).
+func TestMomentListSendsQueryFilter(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		query   string
+		tag     string
+		wantQ   string
+		wantNoQ bool
+	}{
+		{
+			name:  "keyword only",
+			query: "beijing",
+			wantQ: "beijing",
+		},
+		{
+			name:    "empty query omits q",
+			wantNoQ: true,
+		},
+		{
+			name:  "chinese keyword",
+			query: "北京",
+			wantQ: "北京",
+		},
+		{
+			name:  "keyword and tag combine orthogonally",
+			query: "北京",
+			tag:   "t1",
+			wantQ: "北京",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotQuery url.Values
+			runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+				gotQuery = r.URL.Query()
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"success":true,"message":"ok","data":{"items":[],"total":0}}`))
+			}, true, func(srv *httptest.Server) {
+				momentListQuery = tc.query
+				momentListTag = tc.tag
+				momentListPage = 1
+				momentListPageSize = 10
+				momentListAll = false
+				t.Cleanup(func() {
+					momentListQuery = ""
+					momentListTag = ""
+					momentListPage = 1
+					momentListPageSize = 50
+					momentListAll = false
+				})
+				if err := momentListCmd.RunE(momentListCmd, nil); err != nil {
+					t.Fatal(err)
+				}
+			})
+			if tc.wantNoQ {
+				if gotQuery.Has("q") {
+					t.Fatalf("query = %v, want no q parameter", gotQuery)
+				}
+				return
+			}
+			if got := gotQuery.Get("q"); got != tc.wantQ {
+				t.Fatalf("q = %q, want %q (query: %v)", got, tc.wantQ, gotQuery)
+			}
+			if tc.tag != "" {
+				if got := gotQuery.Get("tag"); got != tc.tag {
+					t.Fatalf("tag = %q, want %q (query: %v)", got, tc.tag, gotQuery)
+				}
+			}
+		})
+	}
+}
+
+// TestMomentListQueryFlagRegistered guards the flag contract: moment list must
+// expose --query with shorthand -q (never -b/-t/-j/-c, claimed by root's
+// persistent flags — a shorthand collision panics at runtime in cobra).
+func TestMomentListQueryFlagRegistered(t *testing.T) {
+	f := momentListCmd.Flags().Lookup("query")
+	if f == nil {
+		t.Fatal("moment list missing --query flag")
+	}
+	if f.Shorthand != "q" {
+		t.Fatalf("moment list --query shorthand = %q, want q", f.Shorthand)
+	}
+	if f.Usage == "" {
+		t.Error("moment list --query should have a Chinese usage string")
 	}
 }
 

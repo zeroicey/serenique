@@ -80,8 +80,11 @@ type MomentCommentEntry struct {
 // =============================================================================
 
 // ListMoments fetches a page of moments (created_at DESC). Set tag in query to
-// filter by tag id (the API's additive ?tag= filter, compatible with
-// page/pageSize); page/pageSize are set by the caller.
+// filter by tag id, or q to search by keyword — both are additive filters (the
+// API's ?tag= / ?q= params, compatible with page/pageSize) and may be combined.
+// The q keyword matches moment text directly (中文/英文) or via the server-side
+// pinyin columns (拼音全拼/首字母), so the CLI passes the raw keyword through
+// untouched; page/pageSize are set by the caller.
 func (c *Client) ListMoments(ctx context.Context, query url.Values) ([]MomentEntry, int, error) {
 	return List[MomentEntry](c, ctx, "/api/moments", query)
 }

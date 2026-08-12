@@ -137,6 +137,8 @@ serenique token revoke <令牌ID> --force
 # 列出闪念
 serenique moment list
 serenique moment list --all        # 一次返回全部记录（自动翻页）
+serenique moment list --query "beijing"  # 按关键词搜索（支持中文/拼音/英文）
+serenique moment list --query "北京" --tag <标签ID>  # 关键词 + 标签组合过滤
 serenique moment list --page 1 --page-size 50
 
 # 创建闪念（最长 500 字），可一步关联已上传的文件
