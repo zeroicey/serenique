@@ -35,3 +35,11 @@ bunx wrangler pages deploy dist --project-name=serenique-web
 - 账号：`zeroicey.hp@gmail.com`；Account ID `c41da26c0129fed3ea33ec684993ce0a`。
 - 自定义域名 `serenique.0icey.icu` 现已被本 Pages 项目接管（2026-08-08 实测 200，旧 502 项目已不在）。
 - 验证：`curl -I https://serenique-web.pages.dev/moment` 应 200 text/html；线上 bundle 含 api.hcyj.xyz（懒加载 chunk）。
+
+## 坑：自定义域名间歇 404 chunk（2026-08-13 实测修复）
+
+- **症状**：自定义域名 `serenique.0icey.icu` 上静态资源（chunk/logo）**间歇 ~50% 返回 404**，pages.dev 子域名完全正常。用户浏览器表现为「一堆 404，找不到编译后的文件」。
+- **根因**：项目有 catch-all `functions/[[path]].ts`（SPA 兜底）。自定义域名路由下，静态资源请求**间歇**进入 Function，其 `ASSETS.fetch()` 返回 SPA fallback（200+text/html）而非真实文件（自定义域名路由竞态，pages.dev 无此问题）；Function 按旧设计把 text/html 响应转成真 404（`fd949ba` 防 MIME 缓存中毒的逻辑）→ 已有文件被间歇判 404。
+- **修复（已部署）**：`apps/web/public/_routes.json` 加 `exclude: ["/assets/*", "/logo.png", "/logo_header.svg"]`——assets 请求**完全不进 Function，直连静态存储**；`[[path]].ts` 简化为只处理无扩展名 SPA 路由 + 防御性透传；`_redirects` 首行 `/assets/* /assets/:splat 200` 保证 assets 不被 SPA 兜底吞掉。
+- **注意**：`_redirects` 不支持 404 状态码 rewrite（文档明确 ❌），缺失 chunk 仍会走 SPA 兜底（200+HTML+4h 缓存）——只在部署传播窗口期新 chunk 未同步时短暂出现，传播完成自愈，可接受。
+- **验证**：`for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code}" https://serenique.0icey.icu/assets/<chunk>.js; done` 应 15/15 全 200。
