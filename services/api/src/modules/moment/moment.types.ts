@@ -62,6 +62,9 @@ export const ListMomentSchema = z.object({
    * Empty-after-trim is rejected; omit the param for the full list.
    */
   q: z.string().trim().min(1).max(100).optional(),
+  /** 按 createdAt 时间窗过滤（半开区间 [createdFrom, createdTo)，与 event 的 from/to 语义一致）。 */
+  createdFrom: z.iso.datetime({ offset: true }).optional(),
+  createdTo: z.iso.datetime({ offset: true }).optional(),
 });
 
 export const AddMomentAttachmentSchema = MomentAttachmentInputSchema;

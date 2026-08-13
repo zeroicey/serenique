@@ -433,4 +433,36 @@ describe("moment schemas", () => {
       ListMomentSchema.safeParse({ q: "x".repeat(101) }).success,
     ).toBe(false);
   });
+
+  test("ListMomentSchema createdFrom/createdTo: optional ISO datetime window", async () => {
+    setTestEnv();
+    const { ListMomentSchema } = await import("./moment.types");
+
+    // absent → no window (existing full-list behavior)
+    expect(ListMomentSchema.parse({}).createdFrom).toBeUndefined();
+    expect(ListMomentSchema.parse({}).createdTo).toBeUndefined();
+
+    // valid ISO datetimes pass through unchanged
+    const parsed = ListMomentSchema.parse({
+      createdFrom: "2026-08-01T00:00:00.000Z",
+      createdTo: "2026-08-31T23:59:59.000Z",
+    });
+    expect(parsed.createdFrom).toBe("2026-08-01T00:00:00.000Z");
+    expect(parsed.createdTo).toBe("2026-08-31T23:59:59.000Z");
+
+    // offset form (Z or ±hh:mm, same as event from/to) accepted
+    expect(
+      ListMomentSchema.safeParse({
+        createdFrom: "2026-08-05T10:00:00+08:00",
+      }).success,
+    ).toBe(true);
+
+    // invalid date strings rejected
+    expect(
+      ListMomentSchema.safeParse({ createdFrom: "not-a-date" }).success,
+    ).toBe(false);
+    expect(
+      ListMomentSchema.safeParse({ createdTo: "not-a-date" }).success,
+    ).toBe(false);
+  });
 });

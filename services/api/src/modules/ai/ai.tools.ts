@@ -215,10 +215,26 @@ export function buildAiTools(): ToolDefinition[] {
     defineTool({
       name: "list_moments",
       label: "List Moments",
-      description: "列出最新闪念（前 20 条）",
-      parameters: Type.Object({}),
-      execute: (_id, _p, _s, _u, _c) =>
-        run(() => momentService.list({ page: 1, pageSize: 20 })),
+      description: "分页列出闪念，按 createdAt 倒序（最新在前）。page 从 1 开始，pageSize 最大 50；支持 q 关键词搜索（文本/拼音/拼音首字母）、tag 标签过滤、createdFrom/createdTo 时间窗（ISO 8601，半开区间）。返回 { items, total }，items 为空或不足 pageSize 即无更多数据，用 page+1 继续翻页可遍历全部历史。",
+      parameters: Type.Object({
+        page: Type.Optional(Type.Integer({ minimum: 1 })),
+        pageSize: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+        q: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+        tag: Type.Optional(Type.String()),
+        createdFrom: Type.Optional(Type.String()),
+        createdTo: Type.Optional(Type.String()),
+      }),
+      execute: (_id, p, _s, _u, _c) =>
+        run(() =>
+          momentService.list({
+            page: p.page ?? 1,
+            pageSize: p.pageSize ?? 10,
+            ...(p.q !== undefined ? { q: p.q } : {}),
+            ...(p.tag !== undefined ? { tag: p.tag } : {}),
+            ...(p.createdFrom !== undefined ? { createdFrom: p.createdFrom } : {}),
+            ...(p.createdTo !== undefined ? { createdTo: p.createdTo } : {}),
+          }),
+        ),
     }),
     defineTool({
       name: "get_moment",

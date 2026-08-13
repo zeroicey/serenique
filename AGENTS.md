@@ -222,7 +222,7 @@ The blob module serves as a **shared storage layer** for other modules (diary, m
 | GET, POST | `/api/diaries` | List / create diaries |
 | GET | `/api/diaries/by-date/:date` | Get diary by date (404 if none; registered before `:id`) |
 | GET, PUT, DELETE | `/api/diaries/:id` | Diary detail / update / delete |
-| GET, POST | `/api/moments` | List / create moments (creation may include optional `attachments[]`) |
+| GET, POST | `/api/moments` | List (`?page=&pageSize=&q=&tag=&createdFrom=&createdTo=`，createdFrom/createdTo 为 ISO 时间窗，半开区间 `[from, to)`，与 `page/pageSize` 正交) / create moments (creation may include optional `attachments[]`) |
 | GET, PUT, DELETE | `/api/moments/:id` | Moment detail / update / delete |
 | POST, DELETE | `/api/moments/:id/attachments[/:attachmentId]` | Create / delete moment attachments |
 | GET, POST | `/api/moments/:id/comments` | List / create moment comments (body `{ content }`, ≤2000) |

@@ -527,6 +527,56 @@ describe.skipIf(!RUN_DB_TESTS)("moment service DB integration", () => {
     expect(result.total).toBe(1);
   });
 
+  test("list: createdFrom/createdTo time window filters items and total (orthogonal with q)", async () => {
+    const marker = uniqueTitle("时间窗专用");
+    const a = await createSearchable(`${marker}-a`, "2035-01-01T00:00:00.000Z");
+    const b = await createSearchable(`${marker}-b`, "2035-01-15T00:00:00.000Z");
+    const c = await createSearchable(`${marker}-c`, "2035-02-01T00:00:00.000Z");
+
+    // [createdFrom, createdTo): b and a inside, c excluded; newest first.
+    const window = await momentService.list({
+      page: 1,
+      pageSize: 50,
+      q: marker,
+      createdFrom: "2035-01-01T00:00:00.000Z",
+      createdTo: "2035-02-01T00:00:00.000Z",
+    });
+    expect(window.items.map((m) => m.id)).toEqual([b.id, a.id]);
+    expect(window.total).toBe(2);
+
+    // Half-open boundary: a row exactly at createdTo is excluded.
+    const upToB = await momentService.list({
+      page: 1,
+      pageSize: 50,
+      q: marker,
+      createdFrom: "2035-01-01T00:00:00.000Z",
+      createdTo: "2035-01-15T00:00:00.000Z",
+    });
+    expect(upToB.items.map((m) => m.id)).toEqual([a.id]);
+    expect(upToB.total).toBe(1);
+
+    // createdFrom-only (open-ended) window.
+    const fromMid = await momentService.list({
+      page: 1,
+      pageSize: 50,
+      q: marker,
+      createdFrom: "2035-01-16T00:00:00.000Z",
+    });
+    expect(fromMid.items.map((m) => m.id)).toEqual([c.id]);
+    expect(fromMid.total).toBe(1);
+
+    // Pagination still applies inside the window.
+    const page1 = await momentService.list({
+      page: 1,
+      pageSize: 1,
+      q: marker,
+      createdFrom: "2035-01-01T00:00:00.000Z",
+      createdTo: "2035-02-01T00:00:00.000Z",
+    });
+    expect(page1.items.map((m) => m.id)).toEqual([b.id]);
+    expect(page1.total).toBe(2);
+  });
+
   test("search: ILIKE wildcards % and _ are treated literally", async () => {
     const literalPercent = await createSearchable(
       `搜索-进度100%完成 ${RUN_TOKEN}`,

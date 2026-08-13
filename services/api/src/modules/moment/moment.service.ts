@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/connection";
 import { fireAuditRecord } from "@/modules/audit/audit.service";
 import { blobAttachments, blobs } from "@/modules/blob/blob.schema";
@@ -239,6 +239,10 @@ export const momentService = {
     const conditions: (SQL | undefined)[] = [];
     if (tagOwnerIds) conditions.push(inArray(moments.id, tagOwnerIds));
     if (input.q !== undefined) conditions.push(buildSearchCondition(input.q));
+    if (input.createdFrom)
+      conditions.push(gte(moments.createdAt, new Date(input.createdFrom)));
+    if (input.createdTo)
+      conditions.push(lt(moments.createdAt, new Date(input.createdTo)));
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [items, [{ count }]] = await Promise.all([
