@@ -40,6 +40,7 @@ bunx wrangler pages deploy dist --project-name=serenique-web
 
 - **症状**：自定义域名 `serenique.0icey.icu` 上静态资源（chunk/logo）**间歇 ~50% 返回 404**，pages.dev 子域名完全正常。用户浏览器表现为「一堆 404，找不到编译后的文件」。
 - **根因**：项目有 catch-all `functions/[[path]].ts`（SPA 兜底）。自定义域名路由下，静态资源请求**间歇**进入 Function，其 `ASSETS.fetch()` 返回 SPA fallback（200+text/html）而非真实文件（自定义域名路由竞态，pages.dev 无此问题）；Function 按旧设计把 text/html 响应转成真 404（`fd949ba` 防 MIME 缓存中毒的逻辑）→ 已有文件被间歇判 404。
-- **修复（已部署）**：`apps/web/public/_routes.json` 加 `exclude: ["/assets/*", "/logo.png", "/logo_header.svg"]`——assets 请求**完全不进 Function，直连静态存储**；`[[path]].ts` 简化为只处理无扩展名 SPA 路由 + 防御性透传；`_redirects` 首行 `/assets/* /assets/:splat 200` 保证 assets 不被 SPA 兜底吞掉。
+- **修复（已部署）**：`apps/web/public/_routes.json` 加 `exclude: ["/assets/*", "/logo.png", "/logo_header.svg", "/sw.js", "/workbox-*.js", "/manifest.json", "/favicon.ico", "/pwa-*.png", "/maskable-icon-*.png", "/apple-touch-icon-*.png"]`——assets 请求**完全不进 Function，直连静态存储**；`[[path]].ts` 简化为只处理无扩展名 SPA 路由 + 防御性透传；`_redirects` 首行 `/assets/* /assets/:splat 200` 保证 assets 不被 SPA 兜底吞掉。
+- **PWA 相关（2026-08-13 新增）**：PWA 文件（sw.js/manifest/图标）都必须加进 `_routes.json` exclude，否则自定义域名下会被 SPA fallback 吞（返回 200+text/html）。`_headers` 里 sw.js 必须用 `Cache-Control: no-store` 而非 `no-cache`——zone `browser_cache_ttl=14400` 会覆盖 no-cache（.js 在默认缓存扩展名列表），no-store 则被尊重（cf-cache-status: BYPASS）。manifest.json 用 no-cache 即可（.json 不在默认缓存列表）。部署后验证：`curl -sI https://serenique.0icey.icu/sw.js` 应返回 `no-store` + `BYPASS`。
 - **注意**：`_redirects` 不支持 404 状态码 rewrite（文档明确 ❌），缺失 chunk 仍会走 SPA 兜底（200+HTML+4h 缓存）——只在部署传播窗口期新 chunk 未同步时短暂出现，传播完成自愈，可接受。
 - **验证**：`for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code}" https://serenique.0icey.icu/assets/<chunk>.js; done` 应 15/15 全 200。
