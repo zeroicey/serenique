@@ -108,7 +108,7 @@ export function MomentList() {
   const searching = searchKeyword.length > 0
 
   const searchBox = (
-    <div className="w-full max-w-[600px] px-3 pt-4">
+    <div className="w-full max-w-[600px] px-3 pt-4 pb-4">
       <MomentSearchInput
         keyword={keyword}
         onKeywordChange={setKeyword}
