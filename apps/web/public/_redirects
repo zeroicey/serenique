@@ -1,3 +1,7 @@
-# Cloudflare Pages SPA 兜底：所有路径回退到 index.html，让客户端路由接管。
-# API 请求走 api.hcyj.xyz 域名（跨域，与本站无关）。
-/*    /index.html   200
+// Cloudflare Pages SPA 兜底：所有路径回退到 index.html，让客户端路由接管。
+// API 请求走 api.hcyj.xyz 域名（跨域，与本站无关）。
+// /assets/* 必须显式透传（不 SPA 兜底）：若 assets 也走 index.html 兜底，
+// 缺失 chunk 会返回 200+text/html，被浏览器当模块缓存（MIME type is not a module）。
+// 配合 functions/_routes.json 的 exclude，assets 请求直连静态存储，完全不进 Function。
+/assets/*    /assets/:splat   200
+/*           /index.html      200
