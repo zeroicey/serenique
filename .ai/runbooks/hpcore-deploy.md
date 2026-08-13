@@ -31,6 +31,12 @@ docker compose up -d --force-recreate api
 4. `docker compose up -d` 输出「Container Running」而非「Recreated」= 容器没换镜像，必须 `--force-recreate`。
 5. 业务侧验证：真实请求验证行为（如 PUT 超长文本应过校验返回 404 而非 500）。
 
+## 坑：大镜像 pull 中断 / 并发进程竞争（2026-08-13 实测）
+
+- 症状：`docker pull <digest>` 下载慢（200MB+ 多架构），SSH 命令超时中断后，遗留的 pull 进程与重发的 pull **并发竞争**，日志长时间停在 `Pulling fs layer`。
+- 解法：`nohup bash -c "docker pull ...@sha256:<digest> && docker tag ... <img>:latest" > /tmp/pull.log 2>&1 &` 后台跑，用 `pgrep -af "docker pull"` 检查**只保留一个** pull 进程（杀掉旧进程），轮询 `/tmp/pull.log` 出现 `TAGGED` 且 `docker images <img>:latest --digests` digest 匹配即完成。
+- 服务器上不要嵌套 ssh（`ssh -J` 里再 ssh 本机路径会 `stdio forwarding failed`），循环检查放本地单条 ssh。
+
 ## 平台注意（amd64）
 
 - 生产是 **linux/amd64**。本机是 arm64 Mac，`docker build` 默认产出 arm64 镜像，直接 scp/load 会 `Restarting (255)` 崩溃循环。
