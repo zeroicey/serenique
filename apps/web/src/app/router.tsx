@@ -6,6 +6,7 @@ import { ModuleTitleNav } from '@/app/pages/module-title-nav'
 import { MomentNav } from '@/features/moment/components/moment-nav'
 import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
 import { TaskNav } from '@/features/task/components/task-nav'
+import { TaskGroupSwitcher } from '@/features/task/components/task-group-switcher'
 import { EventNav } from '@/features/event/components/event-nav'
 import { AuditNav } from '@/features/audit/components/audit-nav'
 import { AiNav } from '@/features/ai/components/ai-nav'
@@ -47,7 +48,10 @@ const router = createBrowserRouter([
           {
             path: 'task',
             element: lazyPage(() => import('@/features/task/pages/task-page')),
-            handle: { nav: <TaskNav /> },
+            handle: {
+              nav: <TaskNav />,
+              headerRight: <TaskGroupSwitcher />,
+            },
           },
           {
             path: 'event',
