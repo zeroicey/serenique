@@ -17,3 +17,6 @@ apps/web/dist/
 
 # Isolated worktrees
 .worktrees/
+
+# opencode runtime
+.omo/
