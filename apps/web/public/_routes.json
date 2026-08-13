@@ -4,6 +4,13 @@
   "exclude": [
     "/assets/*",
     "/logo.png",
-    "/logo_header.svg"
+    "/logo_header.svg",
+    "/sw.js",
+    "/workbox-*.js",
+    "/manifest.json",
+    "/favicon.ico",
+    "/pwa-*.png",
+    "/maskable-icon-*.png",
+    "/apple-touch-icon-*.png"
   ]
 }

@@ -1,0 +1,10 @@
+# Cloudflare Pages 响应头：/sw.js 与 /manifest.json 强制不缓存。
+# Pages 静态资源按数据中心缓存（TTL 最长 1 周），新部署后部分边缘节点可能仍返回
+# 旧 sw.js，浏览器检测不到 SW 更新。
+# 注意：sw.js 必须用 no-store 而非 no-cache——zone 的 browser_cache_ttl=14400 会覆盖
+# no-cache（.js 在默认缓存扩展名列表）；no-store 明确禁止缓存，Cloudflare 会尊重。
+/sw.js
+  Cache-Control: no-store
+
+/manifest.json
+  Cache-Control: no-cache
