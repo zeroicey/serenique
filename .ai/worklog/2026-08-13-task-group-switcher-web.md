@@ -37,3 +37,30 @@
 ## 后续可选项（未做，超出本次范围）
 
 - 删除任务组后若删除的是当前选中组，store 的 `selectedGroupId` 保持旧值、页面靠「回退第一个」兜底；将来可考虑在 delete 成功后把 `selectedGroupId` 清空/重置到第一个，语义更精确。
+
+---
+
+# 补充（同日）：任务列表 UI 精简——去边框化（用户反馈）
+
+同一会话继续任务模块 UI 精简，全部在 `apps/web/src/features/task/`，未提交。
+
+## 改动
+
+- **`components/task-list.tsx`**：
+  - 删除顶部任务组标题区（`<div className="border-b px-3 py-2"><h2>{group.title}</h2></div>`）——任务组名已由顶栏下拉 TaskGroupSwitcher 展示，页面内重复信息去掉。
+  - 外层去 `rounded-md border`（→ `flex h-full flex-col`），整体不再有外框卡片；「请先创建一个任务组。」空态块去 `rounded-md border`（保持居中纯文字）；「暂无任务」空态原本就无边框，不动。
+  - 任务条目容器改 `space-y-3`（条目间垂直间距，替代原 border-b 分隔线；moment 列表用 `my-3 w-full border-b` 分隔线，按用户要求任务用垂直间距更清爽）。
+  - 滚动结构未破坏：`flex-1 overflow-auto` 原样保留。
+- **`components/task-item.tsx`**：条目 `flex items-center gap-3 rounded-md border-b px-3 py-3` → `flex items-center gap-3 rounded-md px-3 py-3`（去掉 `border-b`，保留内边距；`bg-muted/40` 完成态底色 + `rounded-md` 保留，无边框时就是圆角高亮行）。
+- **`components/task-create-input.tsx`**：外层 `flex items-center gap-2 border-t px-3 py-2` → 去 `border-t`，输入框 + 添加按钮一行直接呈现；`py-2` 保留作为与上方列表的少量间距（padding 而非边框分隔）。
+
+## 验证
+
+- `cd apps/web && bun run typecheck` ✅
+- `bun run test`（vitest）239/239 ✅——task-item.test.tsx / task-create-input.test.tsx 只断言行为（勾选/按钮/文本），不依赖样式类，未受影响无需改
+- `bun run build`（tsc + vite + PWA）✅
+- `bunx eslint` 本次 3 文件 ✅ 无告警
+
+## 提示
+
+- 去边框后完成态任务行 `bg-muted/40` 横贯列表宽度（圆角），与 moment 无框风格一致；若后续想要内缩高亮，可在任务容器加 `p-3` 并把条目横向 padding 移到容器层，但当前观感已够。

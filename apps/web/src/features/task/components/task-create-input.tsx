@@ -22,7 +22,7 @@ export function TaskCreateInput({ groupId }: TaskCreateInputProps) {
   }
 
   return (
-    <div className="flex items-center gap-2 border-t px-3 py-2">
+    <div className="flex items-center gap-2 px-3 py-2">
       <Input
         value={title}
         onChange={(e) => setTitle(e.target.value)}

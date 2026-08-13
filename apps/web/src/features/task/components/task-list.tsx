@@ -9,13 +9,14 @@ interface TaskListProps {
   group: TaskGroupEntry | null
 }
 
-// 右侧任务面板：当前任务组标题 + 任务列表 + 底部新增输入框。
+// 任务列表 + 底部新增输入框。无外框卡片（对齐 moment 列表风格），任务组名由顶栏
+// 下拉（TaskGroupSwitcher）展示，此处不再重复。
 export function TaskList({ group }: TaskListProps) {
   const { data: tasks, isPending } = useTasks(group?.id ?? null)
 
   if (!group) {
     return (
-      <div className="flex h-full items-center justify-center rounded-md border p-8">
+      <div className="flex h-full items-center justify-center p-8">
         <p className="text-muted-foreground">请先创建一个任务组。</p>
       </div>
     )
@@ -24,11 +25,7 @@ export function TaskList({ group }: TaskListProps) {
   const sorted = sortTasks(tasks ?? [])
 
   return (
-    <div className="flex h-full flex-col rounded-md border">
-      <div className="border-b px-3 py-2">
-        <h2 className="text-base font-medium">{group.title}</h2>
-      </div>
-
+    <div className="flex h-full flex-col">
       <div className="flex-1 overflow-auto">
         {isPending ? (
           <div className="space-y-2 p-3">
@@ -41,7 +38,7 @@ export function TaskList({ group }: TaskListProps) {
             <p className="text-muted-foreground">暂无任务</p>
           </div>
         ) : (
-          <div>
+          <div className="space-y-3">
             {sorted.map((task) => (
               <TaskItem key={task.id} task={task} />
             ))}

@@ -48,7 +48,7 @@ export function TaskItem({ task }: TaskItemProps) {
     <>
       <div
         className={cn(
-          'flex items-center gap-3 rounded-md border-b px-3 py-3',
+          'flex items-center gap-3 rounded-md px-3 py-3',
           isDone && 'bg-muted/40',
           isAbandoned && 'opacity-60',
         )}
