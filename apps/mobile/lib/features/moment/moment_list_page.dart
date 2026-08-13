@@ -200,10 +200,12 @@ class _MomentSearchBarState extends State<_MomentSearchBar> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: SearchBar(
         controller: widget.controller,
         hintText: '搜索闪记',
+        padding:
+            const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20)),
         constraints:
             const BoxConstraints(minWidth: 0, maxWidth: double.infinity),
         elevation: const WidgetStatePropertyAll(0),
