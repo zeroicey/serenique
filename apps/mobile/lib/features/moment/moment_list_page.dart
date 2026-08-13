@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
+import 'moment_models.dart';
 import 'moment_providers.dart';
 import 'widgets/moment_card.dart';
 
@@ -94,83 +95,98 @@ class _MomentListPageState extends ConsumerState<MomentListPage> {
   @override
   Widget build(BuildContext context) {
     final moments = ref.watch(momentListProvider);
+    // 搜索栏作为列表的第一个条目随内容滚动（不置顶）；加载/错误/空态下
+    // 仍保留在顶部，保证无结果时也能清除关键词。
+    final searchBar = _MomentSearchBar(
+      controller: _searchController,
+      onChanged: _onSearchChanged,
+      onClear: _clearSearch,
+    );
     return Scaffold(
-      body: Column(
-        children: [
-          // 搜索栏常驻（含加载/错误/空态），保证无结果时也能清除关键词。
-          _MomentSearchBar(
-            controller: _searchController,
-            onChanged: _onSearchChanged,
-            onClear: _clearSearch,
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(momentListProvider);
-                await ref.read(momentListProvider.future);
-              },
-              child: moments.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (err, _) => AsyncErrorView(
-                    error: err, onRetry: () => ref.invalidate(momentListProvider)),
-                data: (page) {
-                  final searching =
-                      ref.read(momentSearchKeywordProvider).trim().isNotEmpty;
-                  if (page.items.isEmpty) {
-                    return ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        ListTile(
-                          title: Text(
-                            searching ? '未找到匹配的闪记' : '还没有闪记，点右下角新建',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-                  final hasMore = page.items.length < page.total;
-                  return ListView.separated(
-                    controller: _scrollController,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: page.items.length + (hasMore ? 1 : 0),
-                    separatorBuilder: (_, _) =>
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                    itemBuilder: (context, index) {
-                      // 末尾占位：还有下一页时预留一个加载指示条。
-                      if (index >= page.items.length) {
-                        return _loadingMore
-                            ? const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 16),
-                                child: Center(
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child:
-                                        CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                ),
-                              )
-                            : const SizedBox(height: 32);
-                      }
-                      final m = page.items[index];
-                      return InkWell(
-                        onTap: () => context.push('/moments/${m.id}'),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                          child: MomentCard(moment: m),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+      body: moments.when(
+        loading: () => Column(
+          children: [
+            searchBar,
+            const Expanded(child: Center(child: CircularProgressIndicator())),
+          ],
+        ),
+        error: (err, _) => Column(
+          children: [
+            searchBar,
+            Expanded(
+              child: AsyncErrorView(
+                  error: err, onRetry: () => ref.invalidate(momentListProvider)),
             ),
-          ),
-        ],
+          ],
+        ),
+        data: (page) {
+          final searching =
+              ref.read(momentSearchKeywordProvider).trim().isNotEmpty;
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(momentListProvider);
+              await ref.read(momentListProvider.future);
+            },
+            child: page.items.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      searchBar,
+                      ListTile(
+                        title: Text(
+                          searching ? '未找到匹配的闪记' : '还没有闪记，点右下角新建',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  )
+                : _buildMomentList(page, searchBar),
+          );
+        },
       ),
+    );
+  }
+
+  /// 有数据的列表：搜索栏作为第一条（随列表滚动），其后是闪记条目。
+  Widget _buildMomentList(MomentPage page, Widget searchBar) {
+    final hasMore = page.items.length < page.total;
+    return ListView.separated(
+      controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
+      itemCount: page.items.length + (hasMore ? 1 : 0) + 1,
+      separatorBuilder: (_, index) {
+        // 搜索栏（index 0）之后不要分隔线，仅条目之间保留。
+        if (index == 0) return const SizedBox.shrink();
+        return const Divider(height: 1, indent: 16, endIndent: 16);
+      },
+      itemBuilder: (context, index) {
+        if (index == 0) return searchBar;
+        final itemIndex = index - 1;
+        // 末尾占位：还有下一页时预留一个加载指示条。
+        if (itemIndex >= page.items.length) {
+          return _loadingMore
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child:
+                          CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              : const SizedBox(height: 32);
+        }
+        final m = page.items[itemIndex];
+        return InkWell(
+          onTap: () => context.push('/moments/${m.id}'),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: MomentCard(moment: m),
+          ),
+        );
+      },
     );
   }
 }
@@ -204,8 +220,8 @@ class _MomentSearchBarState extends State<_MomentSearchBar> {
       child: SearchBar(
         controller: widget.controller,
         hintText: '搜索闪记',
-        padding:
-            const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20)),
+        padding: const WidgetStatePropertyAll(
+            EdgeInsets.fromLTRB(16, 8, 16, 8)),
         constraints:
             const BoxConstraints(minWidth: 0, maxWidth: double.infinity),
         elevation: const WidgetStatePropertyAll(0),
