@@ -1,6 +1,8 @@
 import type { Context, Next } from 'hono'
 import { csrf as honoCsrf } from 'hono/csrf'
+import { HTTPException } from 'hono/http-exception'
 import { env } from '@/env'
+import { Res } from '@/shared/response'
 
 // ---------------------------------------------------------------------------
 // CSRF 中间件 —— hono/csrf 封装，Origin 白名单校验。
@@ -17,6 +19,10 @@ import { env } from '@/env'
 //
 // 白名单 = CORS_ORIGIN（生产 Web 前端域名）+ WEBAUTHN_ORIGINS（dev 端口 /
 // 未来移动端 origin），与 AI WS 门禁一致。
+//
+// hono/csrf 拦截时抛 HTTPException(403)，而 app.ts 的全局 onError 会把一切
+// 异常转成 500 —— 这里在中间件层把 403 转成统一响应信封（FORBIDDEN），
+// 避免跨站拦截被误报成服务端错误。
 // ---------------------------------------------------------------------------
 
 function buildOriginWhitelist(): string[] {
@@ -36,6 +42,13 @@ export function csrf(origins?: string[]) {
   const check = honoCsrf({ origin: whitelist })
   return async (c: Context, next: Next) => {
     if (!c.req.header('Origin')) return next()
-    return check(c, next)
+    try {
+      return await check(c, next)
+    } catch (err) {
+      if (err instanceof HTTPException && err.status === 403) {
+        return Res.forbidden('跨站请求被拒绝').build(c)
+      }
+      throw err
+    }
   }
 }

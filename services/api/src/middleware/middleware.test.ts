@@ -93,6 +93,10 @@ describe('csrf middleware', () => {
       body: '--xxx\r\nContent-Disposition: form-data; name="a"\r\n\r\n1\r\n--xxx--\r\n',
     })
     expect(res.status).toBe(403)
+    // 统一响应信封（FORBIDDEN），不是被全局 onError 吞成 500
+    const body = await res.json()
+    expect(body.success).toBe(false)
+    expect(body.code).toBe('FORBIDDEN')
   })
 
   test('无 Origin 头（CLI/curl 等非浏览器客户端）放行', async () => {
