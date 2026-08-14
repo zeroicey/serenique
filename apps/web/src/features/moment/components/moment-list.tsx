@@ -150,7 +150,10 @@ export function MomentList() {
           <div className="my-3 w-full border-b" />
         </div>
       ))}
-      <div ref={sentinelRef} className="h-1" />
+      {/* 滚动哨兵：必须保持非零尺寸 + shrink-0 —— 外层 flex 列被 h-full 链撑成定高，
+          内容溢出时 flex-shrink 会把空哨兵压成 0×0（min-height:auto→0），零面积元素
+          永远不会触发 IntersectionObserver（规格如此），导致滚动加载失效。 */}
+      <div ref={sentinelRef} className="h-4 w-4 shrink-0" />
       {isFetchingNextPage && (
         <Loader2 className="my-4 h-6 w-6 animate-spin text-muted-foreground" />
       )}
