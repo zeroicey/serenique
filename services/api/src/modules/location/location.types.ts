@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
 // Location module — request/response types for the AMAP proxy.
@@ -15,7 +15,7 @@ export const NearbyQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   radius: z.coerce.number().int().min(1).max(50000).default(3000),
   keyword: z.string().trim().max(50).optional(),
-});
+})
 
 // 关键字搜索：keyword 必填（1..50 字）；lng/lat 可选但必须成对出现
 // （用于就近优先，同样先转 GCJ-02）。
@@ -27,32 +27,32 @@ export const SearchQuerySchema = z
   })
   .refine(
     (v) => (v.lng === undefined) === (v.lat === undefined),
-    "经度和纬度必须同时提供或同时省略",
-  );
+    '经度和纬度必须同时提供或同时省略',
+  )
 
-export type NearbyInput = z.input<typeof NearbyQuerySchema>;
+export type NearbyInput = z.input<typeof NearbyQuerySchema>
 
 // z.coerce 使 z.input 类型退化为 unknown，故手动声明 service 层输入
 // （radius 可省略，service 内部回退默认 3000；handler 经 schema 解析后必含）。
 export type NearbyServiceInput = {
-  lng: number;
-  lat: number;
-  radius?: number;
-  keyword?: string;
-};
+  lng: number
+  lat: number
+  radius?: number
+  keyword?: string
+}
 
-export type SearchInput = z.infer<typeof SearchQuerySchema>;
+export type SearchInput = z.infer<typeof SearchQuerySchema>
 
 // ---- Entry types（响应层）---------------------------------------------------
 
 export type LocationItem = {
-  name: string;
-  latitude: number;
-  longitude: number;
-  address?: string;
-  distance?: number;
-};
+  name: string
+  latitude: number
+  longitude: number
+  address?: string
+  distance?: number
+}
 
-export type LocationQueryResult = { items: LocationItem[] };
+export type LocationQueryResult = { items: LocationItem[] }
 
-export type LocationConfigEntry = { enabled: boolean };
+export type LocationConfigEntry = { enabled: boolean }

@@ -1,1 +1,1 @@
-export { eventRouter } from "@/modules/event/event.router";
+export { eventRouter } from '@/modules/event/event.router'

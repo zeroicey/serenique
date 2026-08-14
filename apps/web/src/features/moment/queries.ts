@@ -1,26 +1,26 @@
 import {
   keepPreviousData,
+  type UseMutationResult,
   useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
-  type UseMutationResult,
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { uploadBlob } from '@/features/blob/api'
 import type { MediaFile } from '@/types/media'
 import {
+  type CreateMomentInput,
   createMoment,
   createMomentComment,
   deleteMoment,
   deleteMomentComment,
-  listMoments,
   listMomentComments,
-  removeMomentAttachment,
-  type CreateMomentInput,
+  listMoments,
   type MomentCommentEntry,
   type MomentEntry,
   type MomentLocation,
+  removeMomentAttachment,
 } from './api'
 
 // Moment 数据 hooks。读取走 useInfiniteQuery（滚动分页），写入走 useMutation + invalidate。
@@ -66,8 +66,7 @@ export function useRemoveMomentAttachment(): UseMutationResult<
 > {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ momentId, attachmentId }) =>
-      removeMomentAttachment(momentId, attachmentId),
+    mutationFn: ({ momentId, attachmentId }) => removeMomentAttachment(momentId, attachmentId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['moments'] }),
   })
 }

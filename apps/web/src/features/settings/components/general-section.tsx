@@ -55,7 +55,12 @@ export function GeneralSection() {
           <p className="text-sm font-medium">退出登录</p>
           <p className="text-xs text-muted-foreground">清除本设备的登录会话。</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => logout.mutate()} disabled={logout.isPending}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => logout.mutate()}
+          disabled={logout.isPending}
+        >
           <LogOut />
           {logout.isPending ? '退出中…' : '退出登录'}
         </Button>

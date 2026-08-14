@@ -42,10 +42,7 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
             className="aspect-square cursor-pointer overflow-hidden rounded-lg bg-muted"
             onClick={() => setPreviewIndex(i)}
           >
-            <AttachmentTile
-              attachment={a}
-              src={accessUrls?.[a.blob.id] ?? a.blob.fileUrl}
-            />
+            <AttachmentTile attachment={a} src={accessUrls?.[a.blob.id] ?? a.blob.fileUrl} />
           </div>
         ))}
         {needsExpand && !expanded && (
@@ -72,13 +69,7 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
   )
 }
 
-function AttachmentTile({
-  attachment,
-  src,
-}: {
-  attachment: MomentAttachmentEntry
-  src: string
-}) {
+function AttachmentTile({ attachment, src }: { attachment: MomentAttachmentEntry; src: string }) {
   const { blob } = attachment
   const isVideo = blob.mimeType.startsWith('video/')
   if (blob.mimeType.startsWith('image/')) {

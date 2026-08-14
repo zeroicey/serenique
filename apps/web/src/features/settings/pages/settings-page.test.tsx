@@ -10,8 +10,8 @@ import {
   useRenameCredential,
   useUpdateProfile,
 } from '@/features/auth/queries'
-import SettingsPage from './settings-page'
 import { useCreateToken, useRevokeToken, useTokens } from '../queries'
+import SettingsPage from './settings-page'
 
 const { setTheme } = vi.hoisted(() => ({ setTheme: vi.fn() }))
 
@@ -64,10 +64,7 @@ const logoutMutate = vi.fn()
 const revokeTokenMutate = vi.fn()
 const createTokenMutate = vi.fn()
 
-function mockHooks(overrides: {
-  credentials?: unknown[]
-  tokens?: unknown[]
-} = {}) {
+function mockHooks(overrides: { credentials?: unknown[]; tokens?: unknown[] } = {}) {
   mockedUseProfile.mockReturnValue({
     data: profile,
     isPending: false,
@@ -211,7 +208,13 @@ describe('SettingsPage', () => {
     mockHooks({
       tokens: [
         token,
-        { ...token, id: 't2', name: 'server', prefix: 'zzzz9999', revokedAt: '2026-08-09T03:00:00Z' },
+        {
+          ...token,
+          id: 't2',
+          name: 'server',
+          prefix: 'zzzz9999',
+          revokedAt: '2026-08-09T03:00:00Z',
+        },
       ],
     })
     render(<SettingsPage />)
@@ -223,9 +226,11 @@ describe('SettingsPage', () => {
 
   it('令牌 tab：新建令牌 → 明文弹窗仅展示一次，复制后关闭即清除', async () => {
     const user = userEvent.setup()
-    createTokenMutate.mockImplementation((_name: string, opts?: { onSuccess?: (r: { plaintext: string; item: unknown }) => void }) => {
-      opts?.onSuccess?.({ plaintext: 'serenique_plaintext123', item: token })
-    })
+    createTokenMutate.mockImplementation(
+      (_name: string, opts?: { onSuccess?: (r: { plaintext: string; item: unknown }) => void }) => {
+        opts?.onSuccess?.({ plaintext: 'serenique_plaintext123', item: token })
+      },
+    )
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(window.navigator, 'clipboard', {
       value: { writeText },

@@ -2,8 +2,8 @@
 // 服务端数据均来自 WS 事件（server state），不进入 TanStack Query；本 store 只做
 // 连接生命周期 + 消息流聚合。协议类型消费 @/features/ai/lib/protocol（Task 1）。
 import { create } from 'zustand'
-import { apiWsUrl } from '@/features/ai/lib/ws-url'
 import type { ClientMessage, ServerMessage } from '@/features/ai/lib/protocol'
+import { apiWsUrl } from '@/features/ai/lib/ws-url'
 
 // 渲染层消息（与后端 toRenderMessages 输出对齐）：assistant 消息由 activeTurn 落定生成。
 export type RenderToolCall = {
@@ -57,7 +57,7 @@ let turnSeq = 0
 // 浏览器规范：未 OPEN 时 send 抛 InvalidStateError；字面量 1 而非 WebSocket.OPEN，
 // 避免 jsdom（vitest 环境）无 WebSocket 全局时 ReferenceError。
 function sendMsg(msg: ClientMessage) {
-  if (!ws || ws.readyState !== 1) return
+  if (ws?.readyState !== 1) return
   ws.send(JSON.stringify(msg))
 }
 
@@ -205,7 +205,7 @@ export const useAiStore = create<AiState>((set, get) => ({
             const cards = new Map(t.toolCards)
             cards.set(ev.toolCallId, {
               ...card,
-              result: (card.result ? card.result + '\n' : '') + ev.result,
+              result: (card.result ? `${card.result}\n` : '') + ev.result,
               isError: ev.isError,
               running: false,
             })

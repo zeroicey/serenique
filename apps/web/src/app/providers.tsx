@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { TooltipProvider } from '@/components/ui/tooltip'
 import { ThemeProvider } from 'next-themes'
-import { useState, type ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { Toaster } from 'sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 // 应用级 Provider 组装：TanStack Query + 主题 + Tooltip + Toast。
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -10,12 +10,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange
-      >
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster />
       </ThemeProvider>

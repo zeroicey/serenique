@@ -1,13 +1,13 @@
-import { and, asc, eq, gt, lt } from "drizzle-orm";
-import { db } from "@/db/connection";
-import { fireAuditRecord } from "@/modules/audit/audit.service";
-import { events } from "@/modules/event/event.schema";
+import { and, asc, eq, gt, lt } from 'drizzle-orm'
+import { db } from '@/db/connection'
+import { fireAuditRecord } from '@/modules/audit/audit.service'
 import {
   assertValidEventRange,
   assertValidListRange,
   resolveEventUpdate,
-} from "@/modules/event/event.domain";
-import { toEventEntry } from "@/modules/event/event.mappers";
+} from '@/modules/event/event.domain'
+import { toEventEntry } from '@/modules/event/event.mappers'
+import { events } from '@/modules/event/event.schema'
 import type {
   CreateEventInput,
   DeleteEventInput,
@@ -15,8 +15,8 @@ import type {
   GetEventInput,
   ListEventInput,
   UpdateEventInput,
-} from "@/modules/event/event.types";
-import { AppError, ErrorCode } from "@/shared/errors";
+} from '@/modules/event/event.types'
+import { AppError, ErrorCode } from '@/shared/errors'
 
 // ---------------------------------------------------------------------------
 // Event service — business orchestration over `db`.
@@ -28,9 +28,9 @@ import { AppError, ErrorCode } from "@/shared/errors";
 
 export const eventService = {
   async create(input: CreateEventInput): Promise<EventEntry> {
-    const startAt = new Date(input.startAt);
-    const endAt = new Date(input.endAt);
-    assertValidEventRange(startAt, endAt);
+    const startAt = new Date(input.startAt)
+    const endAt = new Date(input.endAt)
+    assertValidEventRange(startAt, endAt)
 
     const [row] = await db
       .insert(events)
@@ -42,37 +42,34 @@ export const eventService = {
         location: input.location ?? null,
         note: input.note ?? null,
       })
-      .returning();
-    return toEventEntry(row);
+      .returning()
+    return toEventEntry(row)
   },
 
   async list(input: ListEventInput): Promise<EventEntry[]> {
-    const from = new Date(input.from);
-    const to = new Date(input.to);
-    assertValidListRange(from, to);
+    const from = new Date(input.from)
+    const to = new Date(input.to)
+    assertValidListRange(from, to)
 
     const rows = await db
       .select()
       .from(events)
       .where(and(lt(events.startAt, to), gt(events.endAt, from)))
-      .orderBy(asc(events.startAt), asc(events.createdAt));
-    return rows.map(toEventEntry);
+      .orderBy(asc(events.startAt), asc(events.createdAt))
+    return rows.map(toEventEntry)
   },
 
   async get(input: GetEventInput): Promise<EventEntry> {
-    const [row] = await db.select().from(events).where(eq(events.id, input.id));
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "事件不存在", 404);
-    return toEventEntry(row);
+    const [row] = await db.select().from(events).where(eq(events.id, input.id))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '事件不存在', 404)
+    return toEventEntry(row)
   },
 
   async update(input: UpdateEventInput): Promise<EventEntry> {
-    const { id, ...patch } = input;
+    const { id, ...patch } = input
 
-    const [current] = await db
-      .select()
-      .from(events)
-      .where(eq(events.id, id));
-    if (!current) throw new AppError(ErrorCode.NOT_FOUND, "事件不存在", 404);
+    const [current] = await db.select().from(events).where(eq(events.id, id))
+    if (!current) throw new AppError(ErrorCode.NOT_FOUND, '事件不存在', 404)
 
     const resolved = resolveEventUpdate(current, {
       title: patch.title,
@@ -81,7 +78,7 @@ export const eventService = {
       isAllDay: patch.isAllDay,
       location: patch.location,
       note: patch.note,
-    });
+    })
 
     const [row] = await db
       .update(events)
@@ -95,23 +92,23 @@ export const eventService = {
         updatedAt: new Date(),
       })
       .where(eq(events.id, id))
-      .returning();
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "事件不存在", 404);
-    return toEventEntry(row);
+      .returning()
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '事件不存在', 404)
+    return toEventEntry(row)
   },
 
   async delete(input: DeleteEventInput): Promise<{ id: string }> {
     const [row] = await db
       .delete(events)
       .where(eq(events.id, input.id))
-      .returning({ id: events.id, title: events.title });
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "事件不存在", 404);
+      .returning({ id: events.id, title: events.title })
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '事件不存在', 404)
     fireAuditRecord({
-      event: "event.delete",
-      message: "事件已删除",
-      level: "warn",
+      event: 'event.delete',
+      message: '事件已删除',
+      level: 'warn',
       detail: { id: row.id, title: row.title },
-    });
-    return { id: row.id };
+    })
+    return { id: row.id }
   },
-};
+}

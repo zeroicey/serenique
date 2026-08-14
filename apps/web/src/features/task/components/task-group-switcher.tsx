@@ -8,11 +8,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import type { TaskGroupEntry } from '@/features/task/api'
 import { useDeleteTaskGroup, useTaskGroups } from '@/features/task/queries'
 import { useTaskStore } from '@/features/task/store/task-store'
-import type { TaskGroupEntry } from '@/features/task/api'
-import { TaskGroupDialog } from './task-group-dialog'
 import { TaskConfirmDialog } from './task-confirm-dialog'
+import { TaskGroupDialog } from './task-group-dialog'
 
 // 任务组切换：全局顶栏右侧浮动下拉，外观/交互对齐 AI 会话切换器 SessionSwitcher。
 // 触发按钮显示当前任务组名（未选中时回退第一个；无任务组显示占位）。面板含新建入口 +
@@ -34,9 +34,7 @@ export function TaskGroupSwitcher() {
   return (
     <>
       <DropdownMenu open={open} onOpenChange={setOpen}>
-        <DropdownMenuTrigger
-          render={<Button variant="outline" className="max-w-48" />}
-        >
+        <DropdownMenuTrigger render={<Button variant="outline" className="max-w-48" />}>
           <span className="truncate">{selectedGroup?.title ?? '选择任务组'}</span>
           <span className="text-muted-foreground">▾</span>
         </DropdownMenuTrigger>
@@ -52,9 +50,7 @@ export function TaskGroupSwitcher() {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {groups && groups.length === 0 && (
-            <div className="px-2 py-1.5 text-xs text-muted-foreground">
-              还没有任务组
-            </div>
+            <div className="px-2 py-1.5 text-xs text-muted-foreground">还没有任务组</div>
           )}
           {(groups ?? []).map((group) => (
             <div key={group.id} className="group relative flex items-center">

@@ -24,12 +24,16 @@ export function TurnView({ turn }: { turn: TurnState }) {
       {turn.text ? (
         <div className="break-words">
           {/* activeTurn 存在即流式中：增量动画渲染 */}
-          <Streamdown animated isAnimating>{turn.text}</Streamdown>
+          <Streamdown animated isAnimating>
+            {turn.text}
+          </Streamdown>
         </div>
       ) : (
         <ThinkingIndicator />
       )}
-      {[...turn.toolCards.values()].map((card) => <ToolCard key={card.id} card={card} />)}
+      {[...turn.toolCards.values()].map((card) => (
+        <ToolCard key={card.id} card={card} />
+      ))}
     </div>
   )
 }

@@ -37,9 +37,7 @@ export function toLocalInputValue(iso: string): string {
 }
 
 /** 事件时间标签：全天 → '全天'；时段 → 'HH:mm – HH:mm'（本地时区）。 */
-export function eventTimeLabel(
-  event: Pick<EventEntry, 'isAllDay' | 'startAt' | 'endAt'>,
-): string {
+export function eventTimeLabel(event: Pick<EventEntry, 'isAllDay' | 'startAt' | 'endAt'>): string {
   if (event.isAllDay) return '全天'
   return `${formatTime(event.startAt)} – ${formatTime(event.endAt)}`
 }

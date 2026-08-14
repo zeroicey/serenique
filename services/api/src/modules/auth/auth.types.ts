@@ -1,5 +1,5 @@
-import type { AuthenticatorTransport } from "@simplewebauthn/server";
-import { z } from "zod";
+import type { AuthenticatorTransport } from '@simplewebauthn/server'
+import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
 // Auth module — request/response types (Passkey era).
@@ -13,17 +13,11 @@ import { z } from "zod";
 /** YYYY-MM-DD 日期（可空字段用）。与 task 模块 DueDateSchema 同套路。 */
 export const DateOnlySchema = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式须为 YYYY-MM-DD")
-  .refine(
-    (v) => {
-      const parsed = Date.parse(`${v}T00:00:00Z`);
-      return (
-        !Number.isNaN(parsed) &&
-        new Date(parsed).toISOString().slice(0, 10) === v
-      );
-    },
-    "日期无效",
-  );
+  .regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式须为 YYYY-MM-DD')
+  .refine((v) => {
+    const parsed = Date.parse(`${v}T00:00:00Z`)
+    return !Number.isNaN(parsed) && new Date(parsed).toISOString().slice(0, 10) === v
+  }, '日期无效')
 
 // ---- Registration ceremony ------------------------------------------------
 
@@ -31,28 +25,28 @@ export const RegisterStartSchema = z.object({
   // 引导期（凭证计数 0）必填；已有凭证时忽略（走登录会话门禁）。
   // users 行由引导脚本创建，ceremony 不再携带/创建用户信息（决策⑨）。
   setupToken: z.string().trim().min(1).max(200).optional(),
-});
+})
 
 export const RegistrationCredentialSchema = z.object({
   id: z.string().min(1).max(1023), // base64url
   rawId: z.string().min(1).max(1023), // base64url
-  type: z.literal("public-key"),
+  type: z.literal('public-key'),
   response: z.object({
     clientDataJSON: z.string().min(1), // base64url
     attestationObject: z.string().min(1), // base64url
   }),
   clientExtensionResults: z.record(z.string(), z.unknown()).optional(),
   transports: z
-    .array(z.enum(["usb", "nfc", "ble", "internal", "hybrid"]))
+    .array(z.enum(['usb', 'nfc', 'ble', 'internal', 'hybrid']))
     .max(10)
     .optional(),
-});
+})
 
 export const RegisterFinishSchema = z.object({
   challengeId: z.string().uuid(),
   deviceLabel: z.string().trim().min(1).max(100).optional(),
   credential: RegistrationCredentialSchema,
-});
+})
 
 // ---- 凭证管理 --------------------------------------------------------------
 
@@ -64,18 +58,16 @@ export const UpdateCredentialLabelSchema = z.object({
     .max(50)
     .nullable()
     .transform((v) => (v ? v : null)),
-});
+})
 
-export type UpdateCredentialLabelInput = z.infer<
-  typeof UpdateCredentialLabelSchema
->;
+export type UpdateCredentialLabelInput = z.infer<typeof UpdateCredentialLabelSchema>
 
 // ---- Login ceremony -------------------------------------------------------
 
 export const AuthenticationCredentialSchema = z.object({
   id: z.string().min(1).max(1023), // base64url
   rawId: z.string().min(1).max(1023), // base64url
-  type: z.literal("public-key"),
+  type: z.literal('public-key'),
   response: z.object({
     clientDataJSON: z.string().min(1), // base64url
     authenticatorData: z.string().min(1), // base64url
@@ -83,12 +75,12 @@ export const AuthenticationCredentialSchema = z.object({
     userHandle: z.string().optional(), // base64url
   }),
   clientExtensionResults: z.record(z.string(), z.unknown()).optional(),
-});
+})
 
 export const LoginFinishSchema = z.object({
   challengeId: z.string().uuid(),
   credential: AuthenticationCredentialSchema,
-});
+})
 
 // ---- User profile ---------------------------------------------------------
 
@@ -96,60 +88,60 @@ export const LoginFinishSchema = z.object({
 export const UpdateUserProfileSchema = z
   .object({
     name: z
-      .union([z.string().trim().min(1).max(100), z.literal("")])
-      .transform((v) => (v === "" ? null : v))
+      .union([z.string().trim().min(1).max(100), z.literal('')])
+      .transform((v) => (v === '' ? null : v))
       .nullable()
       .optional(),
     email: z
-      .union([z.string().trim().min(1).max(200), z.literal("")])
-      .transform((v) => (v === "" ? null : v))
+      .union([z.string().trim().min(1).max(200), z.literal('')])
+      .transform((v) => (v === '' ? null : v))
       .nullable()
       .optional(),
     birthday: z
-      .union([DateOnlySchema, z.literal("")])
-      .transform((v) => (v === "" ? null : v))
+      .union([DateOnlySchema, z.literal('')])
+      .transform((v) => (v === '' ? null : v))
       .nullable()
       .optional(),
   })
   .refine(
     (v) => v.name !== undefined || v.email !== undefined || v.birthday !== undefined,
-    "至少需要提供一个待更新字段",
-  );
+    '至少需要提供一个待更新字段',
+  )
 
 // ---- Input types (service layer) ------------------------------------------
 
-export type RegisterStartInput = z.infer<typeof RegisterStartSchema>;
-export type RegisterFinishInput = z.infer<typeof RegisterFinishSchema>;
-export type LoginFinishInput = z.infer<typeof LoginFinishSchema>;
-export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>;
+export type RegisterStartInput = z.infer<typeof RegisterStartSchema>
+export type RegisterFinishInput = z.infer<typeof RegisterFinishSchema>
+export type LoginFinishInput = z.infer<typeof LoginFinishSchema>
+export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>
 
 export type LoginFinishOutcome =
-  | { status: "ok"; user: UserEntry }
-  | { status: "throttled" }
-  | { status: "rejected"; reason: "invalid" | "counter" };
+  | { status: 'ok'; user: UserEntry }
+  | { status: 'throttled' }
+  | { status: 'rejected'; reason: 'invalid' | 'counter' }
 
 // ---- Entry types (response layer) — times are ISO strings -----------------
 
 export type UserEntry = {
-  id: string;
-  name: string | null;
-  email: string | null;
-  birthday: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  id: string
+  name: string | null
+  email: string | null
+  birthday: string | null
+  createdAt: string
+  updatedAt: string
+}
 
 export type CredentialEntry = {
-  id: string;
-  credentialId: string;
-  deviceLabel: string | null;
-  transports: AuthenticatorTransport[] | null;
-  counter: number;
-  lastUsedAt: string | null;
-  createdAt: string;
-};
+  id: string
+  credentialId: string
+  deviceLabel: string | null
+  transports: AuthenticatorTransport[] | null
+  counter: number
+  lastUsedAt: string | null
+  createdAt: string
+}
 
 /** /api/auth/me 载荷。authenticated:true 时 user 可为 null（令牌身份且尚未注册用户时）。 */
 export type AuthMeEntry =
   | { authenticated: true; user: UserEntry | null }
-  | { authenticated: false; user: null };
+  | { authenticated: false; user: null }

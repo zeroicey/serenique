@@ -1,1 +1,1 @@
-export { taskRouter } from "@/modules/task/task.router";
+export { taskRouter } from '@/modules/task/task.router'

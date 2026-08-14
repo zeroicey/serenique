@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useUpdateTask } from '@/features/task/queries'
-import { taskFormSchema, type TaskFormValues } from '@/features/task/schemas'
 import type { TaskEntry } from '@/features/task/api'
+import { useUpdateTask } from '@/features/task/queries'
+import { type TaskFormValues, taskFormSchema } from '@/features/task/schemas'
 
 interface TaskRenameDialogProps {
   open: boolean

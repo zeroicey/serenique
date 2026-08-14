@@ -1,1 +1,1 @@
-export { momentRouter } from "@/modules/moment/moment.router";
+export { momentRouter } from '@/modules/moment/moment.router'

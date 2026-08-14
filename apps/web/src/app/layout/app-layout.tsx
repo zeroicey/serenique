@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { Outlet } from 'react-router'
-import { SidebarProvider } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/common/app-sidebar'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import { AppNavbar } from './app-navbar'
 import { PageLoading } from './page-loading'
 

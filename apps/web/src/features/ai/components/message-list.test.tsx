@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { describe, expect, test } from 'vitest'
 import { useAiStore } from '@/features/ai/store/ai-store'
 import { MessageList } from './message-list'
 
@@ -12,7 +12,15 @@ function renderWithState() {
         role: 'assistant',
         text: '好的，已创建。',
         thinking: '用户要建任务',
-        toolCalls: [{ id: 't1', name: 'create_task', args: { title: '写周报' }, result: '{"id":"1"}', isError: false }],
+        toolCalls: [
+          {
+            id: 't1',
+            name: 'create_task',
+            args: { title: '写周报' },
+            result: '{"id":"1"}',
+            isError: false,
+          },
+        ],
       },
     ],
     activeTurn: null,

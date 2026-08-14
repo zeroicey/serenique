@@ -14,4 +14,3 @@ describe('formatTime', () => {
     expect(formatTime(new Date(2026, 7, 6, 23, 59).toISOString())).toBe('23:59')
   })
 })
-

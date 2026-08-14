@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import { toast } from 'sonner'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { useAiStore } from '@/features/ai/store/ai-store'
 import { ChatArea } from './chat-area'
 

@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { listTaskGroups, listTasks, createTask } from './api'
-import { useCreateTask, useTaskGroups, useTasks } from './queries'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TaskEntry, TaskGroupEntry } from './api'
+import { createTask, listTaskGroups, listTasks } from './api'
+import { useCreateTask, useTaskGroups, useTasks } from './queries'
 
 vi.mock('./api', () => ({
   listTaskGroups: vi.fn(),

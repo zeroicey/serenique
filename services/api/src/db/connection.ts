@@ -1,12 +1,12 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import { env } from "@/env";
-import * as schema from "@/db/schema";
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
+import * as schema from '@/db/schema'
+import { env } from '@/env'
 
 // ---------------------------------------------------------------------------
 // Drizzle client — single connection pool shared across all modules.
 // ---------------------------------------------------------------------------
 
-const client = postgres(env.DATABASE_URL);
+const client = postgres(env.DATABASE_URL)
 
-export const db = drizzle(client, { schema });
+export const db = drizzle(client, { schema })

@@ -1,8 +1,8 @@
 import { Loader2, Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useMoments } from '@/features/moment/queries'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useMoments } from '@/features/moment/queries'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { MomentItem } from './moment-item'
 
@@ -127,13 +127,17 @@ export function MomentList() {
             <>
               <p className="text-4xl">🔍</p>
               <h3 className="text-lg font-medium">未找到匹配的闪记</h3>
-              <p className="max-w-sm text-muted-foreground">换个关键词试试，支持中文、拼音或英文。</p>
+              <p className="max-w-sm text-muted-foreground">
+                换个关键词试试，支持中文、拼音或英文。
+              </p>
             </>
           ) : (
             <>
               <p className="text-4xl">🌱</p>
               <h3 className="text-lg font-medium">还没有闪记</h3>
-              <p className="max-w-sm text-muted-foreground">点击右上角「新建闪记」，记录此刻的心情。</p>
+              <p className="max-w-sm text-muted-foreground">
+                点击右上角「新建闪记」，记录此刻的心情。
+              </p>
             </>
           )}
         </div>

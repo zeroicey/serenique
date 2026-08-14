@@ -1,4 +1,4 @@
-import type { TaskStatus } from "@/modules/task/task.schema";
+import type { TaskStatus } from '@/modules/task/task.schema'
 
 // ---------------------------------------------------------------------------
 // Task domain — pure business rules for the status ↔ completedAt sync.
@@ -7,29 +7,29 @@ import type { TaskStatus } from "@/modules/task/task.schema";
 
 /** Shape of a task row the update resolver needs. */
 export type TaskUpdateRowLike = {
-  title: string;
-  groupId: string;
-  status: TaskStatus;
-  completedAt: Date | null;
-  dueDate: string | null;
-};
+  title: string
+  groupId: string
+  status: TaskStatus
+  completedAt: Date | null
+  dueDate: string | null
+}
 
 /** Partial update fields accepted by resolveTaskUpdate. */
 export type TaskUpdatePatch = {
-  title?: string;
-  groupId?: string;
-  status?: TaskStatus;
-  dueDate?: string | null;
-};
+  title?: string
+  groupId?: string
+  status?: TaskStatus
+  dueDate?: string | null
+}
 
 /** Result of resolving a task update: the next row values. */
 export type TaskUpdateResult = {
-  title: string;
-  groupId: string;
-  status: TaskStatus;
-  completedAt: Date | null;
-  dueDate: string | null;
-};
+  title: string
+  groupId: string
+  status: TaskStatus
+  completedAt: Date | null
+  dueDate: string | null
+}
 
 /**
  * Compute the completedAt for a status transition, determined solely by the
@@ -39,11 +39,8 @@ export type TaskUpdateResult = {
  * The "离开 done 清空" and "保持 done 不变" rules are implemented at the
  * resolveTaskUpdate level — see its doc comment.
  */
-export function nextCompletedAt(
-  nextStatus: TaskStatus,
-  now: Date,
-): Date | null {
-  return nextStatus === "done" ? now : null;
+export function nextCompletedAt(nextStatus: TaskStatus, now: Date): Date | null {
+  return nextStatus === 'done' ? now : null
 }
 
 /**
@@ -60,14 +57,12 @@ export function resolveTaskUpdate(
   now: Date,
 ): TaskUpdateResult {
   const completedAt =
-    patch.status === undefined
-      ? current.completedAt
-      : nextCompletedAt(patch.status, now);
+    patch.status === undefined ? current.completedAt : nextCompletedAt(patch.status, now)
   return {
     title: patch.title ?? current.title,
     groupId: patch.groupId ?? current.groupId,
     status: patch.status ?? current.status,
     completedAt,
     dueDate: patch.dueDate === undefined ? current.dueDate : patch.dueDate,
-  };
+  }
 }

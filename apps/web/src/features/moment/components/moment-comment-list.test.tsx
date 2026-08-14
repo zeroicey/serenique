@@ -15,7 +15,9 @@ function makeComment(id: string, content: string): MomentCommentEntry {
 
 describe('MomentCommentList', () => {
   it('渲染每条评论，头像 seed 用评论 id', () => {
-    render(<MomentCommentList comments={[makeComment('c1', '第一条'), makeComment('c2', '第二条')]} />)
+    render(
+      <MomentCommentList comments={[makeComment('c1', '第一条'), makeComment('c2', '第二条')]} />,
+    )
     expect(screen.getByText('第一条')).toBeInTheDocument()
     expect(screen.getByText('第二条')).toBeInTheDocument()
 

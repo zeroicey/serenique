@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/browser'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
 import {
   deleteCredential,
@@ -30,7 +30,14 @@ function envelope(data: unknown, success = true) {
   })
 }
 
-const user = { id: 'u1', name: '测试', email: null, birthday: null, createdAt: '2026-08-09T00:00:00Z', updatedAt: '2026-08-09T00:00:00Z' }
+const user = {
+  id: 'u1',
+  name: '测试',
+  email: null,
+  birthday: null,
+  createdAt: '2026-08-09T00:00:00Z',
+  updatedAt: '2026-08-09T00:00:00Z',
+}
 
 const registrationCredential: RegistrationResponseJSON = {
   id: 'cred-1',
@@ -71,7 +78,15 @@ describe('auth api', () => {
 
   it('registerStart posts only setupToken（决策⑨ 无 userInfo）', async () => {
     mockedPost.mockResolvedValue(
-      envelope({ challengeId: 'c1', options: { challenge: 'x', rp: { name: 'Serenique' }, pubKeyCredParams: [], timeout: 60000 } }),
+      envelope({
+        challengeId: 'c1',
+        options: {
+          challenge: 'x',
+          rp: { name: 'Serenique' },
+          pubKeyCredParams: [],
+          timeout: 60000,
+        },
+      }),
     )
     const result = await registerStart({ setupToken: 'tok' })
     expect(mockedPost).toHaveBeenCalledWith('/api/auth/register/start', {
@@ -109,7 +124,9 @@ describe('auth api', () => {
   })
 
   it('loginStart posts to /api/auth/login/start', async () => {
-    mockedPost.mockResolvedValue(envelope({ challengeId: 'c1', options: { challenge: 'x', rpId: 'localhost' } }))
+    mockedPost.mockResolvedValue(
+      envelope({ challengeId: 'c1', options: { challenge: 'x', rpId: 'localhost' } }),
+    )
     const result = await loginStart()
     expect(mockedPost).toHaveBeenCalledWith('/api/auth/login/start')
     expect(result.challengeId).toBe('c1')
@@ -132,7 +149,15 @@ describe('auth api', () => {
   })
 
   it('listCredentials unwraps items', async () => {
-    const cred = { id: 'c1', credentialId: 'cid', deviceLabel: 'MacBook', transports: null, counter: 1, lastUsedAt: null, createdAt: '2026-08-09T00:00:00Z' }
+    const cred = {
+      id: 'c1',
+      credentialId: 'cid',
+      deviceLabel: 'MacBook',
+      transports: null,
+      counter: 1,
+      lastUsedAt: null,
+      createdAt: '2026-08-09T00:00:00Z',
+    }
     mockedGet.mockResolvedValue(envelope({ items: [cred] }))
     const result = await listCredentials()
     expect(mockedGet).toHaveBeenCalledWith('/api/auth/credentials')

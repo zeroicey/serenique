@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { ProfileForm } from '../components/profile-form'
 import { CredentialsSection } from '../components/credentials-section'
-import { TokensSection } from '../components/tokens-section'
 import { GeneralSection } from '../components/general-section'
+import { ProfileForm } from '../components/profile-form'
+import { TokensSection } from '../components/tokens-section'
 
 // 设置页：个人信息 / 登录凭证 / API 令牌 / 通用 四个 tab（均需登录，由 AuthGuard 保证）。
 
@@ -43,9 +43,7 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>
-              {TABS.find((t) => t.id === tab)?.label}
-            </CardTitle>
+            <CardTitle>{TABS.find((t) => t.id === tab)?.label}</CardTitle>
             <CardDescription>
               {tab === 'profile' && '修改你的个人资料，保存后立即生效。'}
               {tab === 'credentials' && '管理可以登录本服务的通行密钥设备。'}

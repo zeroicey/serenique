@@ -1,5 +1,5 @@
-import { events } from "@/modules/event/event.schema";
-import type { EventEntry } from "@/modules/event/event.types";
+import type { events } from '@/modules/event/event.schema'
+import type { EventEntry } from '@/modules/event/event.types'
 
 // ---------------------------------------------------------------------------
 // Event mappers — row → entry conversion. Pure functions, no DB / IO.
@@ -16,5 +16,5 @@ export function toEventEntry(row: typeof events.$inferSelect): EventEntry {
     note: row.note,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-  };
+  }
 }

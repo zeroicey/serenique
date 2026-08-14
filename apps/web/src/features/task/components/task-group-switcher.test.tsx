@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { TaskGroupSwitcher } from './task-group-switcher'
-import { useTaskStore } from '@/features/task/store/task-store'
-import { deleteTaskGroup, listTaskGroups } from '@/features/task/api'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { TaskGroupEntry } from '@/features/task/api'
+import { deleteTaskGroup, listTaskGroups } from '@/features/task/api'
+import { useTaskStore } from '@/features/task/store/task-store'
+import { TaskGroupSwitcher } from './task-group-switcher'
 
 vi.mock('@/features/task/api', () => ({
   listTaskGroups: vi.fn(),

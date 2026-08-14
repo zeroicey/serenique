@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { toast } from 'sonner'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AuditLogEntry } from './api'
 import { getAuditUnreadCount, listAuditLogs, markAuditRead } from './api'
 import { useAuditLogs, useAuditUnreadCount, useMarkAuditRead } from './queries'
-import type { AuditLogEntry } from './api'
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -47,7 +47,9 @@ afterEach(() => vi.clearAllMocks())
 describe('useAuditLogs', () => {
   it('按参数请求并返回 { items, total }', async () => {
     mockedList.mockResolvedValue({ items: [makeLog('a')], total: 1 })
-    const { result } = renderHook(() => useAuditLogs({ page: 1, pageSize: 20, level: 'warn' }), { wrapper })
+    const { result } = renderHook(() => useAuditLogs({ page: 1, pageSize: 20, level: 'warn' }), {
+      wrapper,
+    })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data?.total).toBe(1)
     expect(result.current.data?.items[0].id).toBe('a')

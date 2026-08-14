@@ -1,1 +1,1 @@
-export { auditRouter } from "@/modules/audit/audit.router";
+export { auditRouter } from '@/modules/audit/audit.router'

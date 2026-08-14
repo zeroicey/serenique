@@ -1,9 +1,9 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderWithProviders } from '@/test/helpers'
-import { listMoments } from '@/features/moment/api'
 import type { MomentEntry } from '@/features/moment/api'
+import { listMoments } from '@/features/moment/api'
+import { renderWithProviders } from '@/test/helpers'
 import { MomentList } from './moment-list'
 
 vi.mock('@/features/moment/api', () => ({
@@ -73,8 +73,6 @@ describe('MomentList 搜索', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '清除搜索' }))
     expect(await screen.findByText('北京今天的天气不错')).toBeInTheDocument()
-    await waitFor(() =>
-      expect(mockedList).toHaveBeenLastCalledWith({ page: 1, pageSize: 10 }),
-    )
+    await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith({ page: 1, pageSize: 10 }))
   })
 })

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { AuditLogList } from './audit-log-list'
 import type { AuditLogEntry } from '../api'
+import { AuditLogList } from './audit-log-list'
 
 function makeLog(id: string, overrides: Partial<AuditLogEntry> = {}): AuditLogEntry {
   return {

@@ -6,24 +6,117 @@
 // External consumers import from "@serenique/api" (the package entry point).
 // ---------------------------------------------------------------------------
 
+// ---- Env (for startup validation) ----
+export { env as apiEnv } from '@/env'
+// ---- Audit module ----
+export { auditService } from '@/modules/audit/audit.service'
+export type {
+  AuditEvent,
+  AuditLogEntry,
+  ListAuditInput,
+  MarkReadInput,
+  RecordAuditInput,
+} from '@/modules/audit/audit.types'
+export {
+  AUDIT_EVENTS,
+  ListAuditSchema,
+  MarkReadSchema,
+  RecordAuditSchema,
+} from '@/modules/audit/audit.types'
+// ---- Auth module (Passkey) ----
+export { authService } from '@/modules/auth/auth.service'
+export type {
+  AuthMeEntry,
+  CredentialEntry,
+  LoginFinishInput,
+  LoginFinishOutcome,
+  RegisterFinishInput,
+  RegisterStartInput,
+  UpdateUserProfileInput,
+  UserEntry,
+} from '@/modules/auth/auth.types'
+export {
+  DateOnlySchema,
+  LoginFinishSchema,
+  RegisterFinishSchema,
+  RegisterStartSchema,
+  UpdateUserProfileSchema,
+} from '@/modules/auth/auth.types'
+// ---- Blob module ----
+export { blobService } from '@/modules/blob/blob.service'
+export type {
+  BlobAccessLinkEntry,
+  BlobAttachmentEntry,
+  BlobCleanupResult,
+  BlobEntry,
+  BlobFile,
+  CreateBlobAccessLinkInput,
+  CreateBlobAttachmentInput,
+  ListBlobInput,
+} from '@/modules/blob/blob.types'
+export {
+  CreateBlobAccessLinkSchema,
+  CreateBlobAttachmentSchema,
+  ListBlobSchema,
+} from '@/modules/blob/blob.types'
+// ---- Event module ----
+export { eventService } from '@/modules/event/event.service'
+export type {
+  CreateEventInput,
+  DeleteEventInput,
+  EventEntry,
+  GetEventInput,
+  ListEventInput,
+  UpdateEventInput,
+} from '@/modules/event/event.types'
+export {
+  CreateEventSchema,
+  ListEventSchema,
+  UpdateEventSchema,
+} from '@/modules/event/event.types'
+// ---- Location module (AMAP proxy) ----
+export { locationService } from '@/modules/location/location.service'
+export type {
+  LocationConfigEntry,
+  LocationItem,
+  LocationQueryResult,
+  NearbyInput,
+  SearchInput,
+} from '@/modules/location/location.types'
+export {
+  NearbyQuerySchema,
+  SearchQuerySchema,
+} from '@/modules/location/location.types'
+export { momentCommentService } from '@/modules/moment/comment.service'
+export type {
+  CreateMomentCommentInput,
+  DeleteMomentCommentInput,
+  GetMomentCommentInput,
+  ListMomentCommentsInput,
+  MomentCommentEntry,
+  UpdateMomentCommentInput,
+} from '@/modules/moment/comment.types'
+export {
+  CreateMomentCommentSchema,
+  UpdateMomentCommentSchema,
+} from '@/modules/moment/comment.types'
 // ---- Moment module ----
-export { momentService } from "@/modules/moment/moment.service";
-export { momentCommentService } from "@/modules/moment/comment.service";
+export { momentService } from '@/modules/moment/moment.service'
 export type {
   AddMomentAttachmentInput,
-  DeleteMomentAttachmentInput,
   AddMomentTagInput,
-  RemoveMomentTagInput,
-  MomentEntry,
-  MomentLocation,
+  CreateMomentInput,
+  DeleteMomentAttachmentInput,
+  DeleteMomentInput,
+  GetMomentInput,
+  ListMomentInput,
   MomentAttachmentEntry,
   MomentBlobEntry,
-  CreateMomentInput,
-  ListMomentInput,
-  GetMomentInput,
+  MomentEntry,
+  MomentLocation,
+  RemoveMomentTagInput,
   UpdateMomentInput,
-  DeleteMomentInput,
-} from "@/modules/moment/moment.types";
+} from '@/modules/moment/moment.types'
 export {
   AddMomentAttachmentSchema,
   AddMomentTagSchema,
@@ -32,168 +125,65 @@ export {
   MomentAttachmentInputSchema,
   MomentLocationSchema,
   UpdateMomentSchema,
-} from "@/modules/moment/moment.types";
-export type {
-  MomentCommentEntry,
-  CreateMomentCommentInput,
-  UpdateMomentCommentInput,
-  ListMomentCommentsInput,
-  GetMomentCommentInput,
-  DeleteMomentCommentInput,
-} from "@/modules/moment/comment.types";
-export {
-  CreateMomentCommentSchema,
-  UpdateMomentCommentSchema,
-} from "@/modules/moment/comment.types";
-
-// ---- Blob module ----
-export { blobService } from "@/modules/blob/blob.service";
-export type {
-  BlobAttachmentEntry,
-  BlobAccessLinkEntry,
-  BlobCleanupResult,
-  BlobEntry,
-  BlobFile,
-  CreateBlobAccessLinkInput,
-  CreateBlobAttachmentInput,
-  ListBlobInput,
-} from "@/modules/blob/blob.types";
-export {
-  CreateBlobAccessLinkSchema,
-  CreateBlobAttachmentSchema,
-  ListBlobSchema,
-} from "@/modules/blob/blob.types";
-
-// ---- Task module ----
-export { taskService } from "@/modules/task/task.service";
-export type {
-  TaskEntry,
-  TaskGroupEntry,
-  CreateTaskInput,
-  CreateTaskGroupInput,
-  ListTaskInput,
-  ListTaskGroupInput,
-  GetTaskInput,
-  GetTaskGroupInput,
-  UpdateTaskInput,
-  UpdateTaskGroupInput,
-  DeleteTaskInput,
-  DeleteTaskGroupInput,
-} from "@/modules/task/task.types";
-export {
-  CreateTaskSchema,
-  UpdateTaskSchema,
-  ListTaskSchema,
-  CreateTaskGroupSchema,
-  ListTaskGroupSchema,
-  UpdateTaskGroupSchema,
-  TaskStatusSchema,
-} from "@/modules/task/task.types";
-
-// ---- Event module ----
-export { eventService } from "@/modules/event/event.service";
-export type {
-  EventEntry,
-  CreateEventInput,
-  UpdateEventInput,
-  ListEventInput,
-  GetEventInput,
-  DeleteEventInput,
-} from "@/modules/event/event.types";
-export {
-  CreateEventSchema,
-  UpdateEventSchema,
-  ListEventSchema,
-} from "@/modules/event/event.types";
-
-// ---- Audit module ----
-export { auditService } from "@/modules/audit/audit.service";
-export type {
-  AuditLogEntry,
-  AuditEvent,
-  RecordAuditInput,
-  ListAuditInput,
-  MarkReadInput,
-} from "@/modules/audit/audit.types";
-export {
-  AUDIT_EVENTS,
-  RecordAuditSchema,
-  ListAuditSchema,
-  MarkReadSchema,
-} from "@/modules/audit/audit.types";
-
+} from '@/modules/moment/moment.types'
 // ---- Tag module ----
-export { tagService } from "@/modules/tag/tag.service";
+export { tagService } from '@/modules/tag/tag.service'
 export type {
+  AttachTagInput,
+  CreateTagInput,
+  DeleteTagInput,
+  DetachTagInput,
+  GetTagInput,
+  ListTagInput,
+  RenameTagInput,
+  ReplaceTagsInput,
   TagEntry,
   TagRelationEntry,
-  CreateTagInput,
-  RenameTagInput,
-  ListTagInput,
-  GetTagInput,
-  DeleteTagInput,
-  AttachTagInput,
-  DetachTagInput,
-  ReplaceTagsInput,
-} from "@/modules/tag/tag.types";
+} from '@/modules/tag/tag.types'
 export {
-  CreateTagSchema,
-  RenameTagSchema,
-  ListTagSchema,
   AttachTagSchema,
+  CreateTagSchema,
   DetachTagSchema,
+  ListTagSchema,
+  RenameTagSchema,
   ReplaceTagsSchema,
   TagNameSchema,
-} from "@/modules/tag/tag.types";
-
-// ---- Auth module (Passkey) ----
-export { authService } from "@/modules/auth/auth.service";
+} from '@/modules/tag/tag.types'
+// ---- Task module ----
+export { taskService } from '@/modules/task/task.service'
 export type {
-  UserEntry,
-  CredentialEntry,
-  AuthMeEntry,
-  RegisterStartInput,
-  RegisterFinishInput,
-  LoginFinishInput,
-  UpdateUserProfileInput,
-  LoginFinishOutcome,
-} from "@/modules/auth/auth.types";
+  CreateTaskGroupInput,
+  CreateTaskInput,
+  DeleteTaskGroupInput,
+  DeleteTaskInput,
+  GetTaskGroupInput,
+  GetTaskInput,
+  ListTaskGroupInput,
+  ListTaskInput,
+  TaskEntry,
+  TaskGroupEntry,
+  UpdateTaskGroupInput,
+  UpdateTaskInput,
+} from '@/modules/task/task.types'
 export {
-  DateOnlySchema,
-  RegisterStartSchema,
-  RegisterFinishSchema,
-  LoginFinishSchema,
-  UpdateUserProfileSchema,
-} from "@/modules/auth/auth.types";
-
+  CreateTaskGroupSchema,
+  CreateTaskSchema,
+  ListTaskGroupSchema,
+  ListTaskSchema,
+  TaskStatusSchema,
+  UpdateTaskGroupSchema,
+  UpdateTaskSchema,
+} from '@/modules/task/task.types'
 // ---- Tokens module ----
-export { tokenService } from "@/modules/tokens/token.service";
+export { tokenService } from '@/modules/tokens/token.service'
 export type {
-  TokenEntry,
-  TokenCreateResult,
   CreateTokenInput,
-} from "@/modules/tokens/token.types";
-export { CreateTokenSchema } from "@/modules/tokens/token.types";
-
-// ---- Location module (AMAP proxy) ----
-export { locationService } from "@/modules/location/location.service";
-export type {
-  LocationConfigEntry,
-  LocationItem,
-  LocationQueryResult,
-  NearbyInput,
-  SearchInput,
-} from "@/modules/location/location.types";
-export {
-  NearbyQuerySchema,
-  SearchQuerySchema,
-} from "@/modules/location/location.types";
-
+  TokenCreateResult,
+  TokenEntry,
+} from '@/modules/tokens/token.types'
+export { CreateTokenSchema } from '@/modules/tokens/token.types'
+export type { ErrorCode as ErrorCodeType } from '@/shared/errors'
 // ---- Shared utilities ----
-export { AppError, ErrorCode } from "@/shared/errors";
-export type { ErrorCode as ErrorCodeType } from "@/shared/errors";
-export { logger } from "@/shared/logger";
-export { initBlobRoot } from "@/shared/storage";
-
-// ---- Env (for startup validation) ----
-export { env as apiEnv } from "@/env";
+export { AppError, ErrorCode } from '@/shared/errors'
+export { logger } from '@/shared/logger'
+export { initBlobRoot } from '@/shared/storage'

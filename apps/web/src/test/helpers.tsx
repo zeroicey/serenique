@@ -1,12 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, type RenderOptions } from '@testing-library/react'
+import { type RenderOptions, render } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 
 // 带 QueryClient 的渲染辅助，测试组件/页面用。
-export function renderWithProviders(
-  ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>,
-) {
+export function renderWithProviders(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })

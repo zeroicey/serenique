@@ -53,9 +53,7 @@ describe('toLocalInputValue', () => {
 
 describe('eventTimeLabel', () => {
   it('全天事件显示「全天」', () => {
-    expect(
-      eventTimeLabel({ isAllDay: true, startAt: 'x', endAt: 'y' }),
-    ).toBe('全天')
+    expect(eventTimeLabel({ isAllDay: true, startAt: 'x', endAt: 'y' })).toBe('全天')
   })
 
   it('时段事件显示本地 HH:mm – HH:mm', () => {

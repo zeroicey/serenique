@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAiStore } from '@/features/ai/store/ai-store'
-import { MessageList } from './message-list'
 import { Composer } from './composer'
+import { MessageList } from './message-list'
 
 // 聊天主区：消息流 + 输入框。错误（error 事件/连接失败）走 sonner toast，
 // 与项目 mutation 失败统一 toast.error 的惯例一致（Toaster 已在 providers 挂载）。

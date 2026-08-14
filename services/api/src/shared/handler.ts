@@ -1,8 +1,8 @@
-import type { Context } from "hono";
-import { z, ZodError } from "zod";
-import { AppError, ErrorCode } from "@/shared/errors";
-import { logger } from "@/shared/logger";
-import { Res } from "@/shared/response";
+import type { Context } from 'hono'
+import { ZodError, z } from 'zod'
+import { AppError, ErrorCode } from '@/shared/errors'
+import { logger } from '@/shared/logger'
+import { Res } from '@/shared/response'
 
 // ---------------------------------------------------------------------------
 // Shared HTTP handler helpers — the canonical error-mapping used by every
@@ -11,7 +11,7 @@ import { Res } from "@/shared/response";
 // anything else → 500.
 // ---------------------------------------------------------------------------
 
-const uuidSchema = z.string().uuid();
+const uuidSchema = z.string().uuid()
 
 /**
  * Read a `:param` path param and require it to be a valid UUID.
@@ -23,27 +23,23 @@ const uuidSchema = z.string().uuid();
  * MCP tool schemas use, so both channels reject bad ids identically.
  */
 export function uuidParam(c: Context, name: string): string {
-  const id = c.req.param(name);
+  const id = c.req.param(name)
   if (!id) {
-    throw new AppError(ErrorCode.VALIDATION, `缺少 ${name} 参数`, 400);
+    throw new AppError(ErrorCode.VALIDATION, `缺少 ${name} 参数`, 400)
   }
-  return uuidSchema.parse(id);
+  return uuidSchema.parse(id)
 }
 
 export function handleError(e: unknown, c: Context, scope?: string): Response {
   if (e instanceof AppError) {
-    return Res.error(e.message).code(e.code).status(e.status).build(c);
+    return Res.error(e.message).code(e.code).status(e.status).build(c)
   }
   if (e instanceof ZodError) {
-    return Res.validationFailed("参数校验失败", e.issues)
-      .code(ErrorCode.VALIDATION)
-      .build(c);
+    return Res.validationFailed('参数校验失败', e.issues).code(ErrorCode.VALIDATION).build(c)
   }
   if (e instanceof SyntaxError) {
-    return Res.badRequest("请求体必须是合法的 JSON")
-      .code(ErrorCode.VALIDATION)
-      .build(c);
+    return Res.badRequest('请求体必须是合法的 JSON').code(ErrorCode.VALIDATION).build(c)
   }
-  logger.error({ err: e, scope }, "Unhandled error in handler");
-  return Res.internalError().code(ErrorCode.INTERNAL).build(c);
+  logger.error({ err: e, scope }, 'Unhandled error in handler')
+  return Res.internalError().code(ErrorCode.INTERNAL).build(c)
 }

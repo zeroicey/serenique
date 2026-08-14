@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core'
 
 // ---------------------------------------------------------------------------
 // Tag module — two tables: tags (independent resources) and tag_relations
@@ -15,36 +15,32 @@ import { index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-co
 // ---------------------------------------------------------------------------
 
 export const tags = pgTable(
-  "tags",
+  'tags',
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    name: text("name").notNull().unique(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
+    id: uuid('id').defaultRandom().primaryKey(),
+    name: text('name').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("idx_tags_updated_at_desc").on(t.updatedAt.desc())],
-);
+  (t) => [index('idx_tags_updated_at_desc').on(t.updatedAt.desc())],
+)
 
 export const tagRelations = pgTable(
-  "tag_relations",
+  'tag_relations',
   {
-    id: uuid("id").defaultRandom().primaryKey(),
-    tagId: uuid("tag_id")
+    id: uuid('id').defaultRandom().primaryKey(),
+    tagId: uuid('tag_id')
       .notNull()
-      .references(() => tags.id, { onDelete: "cascade" }),
-    ownerType: text("owner_type").notNull(),
-    ownerId: text("owner_id").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+      .references(() => tags.id, { onDelete: 'cascade' }),
+    ownerType: text('owner_type').notNull(),
+    ownerId: text('owner_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
-    unique("tag_relations_tag_id_owner_type_owner_id_unique").on(
-      t.tagId,
-      t.ownerType,
-      t.ownerId,
-    ),
-    index("tag_relations_owner_idx").on(t.ownerType, t.ownerId),
+    unique('tag_relations_tag_id_owner_type_owner_id_unique').on(t.tagId, t.ownerType, t.ownerId),
+    index('tag_relations_owner_idx').on(t.ownerType, t.ownerId),
   ],
-);
+)

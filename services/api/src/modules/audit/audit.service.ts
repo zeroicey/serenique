@@ -1,22 +1,22 @@
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
-import { db } from "@/db/connection";
-import { auditLogs } from "@/modules/audit/audit.schema";
-import { toAuditLogEntry } from "@/modules/audit/audit.mappers";
+import { and, asc, desc, eq, inArray, lt, sql } from 'drizzle-orm'
+import { db } from '@/db/connection'
+import { env } from '@/env'
 import {
   buildEventMessage,
+  type UnauthorizedDedupState,
   unauthorizedRecord,
   unauthorizedShouldRecord,
   unauthorizedStateExpired,
-  type UnauthorizedDedupState,
-} from "@/modules/audit/audit.domain";
+} from '@/modules/audit/audit.domain'
+import { toAuditLogEntry } from '@/modules/audit/audit.mappers'
+import { auditLogs } from '@/modules/audit/audit.schema'
 import type {
   AuditLogEntry,
   ListAuditInput,
   MarkReadInput,
   RecordAuditInput,
-} from "@/modules/audit/audit.types";
-import { env } from "@/env";
-import { logger } from "@/shared/logger";
+} from '@/modules/audit/audit.types'
+import { logger } from '@/shared/logger'
 
 // ---------------------------------------------------------------------------
 // Audit service — read-mostly, write-via-record singleton.
@@ -37,24 +37,22 @@ export const auditService = {
     await db.insert(auditLogs).values({
       event: input.event,
       message: input.message,
-      level: input.level ?? "info",
+      level: input.level ?? 'info',
       source: input.source ?? null,
       ip: input.ip ?? null,
       detail: input.detail ?? null,
-    });
+    })
   },
 
   /** Paginated list, newest-first. Optional level / event / unread filters. */
-  async list(
-    input: ListAuditInput,
-  ): Promise<{ items: AuditLogEntry[]; total: number }> {
-    const offset = (input.page - 1) * input.pageSize;
+  async list(input: ListAuditInput): Promise<{ items: AuditLogEntry[]; total: number }> {
+    const offset = (input.page - 1) * input.pageSize
     const conditions = [
       input.level ? eq(auditLogs.level, input.level) : undefined,
       input.event ? eq(auditLogs.event, input.event) : undefined,
       input.unreadOnly === true ? eq(auditLogs.isRead, false) : undefined,
-    ].filter((c): c is NonNullable<typeof c> => c !== undefined);
-    const where = conditions.length ? and(...conditions) : undefined;
+    ].filter((c): c is NonNullable<typeof c> => c !== undefined)
+    const where = conditions.length ? and(...conditions) : undefined
 
     const [items, [{ count }]] = await Promise.all([
       db
@@ -64,12 +62,9 @@ export const auditService = {
         .orderBy(desc(auditLogs.createdAt))
         .limit(input.pageSize)
         .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(auditLogs)
-        .where(where),
-    ]);
-    return { items: items.map(toAuditLogEntry), total: count };
+      db.select({ count: sql<number>`count(*)::int` }).from(auditLogs).where(where),
+    ])
+    return { items: items.map(toAuditLogEntry), total: count }
   },
 
   /** Number of unread rows — Web badge polling target. */
@@ -77,36 +72,34 @@ export const auditService = {
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(auditLogs)
-      .where(eq(auditLogs.isRead, false));
-    return count;
+      .where(eq(auditLogs.isRead, false))
+    return count
   },
 
   /**
    * Mark logs read. Empty/absent ids → mark all; otherwise mark exactly the
    * given ids. Returns updated + remaining unread counts.
    */
-  async markRead(
-    input: MarkReadInput,
-  ): Promise<{ updatedCount: number; unreadCount: number }> {
-    let updatedCount = 0;
+  async markRead(input: MarkReadInput): Promise<{ updatedCount: number; unreadCount: number }> {
+    let updatedCount = 0
     if (input.ids && input.ids.length > 0) {
       const rows = await db
         .update(auditLogs)
         .set({ isRead: true })
         .where(inArray(auditLogs.id, input.ids))
-        .returning({ id: auditLogs.id });
-      updatedCount = rows.length;
+        .returning({ id: auditLogs.id })
+      updatedCount = rows.length
     } else {
       // 空数组视为未提供 → 全部置已读
       const rows = await db
         .update(auditLogs)
         .set({ isRead: true })
         .where(eq(auditLogs.isRead, false))
-        .returning({ id: auditLogs.id });
-      updatedCount = rows.length;
+        .returning({ id: auditLogs.id })
+      updatedCount = rows.length
     }
-    const unreadCount = await this.unreadCount();
-    return { updatedCount, unreadCount };
+    const unreadCount = await this.unreadCount()
+    return { updatedCount, unreadCount }
   },
 
   /**
@@ -115,42 +108,45 @@ export const auditService = {
    * by age first so truncation never leaves stale rows behind.
    */
   async sweep(): Promise<{ deletedByDays: number; deletedByRows: number }> {
-    const retentionDays = env.AUDIT_RETENTION_DAYS ?? 90;
-    const maxRows = env.AUDIT_MAX_ROWS ?? 5000;
-    let deletedByDays = 0;
-    let deletedByRows = 0;
+    const retentionDays = env.AUDIT_RETENTION_DAYS ?? 90
+    const maxRows = env.AUDIT_MAX_ROWS ?? 5000
+    let deletedByDays = 0
+    let deletedByRows = 0
 
     if (retentionDays > 0) {
-      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000);
+      const cutoff = new Date(Date.now() - retentionDays * 24 * 3600 * 1000)
       const deleted = await db
         .delete(auditLogs)
         .where(lt(auditLogs.createdAt, cutoff))
-        .returning({ id: auditLogs.id });
-      deletedByDays = deleted.length;
+        .returning({ id: auditLogs.id })
+      deletedByDays = deleted.length
     }
 
     if (maxRows > 0) {
-      const [{ count }] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(auditLogs);
-      const excess = count - maxRows;
+      const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(auditLogs)
+      const excess = count - maxRows
       if (excess > 0) {
         const oldest = await db
           .select({ id: auditLogs.id })
           .from(auditLogs)
           .orderBy(asc(auditLogs.createdAt))
-          .limit(excess);
+          .limit(excess)
         if (oldest.length > 0) {
           const deleted = await db
             .delete(auditLogs)
-            .where(inArray(auditLogs.id, oldest.map((row) => row.id)))
-            .returning({ id: auditLogs.id });
-          deletedByRows = deleted.length;
+            .where(
+              inArray(
+                auditLogs.id,
+                oldest.map((row) => row.id),
+              ),
+            )
+            .returning({ id: auditLogs.id })
+          deletedByRows = deleted.length
         }
       }
     }
 
-    return { deletedByDays, deletedByRows };
+    return { deletedByDays, deletedByRows }
   },
 
   // ---- 401 per-IP dedup (in-memory, single-process) ------------------------
@@ -161,7 +157,7 @@ export const auditService = {
   _sweepUnauthorized(nowMs: number): void {
     for (const [ip, state] of this._unauthorized) {
       if (unauthorizedStateExpired(state, nowMs)) {
-        this._unauthorized.delete(ip);
+        this._unauthorized.delete(ip)
       }
     }
   },
@@ -172,28 +168,28 @@ export const auditService = {
    * insert asynchronously — never blocks the middleware.
    */
   recordUnauthorized(ip: string, nowMs = Date.now()): boolean {
-    this._sweepUnauthorized(nowMs);
-    const state = this._unauthorized.get(ip);
-    if (!unauthorizedShouldRecord(state, nowMs)) return false;
-    this._unauthorized.set(ip, unauthorizedRecord(state, nowMs));
+    this._sweepUnauthorized(nowMs)
+    const state = this._unauthorized.get(ip)
+    if (!unauthorizedShouldRecord(state, nowMs)) return false
+    this._unauthorized.set(ip, unauthorizedRecord(state, nowMs))
     fireAuditRecord({
-      event: "auth.unauthorized",
-      message: buildEventMessage("auth.unauthorized"),
-      level: "warn",
+      event: 'auth.unauthorized',
+      message: buildEventMessage('auth.unauthorized'),
+      level: 'warn',
       ip,
-    });
-    return true;
+    })
+    return true
   },
-};
+}
 
 /** Fire-and-forget audit write — never awaited, failures only hit pino. */
 export function fireAuditRecord(input: RecordAuditInput): void {
   void auditService.record(input).catch((err) => {
-    logger.error({ err }, "audit record failed");
-  });
+    logger.error({ err }, 'audit record failed')
+  })
 }
 
-export const AUDIT_SWEEP_INTERVAL_MS = 30 * 60_000; // 30 分钟
+export const AUDIT_SWEEP_INTERVAL_MS = 30 * 60_000 // 30 分钟
 
 /** Start the background retention sweep. index.ts calls this (skip in test). */
 export function startAuditSweeper(
@@ -201,12 +197,12 @@ export function startAuditSweeper(
 ): ReturnType<typeof setInterval> {
   const timer = setInterval(() => {
     void auditService.sweep().catch((err) => {
-      logger.error({ err }, "audit sweep failed");
-    });
-  }, intervalMs);
+      logger.error({ err }, 'audit sweep failed')
+    })
+  }, intervalMs)
   // 不阻止进程退出（Bun/Node 均支持 Timer.unref）。
-  if (typeof (timer as { unref?: () => void }).unref === "function") {
-    (timer as { unref: () => void }).unref();
+  if (typeof (timer as { unref?: () => void }).unref === 'function') {
+    ;(timer as { unref: () => void }).unref()
   }
-  return timer;
+  return timer
 }

@@ -1,13 +1,11 @@
-import type { auditLogs } from "@/modules/audit/audit.schema";
-import type { AuditLogEntry } from "@/modules/audit/audit.types";
+import type { auditLogs } from '@/modules/audit/audit.schema'
+import type { AuditLogEntry } from '@/modules/audit/audit.types'
 
 // ---------------------------------------------------------------------------
 // Audit mappers — row → entry conversion, pure functions.
 // ---------------------------------------------------------------------------
 
-export function toAuditLogEntry(
-  row: typeof auditLogs.$inferSelect,
-): AuditLogEntry {
+export function toAuditLogEntry(row: typeof auditLogs.$inferSelect): AuditLogEntry {
   return {
     id: row.id,
     event: row.event,
@@ -18,5 +16,5 @@ export function toAuditLogEntry(
     detail: row.detail,
     isRead: row.isRead,
     createdAt: row.createdAt.toISOString(),
-  };
+  }
 }

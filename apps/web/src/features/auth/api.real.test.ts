@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/errors'
-import { deleteCredential, registerStart } from './api'
-import { fetchAuthStatus } from './api'
+import { deleteCredential, fetchAuthStatus, registerStart } from './api'
 
 // 真实 ky 边界测试：不 mock @/api/client，stub 全局 fetch，直接走真实 ky 实例。
 // client 全局 throwHttpErrors:false —— 非 2xx 必须返回 Response 交给 unwrap/手动
@@ -33,9 +32,11 @@ describe('auth api at the real ky boundary', () => {
   })
 
   it('fetchAuthStatus resolves to { authenticated: true } on a real 200', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { success: true, message: 'ok', data: { authenticated: true } }),
-    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(200, { success: true, message: 'ok', data: { authenticated: true } }),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await fetchAuthStatus()
@@ -44,7 +45,9 @@ describe('auth api at the real ky boundary', () => {
   })
 
   it('fetchAuthStatus still throws on a real non-401 error (preserves the error contract)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(500, { success: false, message: '服务器错误' }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(500, { success: false, message: '服务器错误' }))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(fetchAuthStatus()).rejects.toThrow('服务器错误')
@@ -59,9 +62,11 @@ describe('auth api at the real ky boundary', () => {
   })
 
   it('registerStart 真实 403 → ApiError（服务端中文文案 + status 透传，/setup 页区分错误依赖它）', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(403, { success: false, message: '引导注册令牌不正确', code: 'FORBIDDEN' }),
-    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(403, { success: false, message: '引导注册令牌不正确', code: 'FORBIDDEN' }),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     const err = await registerStart({ setupToken: 'wrong' }).catch((e: unknown) => e)
@@ -72,9 +77,11 @@ describe('auth api at the real ky boundary', () => {
   })
 
   it('registerStart 真实 401（已有凭证未登录）→ ApiError status 401', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(401, { success: false, message: '请先登录后再添加新的登录凭证' }),
-    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(401, { success: false, message: '请先登录后再添加新的登录凭证' }),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     const err = await registerStart({}).catch((e: unknown) => e)

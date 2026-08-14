@@ -1,13 +1,13 @@
-import type { blobs, blobAttachments } from "@/modules/blob/blob.schema";
-import type { moments } from "@/modules/moment/moment.schema";
-import type { MomentCommentEntry } from "@/modules/moment/comment.types";
-import type { TagEntry } from "@/modules/tag/tag.types";
-import type { MomentLocation } from "@/modules/moment/moment.types";
+import type { blobAttachments, blobs } from '@/modules/blob/blob.schema'
+import type { MomentCommentEntry } from '@/modules/moment/comment.types'
+import type { moments } from '@/modules/moment/moment.schema'
 import type {
   MomentAttachmentEntry,
   MomentBlobEntry,
   MomentEntry,
-} from "@/modules/moment/moment.types";
+  MomentLocation,
+} from '@/modules/moment/moment.types'
+import type { TagEntry } from '@/modules/tag/tag.types'
 
 // ---------------------------------------------------------------------------
 // Moment mappers — row → entry conversion and attachment grouping/sorting.
@@ -15,9 +15,9 @@ import type {
 // ---------------------------------------------------------------------------
 
 export type MomentAttachmentJoinRow = {
-  attachment: typeof blobAttachments.$inferSelect;
-  blob: typeof blobs.$inferSelect;
-};
+  attachment: typeof blobAttachments.$inferSelect
+  blob: typeof blobs.$inferSelect
+}
 
 export function toMomentBlobEntry(row: typeof blobs.$inferSelect): MomentBlobEntry {
   return {
@@ -31,7 +31,7 @@ export function toMomentBlobEntry(row: typeof blobs.$inferSelect): MomentBlobEnt
     duration: row.duration,
     createdAt: row.createdAt.toISOString(),
     fileUrl: `/api/blobs/${row.id}/file`,
-  };
+  }
 }
 
 export function toMomentAttachmentEntry({
@@ -48,40 +48,38 @@ export function toMomentAttachmentEntry({
     createdAt: attachment.createdAt.toISOString(),
     updatedAt: attachment.updatedAt.toISOString(),
     blob: toMomentBlobEntry(blob),
-  };
+  }
 }
 
 /** Sort a copy of the attachments by (sortOrder, createdAt, id) — never mutates. */
-export function sortAttachments(
-  attachments: MomentAttachmentEntry[],
-): MomentAttachmentEntry[] {
+export function sortAttachments(attachments: MomentAttachmentEntry[]): MomentAttachmentEntry[] {
   return [...attachments].sort((a, b) => {
-    const order = a.sortOrder - b.sortOrder;
-    if (order !== 0) return order;
-    const created = a.createdAt.localeCompare(b.createdAt);
-    if (created !== 0) return created;
-    return a.id.localeCompare(b.id);
-  });
+    const order = a.sortOrder - b.sortOrder
+    if (order !== 0) return order
+    const created = a.createdAt.localeCompare(b.createdAt)
+    if (created !== 0) return created
+    return a.id.localeCompare(b.id)
+  })
 }
 
 /** Group join rows by owner moment id, sorting each group. */
 export function groupAttachmentsByMomentId(
   rows: MomentAttachmentJoinRow[],
 ): Map<string, MomentAttachmentEntry[]> {
-  const grouped = new Map<string, MomentAttachmentEntry[]>();
+  const grouped = new Map<string, MomentAttachmentEntry[]>()
 
   for (const row of rows) {
-    const ownerId = row.attachment.ownerId;
-    const group = grouped.get(ownerId) ?? [];
-    group.push(toMomentAttachmentEntry(row));
-    grouped.set(ownerId, group);
+    const ownerId = row.attachment.ownerId
+    const group = grouped.get(ownerId) ?? []
+    group.push(toMomentAttachmentEntry(row))
+    grouped.set(ownerId, group)
   }
 
   for (const [ownerId, attachments] of grouped) {
-    grouped.set(ownerId, sortAttachments(attachments));
+    grouped.set(ownerId, sortAttachments(attachments))
   }
 
-  return grouped;
+  return grouped
 }
 
 export function toMomentEntry(
@@ -101,5 +99,5 @@ export function toMomentEntry(
     tags,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-  };
+  }
 }

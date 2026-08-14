@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { useCreateMomentWithMedia } from '@/features/moment/queries'
-import { momentCreateSchema, type MomentCreateFormValues } from '@/features/moment/schemas'
+import { formatLocationLabel } from '@/features/location/format'
+import { useLocationConfig } from '@/features/location/queries'
+import type { MomentLocation } from '@/features/moment/api'
 import { MomentCreateAttachmentGrid } from '@/features/moment/components/moment-create-attachment-grid'
 import { MomentLocationPicker } from '@/features/moment/components/moment-location-picker'
-import { useLocationConfig } from '@/features/location/queries'
-import { formatLocationLabel } from '@/features/location/format'
-import type { MomentLocation } from '@/features/moment/api'
+import { useCreateMomentWithMedia } from '@/features/moment/queries'
+import { type MomentCreateFormValues, momentCreateSchema } from '@/features/moment/schemas'
 import { useMomentDraftStore } from '@/stores/moment-draft'
 import type { MediaFile } from '@/types/media'
 
@@ -40,6 +40,7 @@ export default function MomentCreatePage() {
     textareaRef.current?.focus()
   }, [])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 意图性依赖——输入变化时自适应高度
   useEffect(() => {
     const el = textareaRef.current
     if (!el) return

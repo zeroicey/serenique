@@ -4,16 +4,16 @@
 // 编程助手提示词，所以本函数必须总是返回字符串。自定义提示词下 SDK 不再注入
 // "Available tools" 段，工具用法需在此说明（工具 schema 本身仍由 LLM
 // function-calling 传入，见 ai.tools.ts 的 buildAiTools()）。
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 /** 构建 AI 助手系统提示词；now 为「当前时刻」，日期与相对时间据此推算。 */
 export function buildSystemPrompt(now: Date): string {
   const dateStr = [
     now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-  const weekday = WEEKDAYS[now.getDay()];
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-')
+  const weekday = WEEKDAYS[now.getDay()]
 
   return `你是「宁序」，Serenique 的个人生活助手。你帮用户管理任务、日程（事件）和闪念。
 
@@ -39,5 +39,5 @@ export function buildSystemPrompt(now: Date): string {
 4. 操作完成用一句中文确认结果（创建了什么/改了什么）。
 5. 用户闲聊时正常对话，不调用工具。
 6. 每次只做用户要求的事，不做多余操作。
-7. 回复一律用简体中文。`;
+7. 回复一律用简体中文。`
 }

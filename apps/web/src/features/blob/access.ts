@@ -1,4 +1,4 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import { type UseQueryResult, useQuery } from '@tanstack/react-query'
 import { api, apiUrl, resolveApiPath } from '@/api/client'
 import { unwrap } from '@/api/unwrap'
 
@@ -19,9 +19,7 @@ export async function createBlobAccessLink(blobId: string): Promise<string> {
   return resolveApiPath(link.path)
 }
 
-export function useBlobAccessUrls(
-  blobIds: string[],
-): UseQueryResult<Record<string, string>> {
+export function useBlobAccessUrls(blobIds: string[]): UseQueryResult<Record<string, string>> {
   return useQuery({
     queryKey: ['blob-access-urls', blobIds],
     queryFn: async () => {

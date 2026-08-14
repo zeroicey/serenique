@@ -1,11 +1,11 @@
-import type { Context, Next } from "hono";
-import { auditService } from "@/modules/audit/audit.service";
-import { tokenService } from "@/modules/tokens/token.service";
-import { clientIp } from "@/shared/ip";
-import { Res } from "@/shared/response";
-import { AppError, ErrorCode } from "@/shared/errors";
-import { SESSION_COOKIE_NAME } from "./auth.domain";
-import { authService } from "./auth.service";
+import type { Context, Next } from 'hono'
+import { auditService } from '@/modules/audit/audit.service'
+import { tokenService } from '@/modules/tokens/token.service'
+import { AppError, ErrorCode } from '@/shared/errors'
+import { clientIp } from '@/shared/ip'
+import { Res } from '@/shared/response'
+import { SESSION_COOKIE_NAME } from './auth.domain'
+import { authService } from './auth.service'
 
 // ---------------------------------------------------------------------------
 // Auth middleware — the gate for every /api/* route.
@@ -17,42 +17,42 @@ import { authService } from "./auth.service";
 // 自行校验）。dev 未配置 WEBAUTHN_RP_ID 时整体跳过（本地零摩擦）。
 // ---------------------------------------------------------------------------
 
-const BLOB_FILE_ROUTE = /^\/api\/blobs\/[^/]+\/file$/;
+const BLOB_FILE_ROUTE = /^\/api\/blobs\/[^/]+\/file$/
 
 // 无需认证即可到达的路径（ceremony 本身由 service 层门禁把关）。
 const PUBLIC_ROUTES = new Set([
-  "/api/auth/register/start",
-  "/api/auth/register/finish",
-  "/api/auth/login/start",
-  "/api/auth/login/finish",
-  "/api/auth/logout",
-]);
+  '/api/auth/register/start',
+  '/api/auth/register/finish',
+  '/api/auth/login/start',
+  '/api/auth/login/finish',
+  '/api/auth/logout',
+])
 
 export type AuthVars = {
-  userId: string | null; // 会话身份才携带；token 身份为 null
-  authSource: "session" | "token" | null;
-  tokenId: string | null;
-};
+  userId: string | null // 会话身份才携带；token 身份为 null
+  authSource: 'session' | 'token' | null
+  tokenId: string | null
+}
 
-const EMPTY_AUTH: AuthVars = { userId: null, authSource: null, tokenId: null };
+const EMPTY_AUTH: AuthVars = { userId: null, authSource: null, tokenId: null }
 
 /** 读取中间件写入的认证信息（c.set("auth", ...)）。 */
 export function getAuthVars(c: Context): AuthVars {
-  return (c.get("auth") ?? EMPTY_AUTH) as AuthVars;
+  return (c.get('auth') ?? EMPTY_AUTH) as AuthVars
 }
 
 /** 需要「用户身份」的端点（users/me、凭证管理）必须走会话登录。 */
 export function requireSessionUser(c: Context): string {
-  const { userId } = getAuthVars(c);
+  const { userId } = getAuthVars(c)
   if (!userId) {
-    throw new AppError(ErrorCode.UNAUTHORIZED, "请先登录后再操作", 401);
+    throw new AppError(ErrorCode.UNAUTHORIZED, '请先登录后再操作', 401)
   }
-  return userId;
+  return userId
 }
 
 function isSignedBlobLink(c: Context): boolean {
-  const q = c.req.query();
-  return BLOB_FILE_ROUTE.test(c.req.path) && Boolean(q.expires && q.signature);
+  const q = c.req.query()
+  return BLOB_FILE_ROUTE.test(c.req.path) && Boolean(q.expires && q.signature)
 }
 
 /**
@@ -61,41 +61,41 @@ function isSignedBlobLink(c: Context): boolean {
  * 需要拿到 userId；但无凭据时照常放行（门禁在 service 层）。
  */
 async function resolveAuth(c: Context): Promise<AuthVars | null> {
-  const header = c.req.header("Authorization");
-  if (header && header.startsWith("Bearer ")) {
-    const token = header.slice("Bearer ".length).trim();
+  const header = c.req.header('Authorization')
+  if (header?.startsWith('Bearer ')) {
+    const token = header.slice('Bearer '.length).trim()
     if (token) {
-      const row = await tokenService.verify(token);
+      const row = await tokenService.verify(token)
       if (row) {
-        return { userId: null, authSource: "token", tokenId: row.id };
+        return { userId: null, authSource: 'token', tokenId: row.id }
       }
     }
-    return null;
+    return null
   }
 
-  const rawCookie = c.req.header("Cookie") ?? "";
-  const m = rawCookie.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]*)`));
-  const value = m?.[1];
+  const rawCookie = c.req.header('Cookie') ?? ''
+  const m = rawCookie.match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]*)`))
+  const value = m?.[1]
   if (value) {
-    const result = authService.verifySessionCookie(value);
+    const result = authService.verifySessionCookie(value)
     if (result.valid) {
-      return { userId: result.userId, authSource: "session", tokenId: null };
+      return { userId: result.userId, authSource: 'session', tokenId: null }
     }
   }
-  return null;
+  return null
 }
 
 export async function authMiddleware(c: Context, next: Next) {
-  if (!authService.isAuthEnabled()) return next();
+  if (!authService.isAuthEnabled()) return next()
 
-  const isPublic = PUBLIC_ROUTES.has(c.req.path) || isSignedBlobLink(c);
-  const vars = await resolveAuth(c);
-  if (vars) c.set("auth", vars);
-  if (isPublic) return next();
+  const isPublic = PUBLIC_ROUTES.has(c.req.path) || isSignedBlobLink(c)
+  const vars = await resolveAuth(c)
+  if (vars) c.set('auth', vars)
+  if (isPublic) return next()
 
   if (!vars) {
-    auditService.recordUnauthorized(clientIp(c));
-    return Res.unauthorized("未认证或登录已过期").build(c);
+    auditService.recordUnauthorized(clientIp(c))
+    return Res.unauthorized('未认证或登录已过期').build(c)
   }
-  return next();
+  return next()
 }

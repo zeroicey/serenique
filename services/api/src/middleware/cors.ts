@@ -1,4 +1,4 @@
-import { cors as honoCors } from "hono/cors";
+import { cors as honoCors } from 'hono/cors'
 
 // ---------------------------------------------------------------------------
 // CORS middleware — allow all origins in development, configure in production.
@@ -7,12 +7,12 @@ import { cors as honoCors } from "hono/cors";
 // ---------------------------------------------------------------------------
 
 export function cors() {
-  const origin = process.env.CORS_ORIGIN ?? "*";
+  const origin = process.env.CORS_ORIGIN ?? '*'
   return honoCors({
     origin,
-    credentials: origin !== "*",
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Content-Disposition", "Authorization"],
+    credentials: origin !== '*',
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Content-Disposition', 'Authorization'],
     maxAge: 86400,
-  });
+  })
 }

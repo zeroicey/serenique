@@ -1,4 +1,4 @@
-import type { LocationItem } from "@/modules/location/location.types";
+import type { LocationItem } from '@/modules/location/location.types'
 
 // ---------------------------------------------------------------------------
 // Location mappers — AMAP Web 服务响应 → LocationItem[]（纯函数）。
@@ -9,70 +9,75 @@ import type { LocationItem } from "@/modules/location/location.types";
 // ---------------------------------------------------------------------------
 
 export type AmapBaseResponse = {
-  status?: string;
-  info?: string;
-  infocode?: string;
-};
+  status?: string
+  info?: string
+  infocode?: string
+}
 
 export type AmapAroundPoi = {
-  name?: string;
-  location?: string;
-  address?: string;
-  distance?: string;
-};
+  name?: string
+  location?: string
+  address?: string
+  distance?: string
+}
 
-export type AmapAroundResponse = AmapBaseResponse & { pois?: AmapAroundPoi[] };
+export type AmapAroundResponse = AmapBaseResponse & { pois?: AmapAroundPoi[] }
 
 export type AmapTip = {
-  name?: string;
-  location?: string;
-  address?: string;
-};
+  name?: string
+  location?: string
+  address?: string
+}
 
-export type AmapInputtipsResponse = AmapBaseResponse & { tips?: AmapTip[] };
+export type AmapInputtipsResponse = AmapBaseResponse & { tips?: AmapTip[] }
 
 /** 解析高德 "lng,lat" 坐标字符串；缺失或非法返回 null。 */
 export function parseAmapLocation(
   location: string | undefined,
 ): { lng: number; lat: number } | null {
-  if (!location) return null;
-  const [lngStr, latStr] = location.split(",");
-  const lng = Number(lngStr);
-  const lat = Number(latStr);
-  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
-  return { lng, lat };
+  if (!location) return null
+  const [lngStr, latStr] = location.split(',')
+  const lng = Number(lngStr)
+  const lat = Number(latStr)
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null
+  return { lng, lat }
 }
 
-function toItem(name: string | undefined, coord: { lng: number; lat: number }, address?: string, distance?: string): LocationItem {
+function toItem(
+  name: string | undefined,
+  coord: { lng: number; lat: number },
+  address?: string,
+  distance?: string,
+): LocationItem {
   const item: LocationItem = {
-    name: name ?? "",
+    name: name ?? '',
     latitude: coord.lat,
     longitude: coord.lng,
-  };
-  if (address) item.address = address;
-  const d = Number(distance);
-  if (Number.isFinite(d)) item.distance = d;
-  return item;
+  }
+  if (address) item.address = address
+  const d = Number(distance)
+  if (Number.isFinite(d)) item.distance = d
+  return item
 }
 
 /** place/around 响应：pois[] → items（distance 转 number）。 */
 export function mapAroundResponse(body: AmapAroundResponse): LocationItem[] {
-  const items: LocationItem[] = [];
+  const items: LocationItem[] = []
   for (const poi of body.pois ?? []) {
-    const coord = parseAmapLocation(poi.location);
-    if (!coord) continue;
-    items.push(toItem(poi.name, coord, poi.address, poi.distance));
+    const coord = parseAmapLocation(poi.location)
+    if (!coord) continue
+    items.push(toItem(poi.name, coord, poi.address, poi.distance))
   }
-  return items;
+  return items
 }
 
 /** inputtips 响应：tips[] → items。 */
 export function mapInputtipsResponse(body: AmapInputtipsResponse): LocationItem[] {
-  const items: LocationItem[] = [];
+  const items: LocationItem[] = []
   for (const tip of body.tips ?? []) {
-    const coord = parseAmapLocation(tip.location);
-    if (!coord) continue;
-    items.push(toItem(tip.name, coord, tip.address));
+    const coord = parseAmapLocation(tip.location)
+    if (!coord) continue
+    items.push(toItem(tip.name, coord, tip.address))
   }
-  return items;
+  return items
 }

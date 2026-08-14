@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { EventItem } from './event-item'
 import type { EventEntry } from '@/features/event/api'
+import { EventItem } from './event-item'
 
 const { deleteEvent, openEdit } = vi.hoisted(() => ({
   deleteEvent: vi.fn(),

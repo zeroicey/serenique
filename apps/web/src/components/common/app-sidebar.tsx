@@ -2,14 +2,16 @@ import {
   CalendarDays,
   CheckCircle2,
   Images,
+  type LucideIcon,
   Repeat,
   ScrollText,
   Settings,
   Sparkles,
   Zap,
-  type LucideIcon,
 } from 'lucide-react'
 import { NavLink } from 'react-router'
+import { useSidebarCounts } from '@/app/layout/use-sidebar-counts'
+import { Separator } from '@/components/ui/separator'
 import {
   Sidebar,
   SidebarContent,
@@ -21,8 +23,6 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from '@/components/ui/sidebar'
-import { Separator } from '@/components/ui/separator'
-import { useSidebarCounts } from '@/app/layout/use-sidebar-counts'
 import { useAuditUnreadCount } from '@/features/audit/queries'
 
 // 全局侧边栏：品牌区 + 模块导航 + 底部设置入口。新增模块在 NAV_ITEMS 追加一项。

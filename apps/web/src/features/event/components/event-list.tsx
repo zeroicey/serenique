@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { todayLocal } from '@/lib/date'
 import { useEvents } from '@/features/event/queries'
+import { todayLocal } from '@/lib/date'
 import { useEventUIStore } from '@/stores/event-ui'
 import { EventItem } from './event-item'
 

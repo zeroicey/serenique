@@ -23,6 +23,9 @@ export const onRequest = async (context: {
   // index.html 不缓存：保证部署后用户刷新即拿到最新 HTML（引用最新 chunk）。
   return new Response(resp.body, {
     status: resp.status,
-    headers: { 'Content-Type': resp.headers.get('content-type') ?? 'text/html', 'Cache-Control': 'no-store' },
+    headers: {
+      'Content-Type': resp.headers.get('content-type') ?? 'text/html',
+      'Cache-Control': 'no-store',
+    },
   })
 }

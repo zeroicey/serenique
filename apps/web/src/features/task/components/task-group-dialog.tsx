@@ -12,9 +12,9 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCreateTaskGroup, useUpdateTaskGroup } from '@/features/task/queries'
-import { taskGroupFormSchema, type TaskGroupFormValues } from '@/features/task/schemas'
 import type { TaskGroupEntry } from '@/features/task/api'
+import { useCreateTaskGroup, useUpdateTaskGroup } from '@/features/task/queries'
+import { type TaskGroupFormValues, taskGroupFormSchema } from '@/features/task/schemas'
 
 // 新建 / 重命名任务组合一：mode 区分，group 仅重命名时传入。提交走对应 mutation。
 interface TaskGroupDialogProps {

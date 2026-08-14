@@ -1,6 +1,10 @@
-import { browserSupportsWebAuthn, startAuthentication, startRegistration } from '@simplewebauthn/browser'
+import {
+  browserSupportsWebAuthn,
+  startAuthentication,
+  startRegistration,
+} from '@simplewebauthn/browser'
 import { ApiError, toDisplayError } from '@/api/errors'
-import { loginFinish, loginStart, registerFinish, registerStart, type AuthStatus } from './api'
+import { type AuthStatus, loginFinish, loginStart, registerFinish, registerStart } from './api'
 
 // WebAuthn ceremony 客户端：API start 段 → 浏览器通行密钥弹窗 → API finish 段。
 // 全部走 TanStack Query mutations；浏览器/服务端错误统一翻译为中文文案。
@@ -47,9 +51,7 @@ export async function loginWithPasskey(): Promise<AuthStatus> {
  * 注册（决策⑨：引导期 /setup 页带 setupToken；登录态添加设备不带）。
  * register/start → 系统 Passkey 弹窗 → register/finish（成功即自动登录）。
  */
-export async function registerWithPasskey(input: {
-  setupToken?: string
-}): Promise<AuthStatus> {
+export async function registerWithPasskey(input: { setupToken?: string }): Promise<AuthStatus> {
   try {
     const start = await registerStart(input)
     const credential = await startRegistration({ optionsJSON: start.options })

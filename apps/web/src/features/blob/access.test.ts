@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api } from '@/api/client'
-import { resolveApiPath } from '@/api/client'
+import { api, resolveApiPath } from '@/api/client'
 import { createBlobAccessLink } from './access'
 
 vi.mock('@/api/client', () => ({

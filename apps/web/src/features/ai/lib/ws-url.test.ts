@@ -11,7 +11,7 @@ describe('apiWsUrl', () => {
   })
 
   it('未配置 apiBaseUrl 时从当前 origin 派生 ws 地址', () => {
-    expect(apiWsUrl()).toBe(window.location.origin.replace(/^http/, 'ws') + '/api/ai/ws')
+    expect(apiWsUrl()).toBe(`${window.location.origin.replace(/^http/, 'ws')}/api/ai/ws`)
   })
 
   it('http apiBaseUrl → ws，且作为唯一 origin 来源', () => {

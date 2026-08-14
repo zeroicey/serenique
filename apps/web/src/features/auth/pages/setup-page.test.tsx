@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/errors'
-import SetupPage from './setup-page'
 import { useSetupRegister } from '../queries'
+import SetupPage from './setup-page'
 
 // mock 掉 setup mutation，页面只测：token 门控、创建流程、403/401/浏览器错误分支。
 vi.mock('../queries', () => ({

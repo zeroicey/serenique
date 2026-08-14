@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
 // Event module — request/response types.
@@ -19,7 +19,7 @@ export const CreateEventSchema = z.object({
   isAllDay: z.boolean().default(false),
   location: z.string().trim().optional(),
   note: z.string().trim().optional(),
-});
+})
 
 export const UpdateEventSchema = z
   .object({
@@ -38,35 +38,35 @@ export const UpdateEventSchema = z
       v.isAllDay !== undefined ||
       v.location !== undefined ||
       v.note !== undefined,
-    "至少需要提供一个待更新字段",
-  );
+    '至少需要提供一个待更新字段',
+  )
 
 // List is a time-range query (no pagination), matching the reference API:
 // ?from=<ISO>&to=<ISO> returns events overlapping [from, to).
 export const ListEventSchema = z.object({
   from: z.iso.datetime({ offset: true }),
   to: z.iso.datetime({ offset: true }),
-});
+})
 
 // ---- Input types (service layer) ------------------------------------------
 // z.input keeps defaulted fields optional so MCP can pass bare objects.
 
-export type CreateEventInput = z.input<typeof CreateEventSchema>;
-export type UpdateEventInput = { id: string } & z.input<typeof UpdateEventSchema>;
-export type ListEventInput = z.infer<typeof ListEventSchema>;
-export type GetEventInput = { id: string };
-export type DeleteEventInput = { id: string };
+export type CreateEventInput = z.input<typeof CreateEventSchema>
+export type UpdateEventInput = { id: string } & z.input<typeof UpdateEventSchema>
+export type ListEventInput = z.infer<typeof ListEventSchema>
+export type GetEventInput = { id: string }
+export type DeleteEventInput = { id: string }
 
 // ---- Entry types (response layer) — times are ISO strings -----------------
 
 export type EventEntry = {
-  id: string;
-  title: string;
-  startAt: string;
-  endAt: string;
-  isAllDay: boolean;
-  location: string | null;
-  note: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+  id: string
+  title: string
+  startAt: string
+  endAt: string
+  isAllDay: boolean
+  location: string | null
+  note: string | null
+  createdAt: string
+  updatedAt: string
+}

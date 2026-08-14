@@ -1,12 +1,7 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
-import { createBunWebSocket } from "hono/bun";
-import {
-  RUN_DB_TESTS,
-  RUN_TOKEN,
-  setTestEnv,
-  uniqueTitle,
-} from "@/test/helpers";
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { and, desc, eq, inArray, type SQL, sql } from 'drizzle-orm'
+import { createBunWebSocket } from 'hono/bun'
+import { RUN_DB_TESTS, RUN_TOKEN, setTestEnv, uniqueTitle } from '@/test/helpers'
 
 // ---------------------------------------------------------------------------
 // Audit service integration tests — real PostgreSQL (RUN_DB_TESTS=1).
@@ -25,40 +20,37 @@ import {
 // writes login/unauthorized rows), so we never truncate or touch non-ours.
 // ---------------------------------------------------------------------------
 
-setTestEnv();
+setTestEnv()
 
-type AuditRow = typeof import("./audit.schema").auditLogs.$inferSelect;
+type AuditRow = typeof import('./audit.schema').auditLogs.$inferSelect
 
-describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
-  let auditService: typeof import("./audit.service").auditService;
-  let authService: typeof import("@/modules/auth/auth.service").authService;
-  let db: typeof import("@/db/connection").db;
-  let auditLogs: typeof import("./audit.schema").auditLogs;
-  let eventService: typeof import("@/modules/event/event.service").eventService;
-  let taskService: typeof import("@/modules/task/task.service").taskService;
-  let createApp: typeof import("@/app").createApp;
+describe.skipIf(!RUN_DB_TESTS)('audit service DB integration', () => {
+  let auditService: typeof import('./audit.service').auditService
+  let authService: typeof import('@/modules/auth/auth.service').authService
+  let db: typeof import('@/db/connection').db
+  let auditLogs: typeof import('./audit.schema').auditLogs
+  let eventService: typeof import('@/modules/event/event.service').eventService
+  let taskService: typeof import('@/modules/task/task.service').taskService
+  let createApp: typeof import('@/app').createApp
 
-  const createdAuditIds: string[] = [];
+  const createdAuditIds: string[] = []
 
   function track(row: { id: string } | undefined): void {
-    if (row) createdAuditIds.push(row.id);
+    if (row) createdAuditIds.push(row.id)
   }
 
   /** Poll the DB until rows matching `where` appear (fire-and-forget writes). */
-  async function waitForAuditRows(
-    where: SQL | undefined,
-    timeoutMs = 3000,
-  ): Promise<AuditRow[]> {
-    const deadline = Date.now() + timeoutMs;
-    let rows: AuditRow[] = [];
+  async function waitForAuditRows(where: SQL | undefined, timeoutMs = 3000): Promise<AuditRow[]> {
+    const deadline = Date.now() + timeoutMs
+    let rows: AuditRow[] = []
     do {
       rows = where
         ? await db.select().from(auditLogs).where(where).limit(20)
-        : await db.select().from(auditLogs).limit(20);
-      if (rows.length > 0) return rows;
-      await Bun.sleep(40);
-    } while (Date.now() < deadline);
-    return rows;
+        : await db.select().from(auditLogs).limit(20)
+      if (rows.length > 0) return rows
+      await Bun.sleep(40)
+    } while (Date.now() < deadline)
+    return rows
   }
 
   function makeApp() {
@@ -70,234 +62,248 @@ describe.skipIf(!RUN_DB_TESTS)("audit service DB integration", () => {
         BLOB_SIGNING_SECRET: process.env.BLOB_SIGNING_SECRET!,
         SESSION_SECRET: process.env.SESSION_SECRET!,
         SETUP_TOKEN: process.env.SETUP_TOKEN!,
-        WEBAUTHN_RP_ID: "localhost",
-        WEBAUTHN_RP_NAME: "Serenique",
-        WEBAUTHN_ORIGINS: ["http://localhost:5173", "http://localhost:3000"],
+        WEBAUTHN_RP_ID: 'localhost',
+        WEBAUTHN_RP_NAME: 'Serenique',
+        WEBAUTHN_ORIGINS: ['http://localhost:5173', 'http://localhost:3000'],
         PORT: 3000,
-        NODE_ENV: "test",
+        NODE_ENV: 'test',
       },
       { upgradeWebSocket: createBunWebSocket().upgradeWebSocket },
-    );
+    )
   }
 
   beforeAll(async () => {
-    setTestEnv();
-    auditService = (await import("./audit.service")).auditService;
-    authService = (await import("@/modules/auth/auth.service")).authService;
-    db = (await import("@/db/connection")).db;
-    auditLogs = (await import("./audit.schema")).auditLogs;
-    eventService = (await import("@/modules/event/event.service")).eventService;
-    taskService = (await import("@/modules/task/task.service")).taskService;
-    createApp = (await import("@/app")).createApp;
-  });
+    setTestEnv()
+    auditService = (await import('./audit.service')).auditService
+    authService = (await import('@/modules/auth/auth.service')).authService
+    db = (await import('@/db/connection')).db
+    auditLogs = (await import('./audit.schema')).auditLogs
+    eventService = (await import('@/modules/event/event.service')).eventService
+    taskService = (await import('@/modules/task/task.service')).taskService
+    createApp = (await import('@/app')).createApp
+  })
 
   afterAll(async () => {
-    if (!RUN_DB_TESTS || createdAuditIds.length === 0) return;
-    await db
-      .delete(auditLogs)
-      .where(inArray(auditLogs.id, createdAuditIds));
-  });
+    if (!RUN_DB_TESTS || createdAuditIds.length === 0) return
+    await db.delete(auditLogs).where(inArray(auditLogs.id, createdAuditIds))
+  })
 
   // ---- read chain: record → list → unread-count → mark-read ---------------
 
-  test("record → list → unread-count → mark-read (all)", async () => {
+  test('record → list → unread-count → mark-read (all)', async () => {
     await auditService.record({
-      event: "auth.logout",
-      message: "退出登录",
-      level: "info",
+      event: 'auth.logout',
+      message: '退出登录',
+      level: 'info',
       detail: { it: RUN_TOKEN },
-    });
+    })
     await auditService.record({
-      event: "moment.delete",
-      message: "闪念已删除",
-      level: "warn",
+      event: 'moment.delete',
+      message: '闪念已删除',
+      level: 'warn',
       detail: { it: RUN_TOKEN, n: 2 },
-    });
+    })
 
     // list sees both, newest-first
-    const listed = await auditService.list({ page: 1, pageSize: 10 });
-    expect(listed.items.length).toBeGreaterThanOrEqual(2);
-    expect(listed.total).toBeGreaterThanOrEqual(2);
-    const tagged = listed.items.filter((e) => (e.detail as { it?: string })?.it === RUN_TOKEN);
-    expect(tagged.length).toBe(2);
-    expect(tagged[0].createdAt >= tagged[1].createdAt).toBe(true);
+    const listed = await auditService.list({ page: 1, pageSize: 10 })
+    expect(listed.items.length).toBeGreaterThanOrEqual(2)
+    expect(listed.total).toBeGreaterThanOrEqual(2)
+    const tagged = listed.items.filter((e) => (e.detail as { it?: string })?.it === RUN_TOKEN)
+    expect(tagged.length).toBe(2)
+    expect(tagged[0].createdAt >= tagged[1].createdAt).toBe(true)
     // 时间已序列化为 ISO 字符串
-    expect(new Date(tagged[0].createdAt).toISOString()).toBe(tagged[0].createdAt);
+    expect(new Date(tagged[0].createdAt).toISOString()).toBe(tagged[0].createdAt)
 
     // unread-count covers our fresh rows
-    const unread = await auditService.unreadCount();
-    expect(unread).toBeGreaterThanOrEqual(2);
+    const unread = await auditService.unreadCount()
+    expect(unread).toBeGreaterThanOrEqual(2)
 
     // mark all → our rows become read; unread-count drops (may be >0 only if a
     // concurrent file wrote after our mark, so assert on our own rows precisely)
-    const markAll = await auditService.markRead({});
-    expect(markAll.updatedCount).toBeGreaterThanOrEqual(2);
+    const markAll = await auditService.markRead({})
+    expect(markAll.updatedCount).toBeGreaterThanOrEqual(2)
     const afterAll = await db
       .select({ isRead: auditLogs.isRead })
       .from(auditLogs)
-      .where(
-        sql`${auditLogs.detail}->>'it' = ${RUN_TOKEN} AND ${auditLogs.isRead} = false`,
-      );
-    expect(afterAll.length).toBe(0);
+      .where(sql`${auditLogs.detail}->>'it' = ${RUN_TOKEN} AND ${auditLogs.isRead} = false`)
+    expect(afterAll.length).toBe(0)
     for (const r of await db
       .select()
       .from(auditLogs)
       .where(sql`${auditLogs.detail}->>'it' = ${RUN_TOKEN}`)) {
-      track(r);
+      track(r)
     }
-  });
+  })
 
-  test("mark-read with ids marks exactly those rows", async () => {
+  test('mark-read with ids marks exactly those rows', async () => {
     await auditService.record({
-      event: "blob.upload",
-      message: "文件上传成功",
-      level: "info",
+      event: 'blob.upload',
+      message: '文件上传成功',
+      level: 'info',
       detail: { it: RUN_TOKEN, ids: true },
-    });
+    })
     await auditService.record({
-      event: "blob.delete",
-      message: "文件已删除",
-      level: "warn",
+      event: 'blob.delete',
+      message: '文件已删除',
+      level: 'warn',
       detail: { it: RUN_TOKEN, ids: true },
-    });
+    })
     const rows = await db
       .select()
       .from(auditLogs)
-      .where(sql`${auditLogs.detail}->>'it' = ${RUN_TOKEN} AND ${auditLogs.detail}->>'ids' = 'true'`)
-      .orderBy(desc(auditLogs.createdAt));
-    expect(rows.length).toBe(2);
-    for (const r of rows) track(r);
+      .where(
+        sql`${auditLogs.detail}->>'it' = ${RUN_TOKEN} AND ${auditLogs.detail}->>'ids' = 'true'`,
+      )
+      .orderBy(desc(auditLogs.createdAt))
+    expect(rows.length).toBe(2)
+    for (const r of rows) track(r)
 
-    const [first] = rows;
-    const res = await auditService.markRead({ ids: [first.id] });
-    expect(res.updatedCount).toBe(1);
+    const [first] = rows
+    const res = await auditService.markRead({ ids: [first.id] })
+    expect(res.updatedCount).toBe(1)
 
-    const [afterMark] = await db
+    const [_afterMark] = await db
       .select()
       .from(auditLogs)
-      .where(inArray(auditLogs.id, rows.map((r) => r.id)))
-      .orderBy(desc(auditLogs.createdAt));
-    const byId = new Map(rows.map((r) => [r.id, r]));
+      .where(
+        inArray(
+          auditLogs.id,
+          rows.map((r) => r.id),
+        ),
+      )
+      .orderBy(desc(auditLogs.createdAt))
+    const byId = new Map(rows.map((r) => [r.id, r]))
     const reads = await db
       .select({ id: auditLogs.id, isRead: auditLogs.isRead })
       .from(auditLogs)
-      .where(inArray(auditLogs.id, rows.map((r) => r.id)));
-    const readMap = new Map(reads.map((r) => [r.id, r.isRead]));
-    expect(readMap.get(first.id)).toBe(true);
-    expect(readMap.get(byId.get(rows[1].id)!.id)).toBe(false);
-  });
+      .where(
+        inArray(
+          auditLogs.id,
+          rows.map((r) => r.id),
+        ),
+      )
+    const readMap = new Map(reads.map((r) => [r.id, r.isRead]))
+    expect(readMap.get(first.id)).toBe(true)
+    expect(readMap.get(byId.get(rows[1].id)!.id)).toBe(false)
+  })
 
-  test("list unreadOnly=true returns only unread rows", async () => {
+  test('list unreadOnly=true returns only unread rows', async () => {
     await auditService.record({
-      event: "task.delete",
-      message: "任务已删除",
-      level: "warn",
+      event: 'task.delete',
+      message: '任务已删除',
+      level: 'warn',
       detail: { it: RUN_TOKEN, unreadOnly: true },
-    });
+    })
     const [row] = await waitForAuditRows(
       sql`${auditLogs.detail}->>'it' = ${RUN_TOKEN} AND ${auditLogs.detail}->>'unreadOnly' = 'true'`,
-    );
-    expect(row).toBeDefined();
-    track(row);
+    )
+    expect(row).toBeDefined()
+    track(row)
 
     const unreadList = await auditService.list({
       page: 1,
       pageSize: 50,
       unreadOnly: true,
-    });
-    expect(unreadList.items.every((e) => e.isRead === false)).toBe(true);
-    expect(unreadList.items.some((e) => e.id === row.id)).toBe(true);
-  });
+    })
+    expect(unreadList.items.every((e) => e.isRead === false)).toBe(true)
+    expect(unreadList.items.some((e) => e.id === row.id)).toBe(true)
+  })
 
   // ---- write-point hooks ---------------------------------------------------
 
-  test("auth login failure writes audit rows (service 层触发，无需用户)", async () => {
+  test('auth login failure writes audit rows (service 层触发，无需用户)', async () => {
     // 用未知凭证 id 走完 login/start → finish：凭证不存在 → rejected → 审计。
     // （登录成功 / 注册 / token 写点由 auth 集成测试的真实 ceremony 覆盖。）
-    const ipBad = `it-${RUN_TOKEN}-login-bad`;
-    const { challengeId } = await authService.loginStart();
+    const ipBad = `it-${RUN_TOKEN}-login-bad`
+    const { challengeId } = await authService.loginStart()
     const outcome = await authService.loginFinish(
       {
         challengeId,
-        origin: "http://localhost:5173",
+        origin: 'http://localhost:5173',
         ip: ipBad,
         credential: {
-          id: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          rawId: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-          type: "public-key",
-          response: { clientDataJSON: "e30=", authenticatorData: "e30=", signature: "e30=" },
+          id: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          rawId: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          type: 'public-key',
+          response: { clientDataJSON: 'e30=', authenticatorData: 'e30=', signature: 'e30=' },
           clientExtensionResults: {},
         },
       },
       0, // delayMs=0：测试不等真实节流延迟
-    );
-    expect(outcome.status).toBe("rejected");
+    )
+    expect(outcome.status).toBe('rejected')
 
     const badRows = await waitForAuditRows(
-      and(eq(auditLogs.event, "auth.login_failed"), eq(auditLogs.ip, ipBad)),
-    );
-    expect(badRows.length).toBe(1);
-    expect(badRows[0].level).toBe("warn");
-    track(badRows[0]);
-  });
+      and(eq(auditLogs.event, 'auth.login_failed'), eq(auditLogs.ip, ipBad)),
+    )
+    expect(badRows.length).toBe(1)
+    expect(badRows[0].level).toBe('warn')
+    track(badRows[0])
+  })
 
-  test("auth.unauthorized is deduped per-IP within the window", async () => {
-    const app = makeApp();
-    const ipA = `it-${RUN_TOKEN}-unauth-a`;
-    const ipB = `it-${RUN_TOKEN}-unauth-b`;
+  test('auth.unauthorized is deduped per-IP within the window', async () => {
+    const app = makeApp()
+    const ipA = `it-${RUN_TOKEN}-unauth-a`
+    const ipB = `it-${RUN_TOKEN}-unauth-b`
 
     // 同一 IP 两次 401 → 只写一条
-    expect((await app.request("/api/moments", { headers: { "cf-connecting-ip": ipA } })).status).toBe(401);
-    expect((await app.request("/api/moments", { headers: { "cf-connecting-ip": ipA } })).status).toBe(401);
+    expect(
+      (await app.request('/api/moments', { headers: { 'cf-connecting-ip': ipA } })).status,
+    ).toBe(401)
+    expect(
+      (await app.request('/api/moments', { headers: { 'cf-connecting-ip': ipA } })).status,
+    ).toBe(401)
     const rowsA = await waitForAuditRows(
-      and(eq(auditLogs.event, "auth.unauthorized"), eq(auditLogs.ip, ipA)),
-    );
-    expect(rowsA.length).toBe(1);
-    expect(rowsA[0].level).toBe("warn");
-    track(rowsA[0]);
+      and(eq(auditLogs.event, 'auth.unauthorized'), eq(auditLogs.ip, ipA)),
+    )
+    expect(rowsA.length).toBe(1)
+    expect(rowsA[0].level).toBe('warn')
+    track(rowsA[0])
 
     // 不同 IP → 再写一条
-    expect((await app.request("/api/moments", { headers: { "cf-connecting-ip": ipB } })).status).toBe(401);
+    expect(
+      (await app.request('/api/moments', { headers: { 'cf-connecting-ip': ipB } })).status,
+    ).toBe(401)
     const rowsB = await waitForAuditRows(
-      and(eq(auditLogs.event, "auth.unauthorized"), eq(auditLogs.ip, ipB)),
-    );
-    expect(rowsB.length).toBe(1);
-    track(rowsB[0]);
-  });
+      and(eq(auditLogs.event, 'auth.unauthorized'), eq(auditLogs.ip, ipB)),
+    )
+    expect(rowsB.length).toBe(1)
+    track(rowsB[0])
+  })
 
-  test("business delete hooks write audit rows", async () => {
+  test('business delete hooks write audit rows', async () => {
     // event.delete
     const ev = await eventService.create({
-      title: uniqueTitle("audit-ev"),
-      startAt: "2026-08-08T09:00:00.000Z",
-      endAt: "2026-08-08T10:00:00.000Z",
-    });
-    await eventService.delete({ id: ev.id });
+      title: uniqueTitle('audit-ev'),
+      startAt: '2026-08-08T09:00:00.000Z',
+      endAt: '2026-08-08T10:00:00.000Z',
+    })
+    await eventService.delete({ id: ev.id })
     const evRows = await waitForAuditRows(
       sql`${auditLogs.event} = 'event.delete' AND ${auditLogs.detail}->>'id' = ${ev.id}`,
-    );
-    expect(evRows.length).toBe(1);
-    expect(evRows[0].level).toBe("warn");
-    track(evRows[0]);
+    )
+    expect(evRows.length).toBe(1)
+    expect(evRows[0].level).toBe('warn')
+    track(evRows[0])
 
     // task.delete + task_group.delete
-    const group = await taskService.createTaskGroup({ title: uniqueTitle("audit-g") });
+    const group = await taskService.createTaskGroup({ title: uniqueTitle('audit-g') })
     const task = await taskService.createTask({
-      title: uniqueTitle("audit-t"),
+      title: uniqueTitle('audit-t'),
       groupId: group.id,
-    });
-    await taskService.deleteTask({ id: task.id });
+    })
+    await taskService.deleteTask({ id: task.id })
     const taskRows = await waitForAuditRows(
       sql`${auditLogs.event} = 'task.delete' AND ${auditLogs.detail}->>'id' = ${task.id}`,
-    );
-    expect(taskRows.length).toBe(1);
-    track(taskRows[0]);
+    )
+    expect(taskRows.length).toBe(1)
+    track(taskRows[0])
 
-    await taskService.deleteTaskGroup({ id: group.id });
+    await taskService.deleteTaskGroup({ id: group.id })
     const groupRows = await waitForAuditRows(
       sql`${auditLogs.event} = 'task_group.delete' AND ${auditLogs.detail}->>'id' = ${group.id}`,
-    );
-    expect(groupRows.length).toBe(1);
-    track(groupRows[0]);
-  });
-});
+    )
+    expect(groupRows.length).toBe(1)
+    track(groupRows[0])
+  })
+})

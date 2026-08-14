@@ -1,21 +1,16 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai";
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from '@earendil-works/pi-ai'
 import {
   createAgentSession,
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
   SettingsManager,
-} from "@earendil-works/pi-coding-agent";
-import { RUN_DB_TESTS, setTestEnv, uniqueTitle } from "@/test/helpers";
+} from '@earendil-works/pi-coding-agent'
+import { RUN_DB_TESTS, setTestEnv, uniqueTitle } from '@/test/helpers'
 
 // ---------------------------------------------------------------------------
 // AI 助手端到端集成测试 — pi-ai faux provider（本地假模型，预置响应、不发
@@ -46,66 +41,64 @@ import { RUN_DB_TESTS, setTestEnv, uniqueTitle } from "@/test/helpers";
 //   - model 用 faux.getModel()
 // ---------------------------------------------------------------------------
 
-setTestEnv();
+setTestEnv()
 
 /** 预置响应：第一轮 toolCall（create_task），第二轮最终文本。 */
-const TOOL_CALL_TITLE = "AI 集成测试任务";
-const TOOL_CALL_DUE_DATE = "2026-08-10";
+const TOOL_CALL_TITLE = 'AI 集成测试任务'
+const TOOL_CALL_DUE_DATE = '2026-08-10'
 
-describe.skipIf(!RUN_DB_TESTS)("ai.integration", () => {
-  const createdTaskIds: string[] = [];
-  let createdGroupId: string | undefined;
-  let tmpDir: string;
+describe.skipIf(!RUN_DB_TESTS)('ai.integration', () => {
+  const createdTaskIds: string[] = []
+  let createdGroupId: string | undefined
+  let tmpDir: string
 
   beforeAll(async () => {
-    const taskService = (await import("@/modules/task/task.service")).taskService;
+    const taskService = (await import('@/modules/task/task.service')).taskService
     // 保证 resolveGroupId 有组可落：库里没有任务组时先建一个（afterAll 删除），
     // 有则复用首个组（只删任务，不碰既有组）。
-    const groups = await taskService.listTaskGroups({ page: 1, pageSize: 50 });
+    const groups = await taskService.listTaskGroups({ page: 1, pageSize: 50 })
     if (groups.items.length === 0) {
-      createdGroupId = (await taskService.createTaskGroup({ title: uniqueTitle("ai-组") })).id;
+      createdGroupId = (await taskService.createTaskGroup({ title: uniqueTitle('ai-组') })).id
     }
-  });
+  })
 
   afterAll(async () => {
-    if (!RUN_DB_TESTS) return;
-    const taskService = (await import("@/modules/task/task.service")).taskService;
+    if (!RUN_DB_TESTS) return
+    const taskService = (await import('@/modules/task/task.service')).taskService
     for (const id of createdTaskIds) {
-      await taskService.deleteTask({ id }).catch(() => {});
+      await taskService.deleteTask({ id }).catch(() => {})
     }
     if (createdGroupId) {
-      await taskService
-        .deleteTaskGroup({ id: createdGroupId })
-        .catch(() => {});
+      await taskService.deleteTaskGroup({ id: createdGroupId }).catch(() => {})
     }
-    if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
-  });
+    if (tmpDir) rmSync(tmpDir, { recursive: true, force: true })
+  })
 
-  test("faux provider 驱动 agent 调用 create_task 工具落库", async () => {
+  test('faux provider 驱动 agent 调用 create_task 工具落库', async () => {
     // 1. 注册 faux provider：独立 ModelRuntime（不碰 ~/.pi/agent 的
     //    models.json / auth.json，modelsPath: null → 内存 store，不发网络）。
-    const faux = fauxProvider();
+    const faux = fauxProvider()
     const modelRuntime = await ModelRuntime.create({
       modelsPath: null,
       refreshOnCreate: false,
-    });
-    modelRuntime.registerNativeProvider(faux.provider);
+    })
+    modelRuntime.registerNativeProvider(faux.provider)
 
     // 2. 预置响应：先 toolCall，再最终文本（本地假模型，不发真实 API）
     faux.setResponses([
       fauxAssistantMessage([
-        fauxText("我来创建任务。"),
-        fauxToolCall("create_task", {
+        fauxText('我来创建任务。'),
+        fauxToolCall('create_task', {
           title: TOOL_CALL_TITLE,
           dueDate: TOOL_CALL_DUE_DATE,
         }),
       ]),
-      fauxAssistantMessage("任务已创建完成。"),
-    ]);
+      fauxAssistantMessage('任务已创建完成。'),
+    ])
 
     // 3. 建会话：临时目录放 session 文件，loader 最小隔离（无扩展/技能/上下文）
-    tmpDir = mkdtempSync(join(tmpdir(), "serenique-ai-test-"));
-    const settingsManager = SettingsManager.inMemory();
+    tmpDir = mkdtempSync(join(tmpdir(), 'serenique-ai-test-'))
+    const settingsManager = SettingsManager.inMemory()
     const loader = new DefaultResourceLoader({
       cwd: process.cwd(),
       agentDir: process.cwd(),
@@ -115,35 +108,35 @@ describe.skipIf(!RUN_DB_TESTS)("ai.integration", () => {
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      systemPromptOverride: () => "你是测试助手。",
+      systemPromptOverride: () => '你是测试助手。',
       appendSystemPromptOverride: () => [],
-    });
-    await loader.reload();
+    })
+    await loader.reload()
     const { session } = await createAgentSession({
-      sessionManager: SessionManager.create(process.cwd(), join(tmpDir, "sessions")),
+      sessionManager: SessionManager.create(process.cwd(), join(tmpDir, 'sessions')),
       settingsManager,
       modelRuntime,
       model: faux.getModel(),
-      customTools: (await import("./ai.tools")).buildAiTools(),
-      excludeTools: ["bash", "read", "edit", "write", "grep", "find", "ls"],
+      customTools: (await import('./ai.tools')).buildAiTools(),
+      excludeTools: ['bash', 'read', 'edit', 'write', 'grep', 'find', 'ls'],
       resourceLoader: loader,
-    });
+    })
 
     try {
       // 4. 跑一轮：faux 按预置响应返回 toolCall → agent 执行 create_task →
       //    toolResult 回填 → 第二轮 faux 返回最终文本，回合结束。
-      await session.prompt("帮我创建一个任务：写周报，截止明天");
+      await session.prompt('帮我创建一个任务：写周报，截止明天')
 
       // 5. 断言：真实 taskService 落库。
       //    先登记 id 再断言：dueDate 断言失败时 afterAll 也能清理该任务。
-      const taskService = (await import("@/modules/task/task.service")).taskService;
-      const tasks = await taskService.listTasks({ page: 1, pageSize: 50 });
-      const created = tasks.items.find((t) => t.title === TOOL_CALL_TITLE);
-      if (created) createdTaskIds.push(created.id);
-      expect(created).toBeDefined();
-      expect(created?.dueDate).toBe(TOOL_CALL_DUE_DATE);
+      const taskService = (await import('@/modules/task/task.service')).taskService
+      const tasks = await taskService.listTasks({ page: 1, pageSize: 50 })
+      const created = tasks.items.find((t) => t.title === TOOL_CALL_TITLE)
+      if (created) createdTaskIds.push(created.id)
+      expect(created).toBeDefined()
+      expect(created?.dueDate).toBe(TOOL_CALL_DUE_DATE)
     } finally {
-      session.dispose();
+      session.dispose()
     }
-  });
-});
+  })
+})

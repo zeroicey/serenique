@@ -1,11 +1,5 @@
 // 通用「开发中」占位页：新模块（宁序/习惯/素材库/设置等）先展示这里。
-export function PlaceholderPage({
-  title,
-  message,
-}: {
-  title: string
-  message?: string
-}) {
+export function PlaceholderPage({ title, message }: { title: string; message?: string }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
       <p className="text-4xl">🚧</p>

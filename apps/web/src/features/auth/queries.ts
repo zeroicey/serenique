@@ -1,23 +1,23 @@
 import {
+  type UseMutationResult,
+  type UseQueryResult,
   useMutation,
   useQuery,
   useQueryClient,
-  type UseMutationResult,
-  type UseQueryResult,
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
+  type AuthStatus,
+  type CredentialEntry,
   deleteCredential,
   fetchAuthStatus,
   getProfile,
   listCredentials,
   logout,
   renameCredential,
-  updateProfile,
-  type AuthStatus,
-  type CredentialEntry,
   type UpdateProfileInput,
   type UserEntry,
+  updateProfile,
 } from './api'
 import { loginWithPasskey, registerWithPasskey } from './webauthn'
 

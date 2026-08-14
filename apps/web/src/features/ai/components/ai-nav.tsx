@@ -4,13 +4,8 @@ import { useAiStore } from '@/features/ai/store/ai-store'
 export function AiNav() {
   const status = useAiStore((s) => s.status)
   const dot =
-    status === 'online'
-      ? 'bg-green-500'
-      : status === 'connecting'
-        ? 'bg-yellow-500'
-        : 'bg-red-500'
-  const label =
-    status === 'online' ? '在线' : status === 'connecting' ? '连接中…' : '已断开'
+    status === 'online' ? 'bg-green-500' : status === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+  const label = status === 'online' ? '在线' : status === 'connecting' ? '连接中…' : '已断开'
 
   return (
     <div className="flex w-full items-center justify-between">

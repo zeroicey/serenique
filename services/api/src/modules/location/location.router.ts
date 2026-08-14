@@ -1,5 +1,5 @@
-import { Hono } from "hono";
-import { locationHandler } from "@/modules/location/location.handler";
+import { Hono } from 'hono'
+import { locationHandler } from '@/modules/location/location.handler'
 
 // ---------------------------------------------------------------------------
 // Location router — AMAP Web 服务代理，挂载于 /api/location。
@@ -7,6 +7,6 @@ import { locationHandler } from "@/modules/location/location.handler";
 // ---------------------------------------------------------------------------
 
 export const locationRouter = new Hono()
-  .get("/location/config", locationHandler.config)
-  .get("/location/nearby", locationHandler.nearby)
-  .get("/location/search", locationHandler.search);
+  .get('/location/config', locationHandler.config)
+  .get('/location/nearby', locationHandler.nearby)
+  .get('/location/search', locationHandler.search)

@@ -22,43 +22,43 @@ export function Composer() {
     // 无背景、无分界线；输入框胶囊形（rounded-full）呈现悬浮感。
     <div className="shrink-0 p-3">
       <div className="mx-auto flex w-full max-w-[600px] items-center gap-2">
-      <input
-        className="h-9 flex-1 rounded-full border border-input bg-background px-4 text-sm outline-none focus:border-primary disabled:opacity-60"
-        type="text"
-        value={text}
-        disabled={busy}
-        placeholder={busy ? 'AI 正在回复…' : '输入消息，Enter 发送'}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          // isComposing 守卫：中文输入法下按 Enter 确认候选词不触发发送（IME 冲突）
-          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-            e.preventDefault()
-            submit()
-          }
-        }}
-      />
-      {busy ? (
-        <button
-          type="button"
-          aria-label="停止"
-          title="停止 AI 回复"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
-          onClick={abort}
-        >
-          <Square className="size-4 fill-current" />
-        </button>
-      ) : (
-        <button
-          type="button"
-          aria-label="发送"
-          title="发送"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-50"
-          disabled={!text.trim()}
-          onClick={submit}
-        >
-          <Send className="size-4" />
-        </button>
-      )}
+        <input
+          className="h-9 flex-1 rounded-full border border-input bg-background px-4 text-sm outline-none focus:border-primary disabled:opacity-60"
+          type="text"
+          value={text}
+          disabled={busy}
+          placeholder={busy ? 'AI 正在回复…' : '输入消息，Enter 发送'}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            // isComposing 守卫：中文输入法下按 Enter 确认候选词不触发发送（IME 冲突）
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              submit()
+            }
+          }}
+        />
+        {busy ? (
+          <button
+            type="button"
+            aria-label="停止"
+            title="停止 AI 回复"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
+            onClick={abort}
+          >
+            <Square className="size-4 fill-current" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="发送"
+            title="发送"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-50"
+            disabled={!text.trim()}
+            onClick={submit}
+          >
+            <Send className="size-4" />
+          </button>
+        )}
       </div>
     </div>
   )

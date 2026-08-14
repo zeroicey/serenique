@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
-import { createEvent, deleteEvent, listEvents, updateEvent } from './api'
 import type { EventEntry } from './api'
+import { createEvent, deleteEvent, listEvents, updateEvent } from './api'
 
 vi.mock('@/api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -45,7 +45,10 @@ describe('listEvents', () => {
     expect(mockedGet).toHaveBeenCalledTimes(1)
     const [url, opts] = mockedGet.mock.calls[0]
     expect(url).toBe('/api/events')
-    expect(opts?.searchParams).toEqual({ from: '2026-08-06T00:00:00.000Z', to: '2026-08-07T00:00:00.000Z' })
+    expect(opts?.searchParams).toEqual({
+      from: '2026-08-06T00:00:00.000Z',
+      to: '2026-08-07T00:00:00.000Z',
+    })
   })
 })
 

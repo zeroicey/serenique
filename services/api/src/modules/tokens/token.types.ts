@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
 // Tokens module — request/response types (GitHub PAT mode).
@@ -7,22 +7,22 @@ import { z } from "zod";
 
 export const CreateTokenSchema = z.object({
   name: z.string().trim().min(1).max(100),
-});
+})
 
-export type CreateTokenInput = z.input<typeof CreateTokenSchema>;
+export type CreateTokenInput = z.input<typeof CreateTokenSchema>
 
 export type TokenEntry = {
-  id: string;
-  name: string;
+  id: string
+  name: string
   /** 展示用明文片段（随机段前 8 位），无明文。 */
-  prefix: string;
-  lastUsedAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-};
+  prefix: string
+  lastUsedAt: string | null
+  revokedAt: string | null
+  createdAt: string
+}
 
 /** 创建响应：明文仅此一次。 */
 export type TokenCreateResult = {
-  plaintext: string;
-  item: TokenEntry;
-};
+  plaintext: string
+  item: TokenEntry
+}

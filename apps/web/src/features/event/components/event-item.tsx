@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { MapPin, MoreHorizontal, SquarePen, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,10 +16,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useDeleteEvent } from '@/features/event/queries'
-import { eventTimeLabel } from '@/features/event/lib'
-import { useEventUIStore } from '@/stores/event-ui'
 import type { EventEntry } from '@/features/event/api'
+import { eventTimeLabel } from '@/features/event/lib'
+import { useDeleteEvent } from '@/features/event/queries'
+import { useEventUIStore } from '@/stores/event-ui'
 
 const NOTE_TRUNCATE = 150
 
@@ -36,7 +36,7 @@ export function EventItem({ event }: EventItemProps) {
 
   const showNoteToggle = (event.note?.length ?? 0) > NOTE_TRUNCATE
   const note =
-    showNoteToggle && !noteExpanded ? event.note!.slice(0, NOTE_TRUNCATE) + '…' : event.note
+    showNoteToggle && !noteExpanded ? `${event.note!.slice(0, NOTE_TRUNCATE)}…` : event.note
 
   return (
     <>

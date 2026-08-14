@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 
 // PWA 更新提示：registerType=prompt 下，SW 检测到新版本时显示「刷新」横幅，

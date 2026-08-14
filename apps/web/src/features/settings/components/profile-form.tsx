@@ -67,7 +67,12 @@ export function ProfileForm() {
     <form onSubmit={onSubmit} className="space-y-3">
       <div className="space-y-1.5">
         <Label htmlFor="profile-name">姓名</Label>
-        <Input id="profile-name" placeholder="你的称呼" aria-invalid={!!errors.name} {...register('name')} />
+        <Input
+          id="profile-name"
+          placeholder="你的称呼"
+          aria-invalid={!!errors.name}
+          {...register('name')}
+        />
         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
       </div>
       <div className="space-y-1.5">

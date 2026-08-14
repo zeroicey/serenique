@@ -9,10 +9,7 @@ export async function unwrap<T>(response: Response): Promise<T> {
   try {
     body = (await response.json()) as ApiEnvelope<T>
   } catch {
-    throw new ApiError(
-      response.ok ? '响应解析失败' : '服务暂时不可用，请稍后再试',
-      response.status,
-    )
+    throw new ApiError(response.ok ? '响应解析失败' : '服务暂时不可用，请稍后再试', response.status)
   }
   if (!body.success) {
     throw new ApiError(body.message, response.status, body.error)

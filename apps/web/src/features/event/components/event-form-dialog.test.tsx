@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { EventFormDialog } from './event-form-dialog'
 import type { EventEntry } from '@/features/event/api'
+import { EventFormDialog } from './event-form-dialog'
 
 // mutation 的 mutate(input, options) 需要触发 onSuccess，组件里 close() 才会被调用。
 const mocks = vi.hoisted(() => ({

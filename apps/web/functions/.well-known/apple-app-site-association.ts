@@ -5,8 +5,8 @@ export const onRequestGet = () =>
   new Response(
     JSON.stringify({
       webcredentials: {
-        apps: ["ZWYHWSH3RJ.com.zeroicey.serenique"],
+        apps: ['ZWYHWSH3RJ.com.zeroicey.serenique'],
       },
     }),
-    { headers: { "Content-Type": "application/json" } },
-  );
+    { headers: { 'Content-Type': 'application/json' } },
+  )

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, test, vi } from 'vitest'
-import { SessionSwitcher } from './session-switcher'
 import { useAiStore } from '@/features/ai/store/ai-store'
+import { SessionSwitcher } from './session-switcher'
 
 function renderSwitcher() {
   return render(<SessionSwitcher />)

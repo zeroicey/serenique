@@ -1,8 +1,7 @@
-import { eq, like, sql } from "drizzle-orm";
-import { db } from "@/db/connection";
-import { fireAuditRecord } from "@/modules/audit/audit.service";
-import { blobs, blobAttachments } from "@/modules/blob/blob.schema";
-import { toBlobAttachmentEntry, toPublicBlobEntry } from "@/modules/blob/blob.mappers";
+import { eq, like, sql } from 'drizzle-orm'
+import { db } from '@/db/connection'
+import { env } from '@/env'
+import { fireAuditRecord } from '@/modules/audit/audit.service'
 import {
   assertBlobSize,
   assertGenericAttachmentOwnerType,
@@ -10,22 +9,23 @@ import {
   isChecksumUniqueConflict,
   normalizeUploadedMimeType,
   requireSigningSecret,
-  signBlobAccess,
   signaturesEqual,
-} from "@/modules/blob/blob.domain";
-import { AppError, ErrorCode } from "@/shared/errors";
-import { logger } from "@/shared/logger";
-import { env } from "@/env";
+  signBlobAccess,
+} from '@/modules/blob/blob.domain'
+import { toBlobAttachmentEntry, toPublicBlobEntry } from '@/modules/blob/blob.mappers'
+import { blobAttachments, blobs } from '@/modules/blob/blob.schema'
 import type {
   BlobAccessLinkEntry,
   BlobAttachmentEntry,
+  BlobCleanupResult,
   BlobEntry,
   BlobFile,
-  BlobCleanupResult,
   CreateBlobAccessLinkInput,
   CreateBlobAttachmentInput,
   ListBlobInput,
-} from "@/modules/blob/blob.types";
+} from '@/modules/blob/blob.types'
+import { AppError, ErrorCode } from '@/shared/errors'
+import { logger } from '@/shared/logger'
 import {
   buildStoragePath,
   deleteFileFromStorage,
@@ -34,7 +34,7 @@ import {
   openFileFromStorage,
   saveFile,
   sha256,
-} from "@/shared/storage";
+} from '@/shared/storage'
 
 // ---------------------------------------------------------------------------
 // Blob service — generic binary storage with SHA-256 dedup.
@@ -43,7 +43,7 @@ import {
 // + `@/env` (service import of env is the sanctioned pattern, see CLAUDE.md).
 // ---------------------------------------------------------------------------
 
-type BlobRow = typeof blobs.$inferSelect;
+type BlobRow = typeof blobs.$inferSelect
 
 export const blobService = {
   /**
@@ -53,43 +53,40 @@ export const blobService = {
    */
   async upload(file: File): Promise<BlobEntry> {
     // --- size guard ---
-    assertBlobSize(file.size, env.BLOB_MAX_SIZE);
+    assertBlobSize(file.size, env.BLOB_MAX_SIZE)
 
-    const buf = Buffer.from(await file.arrayBuffer());
-    const checksum = sha256(buf);
+    const buf = Buffer.from(await file.arrayBuffer())
+    const checksum = sha256(buf)
 
     // --- dedup ---
-    const [existing] = await db
-      .select()
-      .from(blobs)
-      .where(eq(blobs.checksum, checksum));
+    const [existing] = await db.select().from(blobs).where(eq(blobs.checksum, checksum))
     if (existing) {
-      logger.info({ checksum, existingId: existing.id }, "检测到重复文件，返回已有记录");
-      return toPublicBlobEntry(existing);
+      logger.info({ checksum, existingId: existing.id }, '检测到重复文件，返回已有记录')
+      return toPublicBlobEntry(existing)
     }
 
     // --- persist to disk ---
-    const id = crypto.randomUUID();
-    const mimeType = normalizeUploadedMimeType(file, buf);
-    const path = buildStoragePath(mimeType, id, file.name);
+    const id = crypto.randomUUID()
+    const mimeType = normalizeUploadedMimeType(file, buf)
+    const path = buildStoragePath(mimeType, id, file.name)
 
-    await saveFile(env.BLOB_ROOT, path, buf);
+    await saveFile(env.BLOB_ROOT, path, buf)
 
     // --- extract image dimensions ---
-    let width: number | null = null;
-    let height: number | null = null;
-    if (mimeType.startsWith("image/")) {
-      const dims = extractImageDimensions(buf);
+    let width: number | null = null
+    let height: number | null = null
+    if (mimeType.startsWith('image/')) {
+      const dims = extractImageDimensions(buf)
       if (dims) {
-        width = dims.width;
-        height = dims.height;
+        width = dims.width
+        height = dims.height
       }
     }
 
     // --- insert record ---
-    let row: BlobRow;
+    let row: BlobRow
     try {
-      [row] = await db
+      ;[row] = await db
         .insert(blobs)
         .values({
           id,
@@ -101,52 +98,45 @@ export const blobService = {
           width,
           height,
         })
-        .returning();
+        .returning()
     } catch (err) {
       try {
-        await deleteFileFromStorage(env.BLOB_ROOT, path);
+        await deleteFileFromStorage(env.BLOB_ROOT, path)
       } catch (cleanupErr) {
-        logger.error(
-          { err: cleanupErr, path },
-          "上传失败后的磁盘文件清理失败",
-        );
+        logger.error({ err: cleanupErr, path }, '上传失败后的磁盘文件清理失败')
       }
 
       if (isChecksumUniqueConflict(err)) {
         const [existingAfterConflict] = await db
           .select()
           .from(blobs)
-          .where(eq(blobs.checksum, checksum));
+          .where(eq(blobs.checksum, checksum))
         if (existingAfterConflict) {
           logger.info(
             { checksum, existingId: existingAfterConflict.id },
-            "上传时检测到 checksum 竞态冲突，返回已有记录",
-          );
-          return toPublicBlobEntry(existingAfterConflict);
+            '上传时检测到 checksum 竞态冲突，返回已有记录',
+          )
+          return toPublicBlobEntry(existingAfterConflict)
         }
       }
 
-      throw err;
+      throw err
     }
 
-    logger.info({ id, mimeType, size: file.size }, "文件上传成功");
+    logger.info({ id, mimeType, size: file.size }, '文件上传成功')
     fireAuditRecord({
-      event: "blob.upload",
-      message: "文件上传成功",
-      level: "info",
+      event: 'blob.upload',
+      message: '文件上传成功',
+      level: 'info',
       detail: { id, fileName: file.name, mimeType, size: file.size },
-    });
-    return toPublicBlobEntry(row);
+    })
+    return toPublicBlobEntry(row)
   },
 
   /** Paginated list with optional MIME type prefix filter. */
-  async list(
-    input: ListBlobInput,
-  ): Promise<{ items: BlobEntry[]; total: number }> {
-    const offset = (input.page - 1) * input.pageSize;
-    const where = input.mimeType
-      ? like(blobs.mimeType, `${input.mimeType}%`)
-      : undefined;
+  async list(input: ListBlobInput): Promise<{ items: BlobEntry[]; total: number }> {
+    const offset = (input.page - 1) * input.pageSize
+    const where = input.mimeType ? like(blobs.mimeType, `${input.mimeType}%`) : undefined
 
     const [items, [{ count }]] = await Promise.all([
       db
@@ -156,31 +146,25 @@ export const blobService = {
         .orderBy(blobs.createdAt)
         .limit(input.pageSize)
         .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(blobs)
-        .where(where),
-    ]);
+      db.select({ count: sql<number>`count(*)::int` }).from(blobs).where(where),
+    ])
 
-    return { items: items.map(toPublicBlobEntry), total: count };
+    return { items: items.map(toPublicBlobEntry), total: count }
   },
 
   /** Get a single blob's metadata. */
   async get(id: string): Promise<BlobEntry> {
-    const [row] = await db.select().from(blobs).where(eq(blobs.id, id));
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
-    return toPublicBlobEntry(row);
+    const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
+    return toPublicBlobEntry(row)
   },
 
   /** Open the file body + metadata needed for streaming. */
   async getFile(id: string): Promise<BlobFile> {
-    const [row] = await db.select().from(blobs).where(eq(blobs.id, id));
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
-    const { body, size } = await openFileFromStorage(
-      env.BLOB_ROOT,
-      row.storagePath,
-    );
-    return { body, size, mimeType: row.mimeType, filename: row.originalName };
+    const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
+    const { body, size } = await openFileFromStorage(env.BLOB_ROOT, row.storagePath)
+    return { body, size, mimeType: row.mimeType, filename: row.originalName }
   },
 
   /** Create a temporary HMAC-signed access link for a blob file. */
@@ -188,18 +172,18 @@ export const blobService = {
     blobId: string,
     input: CreateBlobAccessLinkInput & { baseUrl?: string },
   ): Promise<BlobAccessLinkEntry> {
-    const [row] = await db.select().from(blobs).where(eq(blobs.id, blobId));
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
+    const [row] = await db.select().from(blobs).where(eq(blobs.id, blobId))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
 
-    const secret = requireSigningSecret(env.BLOB_SIGNING_SECRET);
-    const expires = Math.floor(Date.now() / 1000) + input.expiresInSeconds;
-    const signature = signBlobAccess(secret, blobId, expires);
+    const secret = requireSigningSecret(env.BLOB_SIGNING_SECRET)
+    const expires = Math.floor(Date.now() / 1000) + input.expiresInSeconds
+    const signature = signBlobAccess(secret, blobId, expires)
     const params = new URLSearchParams({
       expires: expires.toString(),
       signature,
-    });
-    const path = `/api/blobs/${blobId}/file?${params.toString()}`;
-    const url = input.baseUrl ? new URL(path, input.baseUrl).toString() : path;
+    })
+    const path = `/api/blobs/${blobId}/file?${params.toString()}`
+    const url = input.baseUrl ? new URL(path, input.baseUrl).toString() : path
 
     return {
       url,
@@ -207,30 +191,27 @@ export const blobService = {
       expires,
       expiresAt: new Date(expires * 1000).toISOString(),
       signature,
-    };
+    }
   },
 
   /** Validate a temporary access signature for a blob file. */
-  verifyAccessSignature(
-    blobId: string,
-    input: { expires?: string; signature?: string },
-  ): void {
-    const secret = requireSigningSecret(env.BLOB_SIGNING_SECRET);
+  verifyAccessSignature(blobId: string, input: { expires?: string; signature?: string }): void {
+    const secret = requireSigningSecret(env.BLOB_SIGNING_SECRET)
     if (!input.expires || !input.signature) {
-      throw new AppError(ErrorCode.FORBIDDEN, "缺少临时访问签名", 403);
+      throw new AppError(ErrorCode.FORBIDDEN, '缺少临时访问签名', 403)
     }
 
-    const expires = Number(input.expires);
+    const expires = Number(input.expires)
     if (!Number.isInteger(expires) || expires <= 0) {
-      throw new AppError(ErrorCode.FORBIDDEN, "临时访问签名无效", 403);
+      throw new AppError(ErrorCode.FORBIDDEN, '临时访问签名无效', 403)
     }
     if (expires < Math.floor(Date.now() / 1000)) {
-      throw new AppError(ErrorCode.FORBIDDEN, "临时访问链接已过期", 403);
+      throw new AppError(ErrorCode.FORBIDDEN, '临时访问链接已过期', 403)
     }
 
-    const expected = signBlobAccess(secret, blobId, expires);
+    const expected = signBlobAccess(secret, blobId, expires)
     if (!signaturesEqual(input.signature, expected)) {
-      throw new AppError(ErrorCode.FORBIDDEN, "临时访问签名无效", 403);
+      throw new AppError(ErrorCode.FORBIDDEN, '临时访问签名无效', 403)
     }
   },
 
@@ -239,10 +220,10 @@ export const blobService = {
     blobId: string,
     input: CreateBlobAttachmentInput,
   ): Promise<BlobAttachmentEntry> {
-    assertGenericAttachmentOwnerType(input.ownerType);
+    assertGenericAttachmentOwnerType(input.ownerType)
 
-    const [blob] = await db.select().from(blobs).where(eq(blobs.id, blobId));
-    if (!blob) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
+    const [blob] = await db.select().from(blobs).where(eq(blobs.id, blobId))
+    if (!blob) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
 
     const [row] = await db
       .insert(blobAttachments)
@@ -250,39 +231,36 @@ export const blobService = {
         blobId,
         ownerType: input.ownerType,
         ownerId: input.ownerId,
-        role: input.role ?? "attachment",
+        role: input.role ?? 'attachment',
         displayName: input.displayName ?? null,
         sortOrder: input.sortOrder ?? 0,
         metadata: input.metadata ?? {},
       })
-      .returning();
+      .returning()
 
-    return toBlobAttachmentEntry(row);
+    return toBlobAttachmentEntry(row)
   },
 
   /** List business-level attachment references for a blob. */
   async listAttachments(blobId: string): Promise<BlobAttachmentEntry[]> {
-    const [blob] = await db.select().from(blobs).where(eq(blobs.id, blobId));
-    if (!blob) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
+    const [blob] = await db.select().from(blobs).where(eq(blobs.id, blobId))
+    if (!blob) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
 
     const items = await db
       .select()
       .from(blobAttachments)
       .where(eq(blobAttachments.blobId, blobId))
-      .orderBy(blobAttachments.sortOrder, blobAttachments.createdAt);
-    return items.map(toBlobAttachmentEntry);
+      .orderBy(blobAttachments.sortOrder, blobAttachments.createdAt)
+    return items.map(toBlobAttachmentEntry)
   },
 
   /** Delete an attachment reference only; the physical blob remains. */
   async deleteAttachment(id: string): Promise<void> {
-    const [row] = await db
-      .select()
-      .from(blobAttachments)
-      .where(eq(blobAttachments.id, id));
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件关联不存在", 404);
-    assertGenericAttachmentOwnerType(row.ownerType);
+    const [row] = await db.select().from(blobAttachments).where(eq(blobAttachments.id, id))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件关联不存在', 404)
+    assertGenericAttachmentOwnerType(row.ownerType)
 
-    await db.delete(blobAttachments).where(eq(blobAttachments.id, id));
+    await db.delete(blobAttachments).where(eq(blobAttachments.id, id))
   },
 
   /** Delete disk files that no blob row references. */
@@ -290,23 +268,23 @@ export const blobService = {
     const [diskPaths, referencedRows] = await Promise.all([
       listStoragePaths(env.BLOB_ROOT),
       db.select({ storagePath: blobs.storagePath }).from(blobs),
-    ]);
-    const referenced = new Set(referencedRows.map((row) => row.storagePath));
-    const deleted: string[] = [];
-    const failed: BlobCleanupResult["failed"] = [];
+    ])
+    const referenced = new Set(referencedRows.map((row) => row.storagePath))
+    const deleted: string[] = []
+    const failed: BlobCleanupResult['failed'] = []
 
     for (const path of diskPaths) {
-      if (referenced.has(path)) continue;
+      if (referenced.has(path)) continue
 
       try {
-        await deleteFileFromStorage(env.BLOB_ROOT, path);
-        deleted.push(path);
+        await deleteFileFromStorage(env.BLOB_ROOT, path)
+        deleted.push(path)
       } catch (err) {
-        failed.push({ path, message: errorMessage(err) });
+        failed.push({ path, message: errorMessage(err) })
       }
     }
 
-    return { checked: diskPaths.length, deleted, failed };
+    return { checked: diskPaths.length, deleted, failed }
   },
 
   /**
@@ -314,34 +292,30 @@ export const blobService = {
    * record first, then deletes the disk file best-effort.
    */
   async delete(id: string): Promise<void> {
-    const [row] = await db.select().from(blobs).where(eq(blobs.id, id));
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "文件不存在", 404);
+    const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
 
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(blobAttachments)
-      .where(eq(blobAttachments.blobId, id));
+      .where(eq(blobAttachments.blobId, id))
     if (count > 0) {
-      throw new AppError(
-        ErrorCode.CONFLICT,
-        "文件仍被业务记录引用，请先删除关联",
-        409,
-      );
+      throw new AppError(ErrorCode.CONFLICT, '文件仍被业务记录引用，请先删除关联', 409)
     }
 
-    await db.delete(blobs).where(eq(blobs.id, id));
+    await db.delete(blobs).where(eq(blobs.id, id))
 
     fireAuditRecord({
-      event: "blob.delete",
-      message: "文件已删除",
-      level: "warn",
+      event: 'blob.delete',
+      message: '文件已删除',
+      level: 'warn',
       detail: { id, fileName: row.originalName, mimeType: row.mimeType },
-    });
+    })
 
     try {
-      await deleteFileFromStorage(env.BLOB_ROOT, row.storagePath);
+      await deleteFileFromStorage(env.BLOB_ROOT, row.storagePath)
     } catch (err) {
-      logger.error({ err, path: row.storagePath }, "磁盘文件删除失败，数据库记录已删除");
+      logger.error({ err, path: row.storagePath }, '磁盘文件删除失败，数据库记录已删除')
     }
   },
-};
+}

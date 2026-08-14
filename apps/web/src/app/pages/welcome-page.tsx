@@ -2,10 +2,10 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronRight,
+  type LucideIcon,
   ScrollText,
   Sparkles,
   Zap,
-  type LucideIcon,
 } from 'lucide-react'
 import { Link } from 'react-router'
 

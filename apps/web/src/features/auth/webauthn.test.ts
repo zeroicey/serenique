@@ -1,8 +1,8 @@
+import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/errors'
-import { loginWithPasskey, registerWithPasskey } from './webauthn'
 import { loginFinish, loginStart, registerFinish, registerStart } from './api'
-import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
+import { loginWithPasskey, registerWithPasskey } from './webauthn'
 
 // ceremony 编排测试：mock 掉 API 层与浏览器 WebAuthn，验证双段流程顺序与错误翻译。
 

@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, test } from 'vitest'
 import { useAiStore } from '@/features/ai/store/ai-store'
 import { Composer } from './composer'
 

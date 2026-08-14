@@ -8,17 +8,12 @@ export const momentLocationSchema = z
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
   })
-  .refine(
-    (v) => v.name !== undefined || v.latitude !== undefined || v.longitude !== undefined,
-    { message: '位置至少需要名称或坐标之一' },
-  )
+  .refine((v) => v.name !== undefined || v.latitude !== undefined || v.longitude !== undefined, {
+    message: '位置至少需要名称或坐标之一',
+  })
 
 export const momentCreateSchema = z.object({
-  text: z
-    .string()
-    .trim()
-    .min(1, '闪记内容不能为空')
-    .max(10000, '闪记最多 10000 字'),
+  text: z.string().trim().min(1, '闪记内容不能为空').max(10000, '闪记最多 10000 字'),
   location: momentLocationSchema.nullable().optional(),
 })
 

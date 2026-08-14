@@ -1,8 +1,5 @@
-import { blobs, blobAttachments } from "@/modules/blob/blob.schema";
-import type {
-  BlobAttachmentEntry,
-  BlobEntry,
-} from "@/modules/blob/blob.types";
+import type { blobAttachments, blobs } from '@/modules/blob/blob.schema'
+import type { BlobAttachmentEntry, BlobEntry } from '@/modules/blob/blob.types'
 
 // ---------------------------------------------------------------------------
 // Blob mappers — row → entry conversion. Pure functions, no DB / IO.
@@ -21,7 +18,7 @@ export function toPublicBlobEntry(row: typeof blobs.$inferSelect): BlobEntry {
     height: row.height,
     duration: row.duration,
     createdAt: row.createdAt.toISOString(),
-  };
+  }
 }
 
 export function toBlobAttachmentEntry(
@@ -38,5 +35,5 @@ export function toBlobAttachmentEntry(
     metadata: row.metadata as Record<string, unknown>,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-  };
+  }
 }

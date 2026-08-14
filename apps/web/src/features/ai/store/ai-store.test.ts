@@ -75,7 +75,12 @@ describe('ai-store', () => {
     useAiStore.getState().send('帮我创建任务')
     expect(JSON.parse(ws.sent[0])).toEqual({ type: 'prompt', text: '帮我创建任务' })
     const { messages } = useAiStore.getState()
-    expect(messages[messages.length - 1]).toEqual({ role: 'user', text: '帮我创建任务', thinking: '', toolCalls: [] })
+    expect(messages[messages.length - 1]).toEqual({
+      role: 'user',
+      text: '帮我创建任务',
+      thinking: '',
+      toolCalls: [],
+    })
   })
 
   test('text_delta 追加到 activeTurn.text', () => {

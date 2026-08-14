@@ -9,20 +9,20 @@ export class AppError extends Error {
     message: string,
     public readonly status: number = 400,
   ) {
-    super(message);
-    this.name = "AppError";
+    super(message)
+    this.name = 'AppError'
   }
 }
 
 export const ErrorCode = {
-  NOT_FOUND: "NOT_FOUND",
-  VALIDATION: "VALIDATION",
-  FORBIDDEN: "FORBIDDEN",
-  CONFLICT: "CONFLICT",
-  INTERNAL: "INTERNAL",
-  UNAUTHORIZED: "UNAUTHORIZED",
-  RATE_LIMITED: "RATE_LIMITED",
-  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
-} as const;
+  NOT_FOUND: 'NOT_FOUND',
+  VALIDATION: 'VALIDATION',
+  FORBIDDEN: 'FORBIDDEN',
+  CONFLICT: 'CONFLICT',
+  INTERNAL: 'INTERNAL',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  RATE_LIMITED: 'RATE_LIMITED',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+} as const
 
-export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]

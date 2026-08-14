@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
-import {
-  getAuditUnreadCount,
-  listAuditLogs,
-  markAuditRead,
-  type AuditLogEntry,
-} from './api'
+import { type AuditLogEntry, getAuditUnreadCount, listAuditLogs, markAuditRead } from './api'
 
 vi.mock('@/api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -52,7 +47,13 @@ describe('listAuditLogs', () => {
 
   it('透传 level / event / unreadOnly 筛选参数', async () => {
     mockedGet.mockResolvedValue(jsonResponse({ items: [], total: 0 }))
-    await listAuditLogs({ page: 2, pageSize: 50, level: 'error', event: 'blob.delete', unreadOnly: true })
+    await listAuditLogs({
+      page: 2,
+      pageSize: 50,
+      level: 'error',
+      event: 'blob.delete',
+      unreadOnly: true,
+    })
     const [url, opts] = mockedGet.mock.calls[0]
     expect(url).toBe('/api/audit/logs')
     expect(opts?.searchParams).toEqual({

@@ -5,8 +5,8 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { Toaster } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/errors'
-import LoginPage from './login-page'
 import { browserSupportsWebAuthn, loginWithPasskey } from '../webauthn'
+import LoginPage from './login-page'
 
 // 不 mock queries —— 页面走真实 useLogin（onError toast 就是错误文案的呈现路径）；
 // 只 mock webauthn 层（浏览器能力探测 + ceremony 编排，后者在 webauthn.test 里单测）。

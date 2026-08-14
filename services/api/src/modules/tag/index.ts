@@ -1,1 +1,1 @@
-export { tagRouter } from "@/modules/tag/tag.router";
+export { tagRouter } from '@/modules/tag/tag.router'

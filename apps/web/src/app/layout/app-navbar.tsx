@@ -1,7 +1,7 @@
-import { type ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { useMatches } from 'react-router'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
-import { useMatches } from 'react-router'
 
 // 顶栏：折叠按钮 + 动态导航槽 + 右侧槽。动态内容由路由 handle.nav /
 // handle.headerRight 提供（feature 自行注册）。退出登录与主题切换已收敛到

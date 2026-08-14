@@ -1,5 +1,5 @@
-import pino from "pino";
-import { env } from "@/env";
+import pino from 'pino'
+import { env } from '@/env'
 
 // ---------------------------------------------------------------------------
 // Global pino logger — configured per environment.
@@ -7,33 +7,33 @@ import { env } from "@/env";
 // Production: structured JSON for log aggregation.
 // ---------------------------------------------------------------------------
 
-export const isDevelopment = env.NODE_ENV === "development";
+export const isDevelopment = env.NODE_ENV === 'development'
 
 export const logger = pino({
-  level: isDevelopment ? "debug" : "info",
+  level: isDevelopment ? 'debug' : 'info',
   ...(isDevelopment && {
     transport: {
-      target: "pino-pretty",
+      target: 'pino-pretty',
       options: {
         colorize: true,
-        translateTime: "HH:MM:ss",
-        ignore: "pid,hostname",
+        translateTime: 'HH:MM:ss',
+        ignore: 'pid,hostname',
       },
     },
   }),
-});
+})
 
-export type Logger = typeof logger;
+export type Logger = typeof logger
 
 // ---------------------------------------------------------------------------
 // Tiny ANSI color helpers — used in development for rich console output.
 // No external dependency needed.
 // ---------------------------------------------------------------------------
 
-type ColorFn = (s: string) => string;
+type ColorFn = (s: string) => string
 
 const ansi = (code: number): ColorFn =>
-  isDevelopment ? (s) => `\x1b[${code}m${s}\x1b[0m` : (s) => s;
+  isDevelopment ? (s) => `\x1b[${code}m${s}\x1b[0m` : (s) => s
 
 export const c = {
   reset: ansi(0),
@@ -46,4 +46,4 @@ export const c = {
   magenta: ansi(35),
   cyan: ansi(36),
   gray: ansi(90),
-};
+}

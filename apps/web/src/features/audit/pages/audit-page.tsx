@@ -1,13 +1,13 @@
-import { useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
+import { useState } from 'react'
+import { ApiError } from '@/api/errors'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { ApiError } from '@/api/errors'
 import { cn } from '@/lib/utils'
-import { AUDIT_LEVELS, type AuditLevel } from '../api'
-import { useAuditLogs } from '../queries'
+import type { AuditLevel } from '../api'
 import { AuditLogList } from '../components/audit-log-list'
+import { useAuditLogs } from '../queries'
 
 const PAGE_SIZE = 20
 
@@ -50,7 +50,9 @@ export default function AuditPage() {
         <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-center">
           <p className="text-4xl">🚧</p>
           <p className="text-lg font-medium">日志功能尚未上线</p>
-          <p className="max-w-sm text-muted-foreground">服务端审计模块还在开发中，接口可用后这里会自动展示。</p>
+          <p className="max-w-sm text-muted-foreground">
+            服务端审计模块还在开发中，接口可用后这里会自动展示。
+          </p>
           <Button variant="outline" onClick={() => refetch()}>
             重试
           </Button>
@@ -89,7 +91,9 @@ export default function AuditPage() {
               variant={level === opt.value ? 'default' : 'outline'}
               className={cn(level === opt.value && 'font-medium', 'whitespace-nowrap')}
               // 级别单选：点已选项取消（回到全部级别）。
-              onClick={() => changeFilter(() => setLevel(level === opt.value ? undefined : opt.value))}
+              onClick={() =>
+                changeFilter(() => setLevel(level === opt.value ? undefined : opt.value))
+              }
             >
               {opt.label}
             </Button>
@@ -119,12 +123,7 @@ export default function AuditPage() {
             >
               下一页
             </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => refetch()}
-              aria-label="刷新日志"
-            >
+            <Button variant="ghost" size="icon-sm" onClick={() => refetch()} aria-label="刷新日志">
               <RefreshCw />
             </Button>
           </div>

@@ -1,14 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { toast } from 'sonner'
-import {
-  createMomentComment,
-  deleteMomentComment,
-  listMomentComments,
-  listMoments,
-} from './api'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createMomentComment, deleteMomentComment, listMomentComments, listMoments } from './api'
 import {
   useCreateMomentComment,
   useDeleteMomentComment,
@@ -46,9 +41,18 @@ afterEach(() => vi.clearAllMocks())
 describe('useMoments', () => {
   it('满页时推进页码，不足满页时停止', async () => {
     mockedList
-      .mockResolvedValueOnce({ items: Array.from({ length: 10 }, (_, i) => makeMoment(i)), total: 25 })
-      .mockResolvedValueOnce({ items: Array.from({ length: 10 }, (_, i) => makeMoment(10 + i)), total: 25 })
-      .mockResolvedValueOnce({ items: Array.from({ length: 5 }, (_, i) => makeMoment(20 + i)), total: 25 })
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 10 }, (_, i) => makeMoment(i)),
+        total: 25,
+      })
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 10 }, (_, i) => makeMoment(10 + i)),
+        total: 25,
+      })
+      .mockResolvedValueOnce({
+        items: Array.from({ length: 5 }, (_, i) => makeMoment(20 + i)),
+        total: 25,
+      })
 
     const { result } = renderHook(() => useMoments(10), { wrapper })
 
@@ -93,7 +97,10 @@ describe('useMoments', () => {
 
 describe('useMomentComments', () => {
   it('返回评论列表（时间正序）', async () => {
-    mockedListComments.mockResolvedValueOnce([makeComment('c1', '第一条'), makeComment('c2', '第二条')])
+    mockedListComments.mockResolvedValueOnce([
+      makeComment('c1', '第一条'),
+      makeComment('c2', '第二条'),
+    ])
     const { result } = renderHook(() => useMomentComments('m1'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data?.map((c) => c.id)).toEqual(['c1', 'c2'])

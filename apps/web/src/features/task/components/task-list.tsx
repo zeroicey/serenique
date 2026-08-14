@@ -1,9 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import type { TaskGroupEntry } from '@/features/task/api'
 import { sortTasks } from '@/features/task/lib'
 import { useTasks } from '@/features/task/queries'
-import type { TaskGroupEntry } from '@/features/task/api'
-import { TaskItem } from './task-item'
 import { TaskCreateInput } from './task-create-input'
+import { TaskItem } from './task-item'
 
 interface TaskListProps {
   group: TaskGroupEntry | null

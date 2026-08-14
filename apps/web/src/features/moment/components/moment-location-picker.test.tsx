@@ -1,8 +1,8 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { renderWithProviders } from '@/test/helpers'
 import * as locationApi from '@/features/location/api'
+import { renderWithProviders } from '@/test/helpers'
 import { MomentLocationPicker } from './moment-location-picker'
 
 vi.mock('@/features/location/api', () => ({

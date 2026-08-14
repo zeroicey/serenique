@@ -1,18 +1,18 @@
 import {
+  type UseMutationResult,
   useMutation,
   useQuery,
   useQueryClient,
-  type UseMutationResult,
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
+  type CreateEventInput,
   createEvent,
   deleteEvent,
-  listEvents,
-  updateEvent,
-  type CreateEventInput,
   type EventEntry,
+  listEvents,
   type UpdateEventInput,
+  updateEvent,
 } from './api'
 import { dayWindow, sortEvents } from './lib'
 

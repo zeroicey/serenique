@@ -1,4 +1,4 @@
-import { AppError, ErrorCode } from "@/shared/errors";
+import { AppError, ErrorCode } from '@/shared/errors'
 
 // ---------------------------------------------------------------------------
 // Event domain — pure rules for event time-range validation and partial-update
@@ -7,46 +7,38 @@ import { AppError, ErrorCode } from "@/shared/errors";
 
 /** Shape of an event row the update resolver needs. */
 export type EventRowLike = {
-  title: string;
-  startAt: Date;
-  endAt: Date;
-  isAllDay: boolean;
-  location: string | null;
-  note: string | null;
-};
+  title: string
+  startAt: Date
+  endAt: Date
+  isAllDay: boolean
+  location: string | null
+  note: string | null
+}
 
 /** Partial update fields accepted by resolveEventUpdate. */
 export type EventUpdatePatch = {
-  title?: string;
-  startAt?: Date;
-  endAt?: Date;
-  isAllDay?: boolean;
-  location?: string;
-  note?: string;
-};
+  title?: string
+  startAt?: Date
+  endAt?: Date
+  isAllDay?: boolean
+  location?: string
+  note?: string
+}
 
 /** Result of resolving an event update: the next row values. */
-export type EventUpdateResult = EventRowLike;
+export type EventUpdateResult = EventRowLike
 
 /** Throw VALIDATION unless endAt is strictly after startAt. */
 export function assertValidEventRange(startAt: Date, endAt: Date): void {
   if (endAt.getTime() <= startAt.getTime()) {
-    throw new AppError(
-      ErrorCode.VALIDATION,
-      "结束时间必须晚于开始时间",
-      400,
-    );
+    throw new AppError(ErrorCode.VALIDATION, '结束时间必须晚于开始时间', 400)
   }
 }
 
 /** Throw VALIDATION unless the list window [from, to) is well-formed. */
 export function assertValidListRange(from: Date, to: Date): void {
   if (to.getTime() <= from.getTime()) {
-    throw new AppError(
-      ErrorCode.VALIDATION,
-      "查询时间范围无效：结束时间必须晚于开始时间",
-      400,
-    );
+    throw new AppError(ErrorCode.VALIDATION, '查询时间范围无效：结束时间必须晚于开始时间', 400)
   }
 }
 
@@ -67,7 +59,7 @@ export function resolveEventUpdate(
     isAllDay: patch.isAllDay ?? current.isAllDay,
     location: patch.location !== undefined ? patch.location : current.location,
     note: patch.note !== undefined ? patch.note : current.note,
-  };
-  assertValidEventRange(resolved.startAt, resolved.endAt);
-  return resolved;
+  }
+  assertValidEventRange(resolved.startAt, resolved.endAt)
+  return resolved
 }

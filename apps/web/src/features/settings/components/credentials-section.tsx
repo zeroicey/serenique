@@ -1,6 +1,8 @@
-import { useState } from 'react'
 import { KeyRound, Pencil, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
+import { toDisplayError } from '@/api/errors'
+import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,15 +13,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ConfirmDialog } from '@/components/common/confirm-dialog'
-import { toDisplayError } from '@/api/errors'
-import { formatDate } from '@/lib/format'
 import {
   useCredentials,
   useDeleteCredential,
   useRegister,
   useRenameCredential,
 } from '@/features/auth/queries'
+import { formatDate } from '@/lib/format'
 
 // 登录凭证管理：列出已注册的通行密钥，支持重命名（PATCH /auth/credentials/:id）、
 // 删除（删最后一把 409 由服务端文案提示）与登录态添加新设备（不带 setupToken
@@ -77,7 +77,9 @@ export function CredentialsSection() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">共 {items.length} 把登录凭证，删除前请确认至少保留一把。</p>
+        <p className="text-xs text-muted-foreground">
+          共 {items.length} 把登录凭证，删除前请确认至少保留一把。
+        </p>
         <Button size="sm" onClick={handleAddDevice} disabled={register.isPending}>
           <KeyRound />
           {register.isPending ? '正在创建通行密钥…' : '添加新设备'}
@@ -151,8 +153,8 @@ export function CredentialsSection() {
           <DialogHeader>
             <DialogTitle>重命名登录凭证</DialogTitle>
             <DialogDescription>
-              给「{pendingRename?.deviceLabel ?? '未命名设备'}」起个一眼能认出的名字（如
-              iPhone · Apple / MacBook）。
+              给「{pendingRename?.deviceLabel ?? '未命名设备'}」起个一眼能认出的名字（如 iPhone ·
+              Apple / MacBook）。
             </DialogDescription>
           </DialogHeader>
           <Input

@@ -39,9 +39,9 @@ describe('momentCreateSchema', () => {
     expect(momentCreateSchema.safeParse({ text: 'x', location: { latitude: 91 } }).success).toBe(
       false,
     )
-    expect(
-      momentCreateSchema.safeParse({ text: 'x', location: { longitude: -181 } }).success,
-    ).toBe(false)
+    expect(momentCreateSchema.safeParse({ text: 'x', location: { longitude: -181 } }).success).toBe(
+      false,
+    )
   })
 
   it('location name 超长校验失败', () => {

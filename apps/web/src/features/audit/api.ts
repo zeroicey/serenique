@@ -38,9 +38,7 @@ export interface MarkAuditReadResult {
   unreadCount: number
 }
 
-export async function listAuditLogs(
-  params?: ListAuditLogsParams,
-): Promise<Paged<AuditLogEntry>> {
+export async function listAuditLogs(params?: ListAuditLogsParams): Promise<Paged<AuditLogEntry>> {
   const searchParams: Record<string, string> = {
     page: String(params?.page ?? 1),
     pageSize: String(params?.pageSize ?? 20),

@@ -1,12 +1,18 @@
 import {
+  type UseMutationResult,
+  type UseQueryResult,
   useMutation,
   useQuery,
   useQueryClient,
-  type UseMutationResult,
-  type UseQueryResult,
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { createToken, listTokens, revokeToken, type TokenCreateResult, type TokenEntry } from './api'
+import {
+  createToken,
+  listTokens,
+  revokeToken,
+  type TokenCreateResult,
+  type TokenEntry,
+} from './api'
 
 // API 令牌数据 hooks。创建成功不弹 Toast——明文弹窗本身就是反馈；
 // 撤销与失败走统一 Toast。

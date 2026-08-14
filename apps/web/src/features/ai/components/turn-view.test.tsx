@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { describe, expect, test } from 'vitest'
 import type { TurnState } from '@/features/ai/store/ai-store'
 import { TurnView } from './turn-view'
 

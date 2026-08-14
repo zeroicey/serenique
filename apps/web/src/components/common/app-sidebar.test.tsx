@@ -16,7 +16,14 @@ vi.mock('@/features/audit/queries', () => ({
 describe('AppSidebar', () => {
   it('渲染品牌与全部导航项（对齐移动端顺序）', () => {
     const router = createMemoryRouter([
-      { path: '/', element: <SidebarProvider><AppSidebar /></SidebarProvider> },
+      {
+        path: '/',
+        element: (
+          <SidebarProvider>
+            <AppSidebar />
+          </SidebarProvider>
+        ),
+      },
     ])
     render(<RouterProvider router={router} />)
 
@@ -30,7 +37,14 @@ describe('AppSidebar', () => {
 
   it('渲染计数 badge：闪记真实值 + 任务/日历/习惯占位 + 日志未读数', () => {
     const router = createMemoryRouter([
-      { path: '/', element: <SidebarProvider><AppSidebar /></SidebarProvider> },
+      {
+        path: '/',
+        element: (
+          <SidebarProvider>
+            <AppSidebar />
+          </SidebarProvider>
+        ),
+      },
     ])
     render(<RouterProvider router={router} />)
 

@@ -1,33 +1,24 @@
-import { and, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from "drizzle-orm";
-import { db } from "@/db/connection";
-import { fireAuditRecord } from "@/modules/audit/audit.service";
-import { blobAttachments, blobs } from "@/modules/blob/blob.schema";
-import { moments } from "@/modules/moment/moment.schema";
-import { listCommentsByMomentIds } from "@/modules/moment/comment.service";
-import { groupCommentsByMomentId } from "@/modules/moment/comment.mappers";
+import { and, desc, eq, gte, ilike, inArray, lt, or, type SQL, sql } from 'drizzle-orm'
+import { db } from '@/db/connection'
+import { fireAuditRecord } from '@/modules/audit/audit.service'
+import { blobAttachments, blobs } from '@/modules/blob/blob.schema'
+import { groupCommentsByMomentId } from '@/modules/moment/comment.mappers'
+import { listCommentsByMomentIds } from '@/modules/moment/comment.service'
 import {
   assertAllowedMomentBlob,
   MOMENT_ATTACHMENT_OWNER_TYPE,
   normalizeSortOrder,
   toLikePattern,
   toPinyinColumns,
-} from "@/modules/moment/moment.domain";
+} from '@/modules/moment/moment.domain'
 import {
   groupAttachmentsByMomentId,
+  type MomentAttachmentJoinRow,
   sortAttachments,
   toMomentAttachmentEntry,
   toMomentEntry,
-  type MomentAttachmentJoinRow,
-} from "@/modules/moment/moment.mappers";
-import { tagRelations } from "@/modules/tag/tag.schema";
-import { MOMENT_TAG_OWNER_TYPE } from "@/modules/tag/tag.domain";
-import {
-  createTagRelationsForOwner,
-  listOwnerIdsByTagId,
-  listTagEntriesByOwnerIds,
-  tagService,
-} from "@/modules/tag/tag.service";
-import { AppError, ErrorCode } from "@/shared/errors";
+} from '@/modules/moment/moment.mappers'
+import { moments } from '@/modules/moment/moment.schema'
 import type {
   AddMomentAttachmentInput,
   CreateMomentInput,
@@ -38,8 +29,17 @@ import type {
   MomentAttachmentEntry,
   MomentEntry,
   UpdateMomentInput,
-} from "@/modules/moment/moment.types";
-import type { TagEntry, TagRelationEntry } from "@/modules/tag/tag.types";
+} from '@/modules/moment/moment.types'
+import { MOMENT_TAG_OWNER_TYPE } from '@/modules/tag/tag.domain'
+import { tagRelations } from '@/modules/tag/tag.schema'
+import {
+  createTagRelationsForOwner,
+  listOwnerIdsByTagId,
+  listTagEntriesByOwnerIds,
+  tagService,
+} from '@/modules/tag/tag.service'
+import type { TagEntry, TagRelationEntry } from '@/modules/tag/tag.types'
+import { AppError, ErrorCode } from '@/shared/errors'
 
 // ---------------------------------------------------------------------------
 // Moment service — text moments with media attachments backed by blob refs.
@@ -47,28 +47,25 @@ import type { TagEntry, TagRelationEntry } from "@/modules/tag/tag.types";
 // moment.mappers.ts. Multi-write operations use db.transaction for atomicity.
 // ---------------------------------------------------------------------------
 
-type BlobRow = typeof blobs.$inferSelect;
+type BlobRow = typeof blobs.$inferSelect
 
 /**
  * Minimal query client — either the singleton `db` or a drizzle transaction.
  * Helpers below accept this so the same query logic works inside and outside
  * transactions without a repository abstraction.
  */
-type DbClient = Pick<typeof db, "select" | "insert" | "update" | "delete">;
+type DbClient = Pick<typeof db, 'select' | 'insert' | 'update' | 'delete'>
 
-async function findBlobsByIds(
-  client: DbClient,
-  ids: string[],
-): Promise<BlobRow[]> {
-  if (ids.length === 0) return [];
-  return client.select().from(blobs).where(inArray(blobs.id, ids));
+async function findBlobsByIds(client: DbClient, ids: string[]): Promise<BlobRow[]> {
+  if (ids.length === 0) return []
+  return client.select().from(blobs).where(inArray(blobs.id, ids))
 }
 
 async function listAttachmentsByMomentIds(
   client: DbClient,
   ids: string[],
 ): Promise<MomentAttachmentJoinRow[]> {
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return []
   return client
     .select({ attachment: blobAttachments, blob: blobs })
     .from(blobAttachments)
@@ -79,11 +76,7 @@ async function listAttachmentsByMomentIds(
         inArray(blobAttachments.ownerId, ids),
       ),
     )
-    .orderBy(
-      blobAttachments.ownerId,
-      blobAttachments.sortOrder,
-      blobAttachments.createdAt,
-    );
+    .orderBy(blobAttachments.ownerId, blobAttachments.sortOrder, blobAttachments.createdAt)
 }
 
 async function findMomentAttachment(
@@ -101,14 +94,11 @@ async function findMomentAttachment(
         eq(blobAttachments.ownerType, MOMENT_ATTACHMENT_OWNER_TYPE),
         eq(blobAttachments.ownerId, momentId),
       ),
-    );
-  return row;
+    )
+  return row
 }
 
-async function getNextAttachmentSortOrder(
-  client: DbClient,
-  momentId: string,
-): Promise<number> {
+async function getNextAttachmentSortOrder(client: DbClient, momentId: string): Promise<number> {
   const [{ next }] = await client
     .select({
       next: sql<number>`coalesce(max(${blobAttachments.sortOrder}), -1) + 1`,
@@ -119,8 +109,8 @@ async function getNextAttachmentSortOrder(
         eq(blobAttachments.ownerType, MOMENT_ATTACHMENT_OWNER_TYPE),
         eq(blobAttachments.ownerId, momentId),
       ),
-    );
-  return next;
+    )
+  return next
 }
 
 /** Resolve attachment blob ids to rows, validating existence and mime type. */
@@ -128,19 +118,19 @@ async function resolveAttachmentBlobs(
   client: DbClient,
   attachments: AddMomentAttachmentInput[],
 ): Promise<Map<string, BlobRow>> {
-  const uniqueBlobIds = [...new Set(attachments.map((item) => item.blobId))];
-  const rows = await findBlobsByIds(client, uniqueBlobIds);
-  const byId = new Map(rows.map((row) => [row.id, row]));
+  const uniqueBlobIds = [...new Set(attachments.map((item) => item.blobId))]
+  const rows = await findBlobsByIds(client, uniqueBlobIds)
+  const byId = new Map(rows.map((row) => [row.id, row]))
 
   for (const id of uniqueBlobIds) {
-    const row = byId.get(id);
+    const row = byId.get(id)
     if (!row) {
-      throw new AppError(ErrorCode.NOT_FOUND, "附件文件不存在", 404);
+      throw new AppError(ErrorCode.NOT_FOUND, '附件文件不存在', 404)
     }
-    assertAllowedMomentBlob(row);
+    assertAllowedMomentBlob(row)
   }
 
-  return byId;
+  return byId
 }
 
 async function createMomentAttachment(
@@ -156,14 +146,14 @@ async function createMomentAttachment(
       blobId: input.blobId,
       ownerType: MOMENT_ATTACHMENT_OWNER_TYPE,
       ownerId: momentId,
-      role: input.role ?? "attachment",
+      role: input.role ?? 'attachment',
       displayName: input.displayName ?? null,
       sortOrder: normalizeSortOrder(input.sortOrder, fallbackSortOrder),
       metadata: input.metadata ?? {},
     })
-    .returning();
+    .returning()
 
-  return toMomentAttachmentEntry({ attachment: row, blob });
+  return toMomentAttachmentEntry({ attachment: row, blob })
 }
 
 /**
@@ -172,12 +162,12 @@ async function createMomentAttachment(
  * string-concatenated — so user input cannot inject pattern characters.
  */
 function buildSearchCondition(keyword: string): SQL | undefined {
-  const pattern = sql`${toLikePattern(keyword)} escape '\\'`;
+  const pattern = sql`${toLikePattern(keyword)} escape '\\'`
   return or(
     ilike(moments.text, pattern),
     ilike(moments.pinyin, pattern),
     ilike(moments.pinyinInitial, pattern),
-  );
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -187,10 +177,10 @@ function buildSearchCondition(keyword: string): SQL | undefined {
 export const momentService = {
   async create(input: CreateMomentInput): Promise<MomentEntry> {
     return db.transaction(async (tx) => {
-      const requestedAttachments = input.attachments ?? [];
-      const requestedTags = input.tags ?? [];
-      const blobById = await resolveAttachmentBlobs(tx, requestedAttachments);
-      const pinyinCols = toPinyinColumns(input.text);
+      const requestedAttachments = input.attachments ?? []
+      const requestedTags = input.tags ?? []
+      const blobById = await resolveAttachmentBlobs(tx, requestedAttachments)
+      const pinyinCols = toPinyinColumns(input.text)
       const [row] = await tx
         .insert(moments)
         .values({
@@ -198,17 +188,15 @@ export const momentService = {
           ...pinyinCols,
           location: input.location ?? null,
         })
-        .returning();
+        .returning()
 
-      const attachments: MomentAttachmentEntry[] = [];
+      const attachments: MomentAttachmentEntry[] = []
       for (const [index, attachment] of requestedAttachments.entries()) {
-        const blob = blobById.get(attachment.blobId);
+        const blob = blobById.get(attachment.blobId)
         if (!blob) {
-          throw new AppError(ErrorCode.NOT_FOUND, "附件文件不存在", 404);
+          throw new AppError(ErrorCode.NOT_FOUND, '附件文件不存在', 404)
         }
-        attachments.push(
-          await createMomentAttachment(tx, row.id, attachment, blob, index),
-        );
+        attachments.push(await createMomentAttachment(tx, row.id, attachment, blob, index))
       }
 
       // Inline tags share the transaction: missing tag → 404 rolls everything back.
@@ -217,33 +205,29 @@ export const momentService = {
         MOMENT_TAG_OWNER_TYPE,
         row.id,
         requestedTags,
-      );
+      )
 
-      return toMomentEntry(row, sortAttachments(attachments), [], 0, tags);
-    });
+      return toMomentEntry(row, sortAttachments(attachments), [], 0, tags)
+    })
   },
 
-  async list(
-    input: ListMomentInput,
-  ): Promise<{ items: MomentEntry[]; total: number }> {
-    const offset = (input.page - 1) * input.pageSize;
+  async list(input: ListMomentInput): Promise<{ items: MomentEntry[]; total: number }> {
+    const offset = (input.page - 1) * input.pageSize
 
     // ?tag= filter: resolve the owner set bound to the tag first, then filter.
-    let tagOwnerIds: string[] | null = null;
+    let tagOwnerIds: string[] | null = null
     if (input.tag !== undefined) {
-      tagOwnerIds = await listOwnerIdsByTagId(db, input.tag, MOMENT_TAG_OWNER_TYPE);
-      if (tagOwnerIds.length === 0) return { items: [], total: 0 };
+      tagOwnerIds = await listOwnerIdsByTagId(db, input.tag, MOMENT_TAG_OWNER_TYPE)
+      if (tagOwnerIds.length === 0) return { items: [], total: 0 }
     }
 
     // ?q= search: text / pinyin / pinyin-initial ILIKE match; orthogonal to tag.
-    const conditions: (SQL | undefined)[] = [];
-    if (tagOwnerIds) conditions.push(inArray(moments.id, tagOwnerIds));
-    if (input.q !== undefined) conditions.push(buildSearchCondition(input.q));
-    if (input.createdFrom)
-      conditions.push(gte(moments.createdAt, new Date(input.createdFrom)));
-    if (input.createdTo)
-      conditions.push(lt(moments.createdAt, new Date(input.createdTo)));
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const conditions: (SQL | undefined)[] = []
+    if (tagOwnerIds) conditions.push(inArray(moments.id, tagOwnerIds))
+    if (input.q !== undefined) conditions.push(buildSearchCondition(input.q))
+    if (input.createdFrom) conditions.push(gte(moments.createdAt, new Date(input.createdFrom)))
+    if (input.createdTo) conditions.push(lt(moments.createdAt, new Date(input.createdTo)))
+    const where = conditions.length > 0 ? and(...conditions) : undefined
 
     const [items, [{ count }]] = await Promise.all([
       db
@@ -254,16 +238,16 @@ export const momentService = {
         .limit(input.pageSize)
         .offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(moments).where(where),
-    ]);
+    ])
 
-    const momentIds = items.map((row) => row.id);
+    const momentIds = items.map((row) => row.id)
     const [attachmentRows, commentRows, tagsByMomentId] = await Promise.all([
       listAttachmentsByMomentIds(db, momentIds),
       listCommentsByMomentIds(db, momentIds),
       listTagEntriesByOwnerIds(db, MOMENT_TAG_OWNER_TYPE, momentIds),
-    ]);
-    const attachmentsByMomentId = groupAttachmentsByMomentId(attachmentRows);
-    const commentsByMomentId = groupCommentsByMomentId(commentRows);
+    ])
+    const attachmentsByMomentId = groupAttachmentsByMomentId(attachmentRows)
+    const commentsByMomentId = groupCommentsByMomentId(commentRows)
 
     return {
       items: items.map((row) =>
@@ -276,33 +260,30 @@ export const momentService = {
         ),
       ),
       total: count,
-    };
+    }
   },
 
   async get(input: GetMomentInput): Promise<MomentEntry> {
-    const [row] = await db.select().from(moments).where(eq(moments.id, input.id));
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "闪念不存在", 404);
+    const [row] = await db.select().from(moments).where(eq(moments.id, input.id))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '闪念不存在', 404)
 
-    const [attachmentsByMomentId, commentsByMomentId, tagsByMomentId] =
-      await Promise.all([
-        groupAttachmentsByMomentId(
-          await listAttachmentsByMomentIds(db, [input.id]),
-        ),
-        groupCommentsByMomentId(await listCommentsByMomentIds(db, [input.id])),
-        listTagEntriesByOwnerIds(db, MOMENT_TAG_OWNER_TYPE, [input.id]),
-      ]);
-    const comments = commentsByMomentId.get(input.id) ?? [];
+    const [attachmentsByMomentId, commentsByMomentId, tagsByMomentId] = await Promise.all([
+      groupAttachmentsByMomentId(await listAttachmentsByMomentIds(db, [input.id])),
+      groupCommentsByMomentId(await listCommentsByMomentIds(db, [input.id])),
+      listTagEntriesByOwnerIds(db, MOMENT_TAG_OWNER_TYPE, [input.id]),
+    ])
+    const comments = commentsByMomentId.get(input.id) ?? []
     return toMomentEntry(
       row,
       attachmentsByMomentId.get(input.id) ?? [],
       comments,
       comments.length,
       tagsByMomentId.get(input.id) ?? [],
-    );
+    )
   },
 
   async update(input: UpdateMomentInput): Promise<MomentEntry> {
-    const { id, ...data } = input;
+    const { id, ...data } = input
     const [row] = await db
       .update(moments)
       .set({
@@ -311,9 +292,9 @@ export const momentService = {
         updatedAt: new Date(),
       })
       .where(eq(moments.id, id))
-      .returning();
-    if (!row) throw new AppError(ErrorCode.NOT_FOUND, "闪念不存在", 404);
-    return momentService.get({ id });
+      .returning()
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '闪念不存在', 404)
+    return momentService.get({ id })
   },
 
   async addAttachment(
@@ -321,50 +302,32 @@ export const momentService = {
     input: AddMomentAttachmentInput,
   ): Promise<MomentAttachmentEntry> {
     return db.transaction(async (tx) => {
-      const [moment] = await tx
-        .select()
-        .from(moments)
-        .where(eq(moments.id, momentId));
-      if (!moment) throw new AppError(ErrorCode.NOT_FOUND, "闪念不存在", 404);
+      const [moment] = await tx.select().from(moments).where(eq(moments.id, momentId))
+      if (!moment) throw new AppError(ErrorCode.NOT_FOUND, '闪念不存在', 404)
 
-      const blobById = await resolveAttachmentBlobs(tx, [input]);
-      const blob = blobById.get(input.blobId);
-      if (!blob) throw new AppError(ErrorCode.NOT_FOUND, "附件文件不存在", 404);
+      const blobById = await resolveAttachmentBlobs(tx, [input])
+      const blob = blobById.get(input.blobId)
+      if (!blob) throw new AppError(ErrorCode.NOT_FOUND, '附件文件不存在', 404)
 
-      const fallbackSortOrder = await getNextAttachmentSortOrder(tx, momentId);
-      return createMomentAttachment(
-        tx,
-        momentId,
-        input,
-        blob,
-        fallbackSortOrder,
-      );
-    });
+      const fallbackSortOrder = await getNextAttachmentSortOrder(tx, momentId)
+      return createMomentAttachment(tx, momentId, input, blob, fallbackSortOrder)
+    })
   },
 
-  async deleteAttachment(
-    input: DeleteMomentAttachmentInput,
-  ): Promise<{ id: string }> {
-    const row = await findMomentAttachment(
-      db,
-      input.momentId,
-      input.attachmentId,
-    );
+  async deleteAttachment(input: DeleteMomentAttachmentInput): Promise<{ id: string }> {
+    const row = await findMomentAttachment(db, input.momentId, input.attachmentId)
     if (!row) {
-      throw new AppError(ErrorCode.NOT_FOUND, "闪念附件不存在", 404);
+      throw new AppError(ErrorCode.NOT_FOUND, '闪念附件不存在', 404)
     }
 
-    await db.delete(blobAttachments).where(eq(blobAttachments.id, input.attachmentId));
-    return { id: input.attachmentId };
+    await db.delete(blobAttachments).where(eq(blobAttachments.id, input.attachmentId))
+    return { id: input.attachmentId }
   },
 
   async delete(input: DeleteMomentInput): Promise<{ id: string }> {
     return db.transaction(async (tx) => {
-      const [row] = await tx
-        .select()
-        .from(moments)
-        .where(eq(moments.id, input.id));
-      if (!row) throw new AppError(ErrorCode.NOT_FOUND, "闪念不存在", 404);
+      const [row] = await tx.select().from(moments).where(eq(moments.id, input.id))
+      if (!row) throw new AppError(ErrorCode.NOT_FOUND, '闪念不存在', 404)
 
       await tx
         .delete(blobAttachments)
@@ -373,7 +336,7 @@ export const momentService = {
             eq(blobAttachments.ownerType, MOMENT_ATTACHMENT_OWNER_TYPE),
             eq(blobAttachments.ownerId, input.id),
           ),
-        );
+        )
       // Owner relations have no FK — clean them explicitly (tags survive).
       await tx
         .delete(tagRelations)
@@ -382,17 +345,17 @@ export const momentService = {
             eq(tagRelations.ownerType, MOMENT_TAG_OWNER_TYPE),
             eq(tagRelations.ownerId, input.id),
           ),
-        );
-      await tx.delete(moments).where(eq(moments.id, input.id));
+        )
+      await tx.delete(moments).where(eq(moments.id, input.id))
 
       fireAuditRecord({
-        event: "moment.delete",
-        message: "闪念已删除",
-        level: "warn",
+        event: 'moment.delete',
+        message: '闪念已删除',
+        level: 'warn',
         detail: { id: input.id },
-      });
-      return { id: input.id };
-    });
+      })
+      return { id: input.id }
+    })
   },
 
   // ---- Tag sub-resource (thin delegation to the tag service) -------------
@@ -402,7 +365,7 @@ export const momentService = {
       tagId,
       ownerType: MOMENT_TAG_OWNER_TYPE,
       ownerId: momentId,
-    });
+    })
   },
 
   async removeTag(momentId: string, tagId: string): Promise<{ id: string }> {
@@ -410,7 +373,7 @@ export const momentService = {
       tagId,
       ownerType: MOMENT_TAG_OWNER_TYPE,
       ownerId: momentId,
-    });
+    })
   },
 
   async replaceTags(momentId: string, tagIds: string[]): Promise<TagEntry[]> {
@@ -418,6 +381,6 @@ export const momentService = {
       ownerType: MOMENT_TAG_OWNER_TYPE,
       ownerId: momentId,
       tagIds,
-    });
+    })
   },
-};
+}

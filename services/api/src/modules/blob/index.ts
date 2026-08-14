@@ -1,1 +1,1 @@
-export { blobRouter } from "@/modules/blob/blob.router";
+export { blobRouter } from '@/modules/blob/blob.router'

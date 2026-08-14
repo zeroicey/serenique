@@ -1,4 +1,3 @@
-import { useTaskGroups, useUpdateTask } from '@/features/task/queries'
 import {
   Dialog,
   DialogContent,
@@ -8,6 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { TaskEntry } from '@/features/task/api'
+import { useTaskGroups, useUpdateTask } from '@/features/task/queries'
 
 interface TaskMoveDialogProps {
   open: boolean

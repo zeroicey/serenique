@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { EventEntry } from './api'
 import { createEvent, deleteEvent, listEvents, updateEvent } from './api'
 import { useCreateEvent, useDeleteEvent, useEvents, useUpdateEvent } from './queries'
-import type { EventEntry } from './api'
 
 vi.mock('./api', () => ({
   listEvents: vi.fn(),

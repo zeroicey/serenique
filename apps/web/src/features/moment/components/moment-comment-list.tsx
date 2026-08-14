@@ -1,5 +1,5 @@
-import { formatDate } from '@/lib/format'
 import type { MomentCommentEntry } from '@/features/moment/api'
+import { formatDate } from '@/lib/format'
 
 interface MomentCommentListProps {
   comments: MomentCommentEntry[]

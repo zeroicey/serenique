@@ -4,9 +4,12 @@
   "workspaces": ["services/*", "apps/web"],
   "scripts": {
     "typecheck": "bunx tsc --noEmit -p services/api/tsconfig.json && bunx tsc --noEmit -p services/mcp/tsconfig.json && bun run --cwd apps/web typecheck",
-    "test": "bun run --cwd services/mcp test && bun run --cwd apps/web test"
+    "test": "bun run --cwd services/mcp test && bun run --cwd apps/web test",
+    "lint": "biome check .",
+    "format": "biome format --write ."
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
     "@types/bun": "latest",
     "typescript": "^5.9.3"
   }

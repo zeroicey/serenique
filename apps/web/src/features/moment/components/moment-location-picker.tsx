@@ -2,9 +2,9 @@ import { Loader2, MapPin, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import type { LocationPoi } from '@/features/location/api'
 import { formatDistance } from '@/features/location/format'
 import { useLocationSearch, useNearbyLocations } from '@/features/location/queries'
-import type { LocationPoi } from '@/features/location/api'
 import type { MomentLocation } from '@/features/moment/api'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 
@@ -44,7 +44,7 @@ export function MomentLocationPicker({ open, onOpenChange, onSelect }: MomentLoc
   const nearbyQuery = useNearbyLocations(coords, open && !searching)
   const searchQuery = useLocationSearch(debouncedKeyword, coords, open && searching)
 
-  const items = searching ? searchQuery.data ?? [] : nearbyQuery.data ?? []
+  const items = searching ? (searchQuery.data ?? []) : (nearbyQuery.data ?? [])
   const isLoading = searching ? searchQuery.isPending : nearbyQuery.isPending
 
   const pick = (item: LocationPoi) => {
@@ -83,8 +83,8 @@ export function MomentLocationPicker({ open, onOpenChange, onSelect }: MomentLoc
             </p>
           ) : (
             <ul className="max-h-[300px] overflow-auto">
-              {items.map((item, i) => (
-                <li key={`${item.name}-${i}`}>
+              {items.map((item, _i) => (
+                <li key={`${item.name}-${item.latitude}-${item.longitude}`}>
                   <button
                     type="button"
                     className="flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-accent"

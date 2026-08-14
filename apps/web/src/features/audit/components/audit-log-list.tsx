@@ -1,5 +1,5 @@
-import { formatDate } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
+import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { AuditLogEntry } from '../api'
 import { AuditLevelBadge } from './audit-level-badge'

@@ -11,6 +11,7 @@ export function MessageList() {
   const activeTurn = useAiStore((s) => s.activeTurn)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 意图性依赖——新消息/新文本到达时滚动到底部
   useEffect(() => {
     // 可选调用：jsdom 未实现 scrollIntoView，避免测试环境抛错；浏览器中正常滚动到底部。
     bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' })
@@ -20,21 +21,28 @@ export function MessageList() {
     // 内容列限宽居中（与闪记一致 max-w-[600px]）：大屏两侧留白，小屏自动全宽。
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
       <div className="mx-auto flex w-full max-w-[600px] flex-col gap-3">
-      {messages.map((m, i) =>
-        m.role === 'user' ? (
-          <div key={i} className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right">{m.text}</div>
-        ) : (
-          <div key={i} className="flex flex-col gap-1">
-            <ThinkingBlock text={m.thinking} />
-            <div className="break-words">
-              {/* 历史消息已完整：静态渲染，不动画 */}
-              <Streamdown isAnimating={false}>{m.text}</Streamdown>
+        {messages.map((m, i) =>
+          m.role === 'user' ? (
+            <div
+              key={i}
+              className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right"
+            >
+              {m.text}
             </div>
-            {m.toolCalls.map((tc) => <ToolCard key={tc.id} card={{ ...tc, running: false }} />)}
-          </div>
-        ),
-      )}
-      {activeTurn && <TurnView turn={activeTurn} />}
+          ) : (
+            <div key={i} className="flex flex-col gap-1">
+              <ThinkingBlock text={m.thinking} />
+              <div className="break-words">
+                {/* 历史消息已完整：静态渲染，不动画 */}
+                <Streamdown isAnimating={false}>{m.text}</Streamdown>
+              </div>
+              {m.toolCalls.map((tc) => (
+                <ToolCard key={tc.id} card={{ ...tc, running: false }} />
+              ))}
+            </div>
+          ),
+        )}
+        {activeTurn && <TurnView turn={activeTurn} />}
       </div>
       <div ref={bottomRef} />
     </div>

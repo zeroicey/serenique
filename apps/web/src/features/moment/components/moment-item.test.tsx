@@ -53,7 +53,7 @@ describe('MomentItem', () => {
   it('超长文本默认截断，正文下方可展开/收起', async () => {
     const user = userEvent.setup()
     renderWithProviders(<MomentItem moment={makeMoment({ text: longText })} />)
-    expect(screen.getByText(longText.slice(0, 150) + '…')).toBeInTheDocument()
+    expect(screen.getByText(`${longText.slice(0, 150)}…`)).toBeInTheDocument()
     expect(screen.queryByText(longText)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '全文' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '全文' }))
@@ -149,7 +149,9 @@ describe('MomentItem', () => {
 
   it('无 name 时显示坐标文本（lat, lng）', () => {
     renderWithProviders(
-      <MomentItem moment={makeMoment({ location: { latitude: 39.90872, longitude: 116.39751 } })} />,
+      <MomentItem
+        moment={makeMoment({ location: { latitude: 39.90872, longitude: 116.39751 } })}
+      />,
     )
     expect(screen.getByRole('link', { name: '39.9087, 116.3975' })).toBeInTheDocument()
   })

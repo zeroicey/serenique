@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { sortTasks, taskStatusLabel } from './lib'
 import type { TaskEntry } from './api'
+import { sortTasks, taskStatusLabel } from './lib'
 
 describe('taskStatusLabel', () => {
   it('映射三种状态到中文标签', () => {

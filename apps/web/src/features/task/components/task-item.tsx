@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   ArrowRightLeft,
   MoreHorizontal,
@@ -8,8 +7,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { formatDate } from '@/lib/format'
+import { useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
@@ -17,11 +15,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useDeleteTask, useUpdateTask } from '@/features/task/queries'
 import type { TaskEntry } from '@/features/task/api'
+import { useDeleteTask, useUpdateTask } from '@/features/task/queries'
+import { formatDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { TaskConfirmDialog } from './task-confirm-dialog'
-import { TaskRenameDialog } from './task-rename-dialog'
 import { TaskMoveDialog } from './task-move-dialog'
+import { TaskRenameDialog } from './task-rename-dialog'
 
 interface TaskItemProps {
   task: TaskEntry

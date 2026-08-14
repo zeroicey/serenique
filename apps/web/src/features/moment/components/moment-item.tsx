@@ -1,13 +1,5 @@
 import { Clock, MapPin, MessageCircle, MoreHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { formatDate } from '@/lib/format'
-import {
-  useCreateMomentComment,
-  useDeleteMoment,
-  useMomentComments,
-} from '@/features/moment/queries'
-import type { MomentEntry, MomentLocation } from '@/features/moment/api'
-import { formatLocationLabel, locationAmapUrl } from '@/features/location/format'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,6 +16,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { formatLocationLabel, locationAmapUrl } from '@/features/location/format'
+import type { MomentEntry, MomentLocation } from '@/features/moment/api'
+import {
+  useCreateMomentComment,
+  useDeleteMoment,
+  useMomentComments,
+} from '@/features/moment/queries'
+import { formatDate } from '@/lib/format'
 import { MomentAttachmentGrid } from './moment-attachment-grid'
 import { MomentCommentList } from './moment-comment-list'
 import { MomentCommentsDialog } from './moment-comments-dialog'
@@ -50,7 +50,7 @@ export function MomentItem({ moment }: MomentItemProps) {
   const { data: comments } = useMomentComments(moment.id, moment.commentCount > 0)
 
   const showToggle = moment.text.length > TEXT_TRUNCATE
-  const text = showToggle && !textExpanded ? moment.text.slice(0, TEXT_TRUNCATE) + '…' : moment.text
+  const text = showToggle && !textExpanded ? `${moment.text.slice(0, TEXT_TRUNCATE)}…` : moment.text
 
   const inlineComments = (comments ?? []).slice(0, INLINE_COMMENTS)
   const hasMoreComments = moment.commentCount > INLINE_COMMENTS

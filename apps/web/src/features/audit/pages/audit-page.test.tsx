@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/api/errors'
-import AuditPage from './audit-page'
-import { useAuditLogs } from '../queries'
 import type { AuditLogEntry } from '../api'
+import { useAuditLogs } from '../queries'
+import AuditPage from './audit-page'
 
 // mock 掉 audit 数据 hook，页面只测渲染与交互。
 vi.mock('../queries', () => ({
@@ -55,7 +55,9 @@ describe('AuditPage', () => {
   })
 
   it('渲染筛选条与日志列表', () => {
-    renderPage({ data: { items: [makeLog('a', { message: '文件已删除', level: 'warn' })], total: 1 } })
+    renderPage({
+      data: { items: [makeLog('a', { message: '文件已删除', level: 'warn' })], total: 1 },
+    })
     // 级别筛选是按钮（避免与日志卡上的级别角标文本撞车，用 role 查）。
     for (const label of ['信息', '警告', '错误']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
@@ -89,7 +91,9 @@ describe('AuditPage', () => {
   })
 
   it('超过一页时分页按钮可用', () => {
-    renderPage({ data: { items: Array.from({ length: 20 }, (_, i) => makeLog(`l${i}`)), total: 41 } })
+    renderPage({
+      data: { items: Array.from({ length: 20 }, (_, i) => makeLog(`l${i}`)), total: 41 },
+    })
     expect(screen.getByText(/共 41 条/)).toBeInTheDocument()
     const prev = screen.getByRole('button', { name: '上一页' })
     expect(prev).toBeDisabled()

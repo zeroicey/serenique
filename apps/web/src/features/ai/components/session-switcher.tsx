@@ -20,14 +20,11 @@ export function SessionSwitcher() {
   const deleteSession = useAiStore((s) => s.deleteSession)
   const [open, setOpen] = useState(false)
 
-  const currentName =
-    sessions.find((s) => s.id === currentSessionId)?.name ?? '新会话'
+  const currentName = sessions.find((s) => s.id === currentSessionId)?.name ?? '新会话'
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger
-        render={<Button variant="outline" className="max-w-48" />}
-      >
+      <DropdownMenuTrigger render={<Button variant="outline" className="max-w-48" />}>
         <span className="truncate">{currentName}</span>
         <span className="text-muted-foreground">▾</span>
       </DropdownMenuTrigger>
@@ -43,15 +40,10 @@ export function SessionSwitcher() {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {sessions.length === 0 && (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">
-            暂无会话
-          </div>
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">暂无会话</div>
         )}
         {sessions.map((s) => (
-          <div
-            key={s.id}
-            className="group relative flex items-center"
-          >
+          <div key={s.id} className="group relative flex items-center">
             <DropdownMenuItem
               className={`flex-1 pr-7 ${s.id === currentSessionId ? 'bg-primary/10' : ''}`}
               onClick={() => {
