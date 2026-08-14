@@ -1,19 +1,19 @@
-import { Hono } from "hono";
-import type { upgradeWebSocket } from "hono/bun";
-import type { Env } from "@/env";
-import { cors, logger } from "@/middleware";
-import { momentRouter } from "@/modules/moment";
-import { blobRouter } from "@/modules/blob";
-import { taskRouter } from "@/modules/task";
-import { eventRouter } from "@/modules/event";
-import { auditRouter } from "@/modules/audit";
-import { tagRouter } from "@/modules/tag";
-import { locationRouter } from "@/modules/location";
-import { authMiddleware, authRouter } from "@/modules/auth";
-import { tokenRouter } from "@/modules/tokens";
-import { createAiRouter } from "@/modules/ai";
-import { Res } from "@/shared/response";
-import { logger as pinoLogger } from "@/shared/logger";
+import { Hono } from 'hono'
+import type { upgradeWebSocket } from 'hono/bun'
+import type { Env } from '@/env'
+import { bodyLimit, cors, csrf, logger, rateLimit, secureHeaders, timeout } from '@/middleware'
+import { createAiRouter } from '@/modules/ai'
+import { auditRouter } from '@/modules/audit'
+import { authMiddleware, authRouter } from '@/modules/auth'
+import { blobRouter } from '@/modules/blob'
+import { eventRouter } from '@/modules/event'
+import { locationRouter } from '@/modules/location'
+import { momentRouter } from '@/modules/moment'
+import { tagRouter } from '@/modules/tag'
+import { taskRouter } from '@/modules/task'
+import { tokenRouter } from '@/modules/tokens'
+import { logger as pinoLogger } from '@/shared/logger'
+import { Res } from '@/shared/response'
 
 // ---------------------------------------------------------------------------
 // App factory — receives validated env, returns an assembled Hono instance.
@@ -26,57 +26,60 @@ import { logger as pinoLogger } from "@/shared/logger";
 export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSocket }) {
   // ---- 0. Fail-closed: 生产必须配置会话签名密钥与 RP ID，否则拒绝启动 -------
   //    （SETUP_TOKEN 注册完成后可移除，故不在此列 —— 见需求文档 ⑦）
-  if (
-    env.NODE_ENV === "production" &&
-    (!env.SESSION_SECRET || !env.WEBAUTHN_RP_ID)
-  ) {
+  if (env.NODE_ENV === 'production' && (!env.SESSION_SECRET || !env.WEBAUTHN_RP_ID)) {
     throw new Error(
-      "生产环境必须配置 SESSION_SECRET 与 WEBAUTHN_RP_ID 才能启动（认证 fail-closed）",
-    );
+      '生产环境必须配置 SESSION_SECRET 与 WEBAUTHN_RP_ID 才能启动（认证 fail-closed）',
+    )
   }
 
-  const app = new Hono();
+  const app = new Hono()
 
   // ---- 1. Global error handler --------------------------------------------
   //    Catches unhandled errors from any layer below.
   //
   app.onError((err, c) => {
-    pinoLogger.error({ err, method: c.req.method, path: c.req.path }, "Unhandled error");
-    return Res.internalError().build(c);
-  });
+    pinoLogger.error({ err, method: c.req.method, path: c.req.path }, 'Unhandled error')
+    return Res.internalError().build(c)
+  })
 
   // ---- 2. Global middleware -----------------------------------------------
-  //    Order: CORS first (preflight), then logger.
+  //    Order: CORS (preflight) → logger → security headers → rate limit →
+  //    CSRF → body limit → timeout。各中间件设计见 middleware/*.ts。
   //
-  app.use("*", cors());
-  app.use("*", logger);
+  app.use('*', cors())
+  app.use('*', logger)
+  app.use('*', secureHeaders())
+  app.use('*', rateLimit())
+  app.use('*', csrf())
+  app.use('*', bodyLimit())
+  app.use('*', timeout())
 
   // ---- 3. Meta routes -----------------------------------------------------
   //
-  app.get("/health", (c) => Res.ok("服务运行中", { status: "ok" }).build(c));
-  app.get("/", (c) =>
-    Res.ok("Serenique API", {
-      modules: ["moment", "blob", "task", "event", "audit", "tags", "auth", "tokens", "location"],
+  app.get('/health', (c) => Res.ok('服务运行中', { status: 'ok' }).build(c))
+  app.get('/', (c) =>
+    Res.ok('Serenique API', {
+      modules: ['moment', 'blob', 'task', 'event', 'audit', 'tags', 'auth', 'tokens', 'location'],
     }).build(c),
-  );
+  )
 
   // ---- 4. API modules -----------------------------------------------------
   //    Each module is a self-contained Hono instance mounted under /api.
   //
-  app.use("/api/*", authMiddleware);
-  app.route("/api", authRouter);
-  app.route("/api", tokenRouter);
-  app.route("/api", momentRouter);
-  app.route("/api", blobRouter);
-  app.route("/api", taskRouter);
-  app.route("/api", eventRouter);
-  app.route("/api", auditRouter);
-  app.route("/api", tagRouter);
-  app.route("/api", locationRouter);
-  app.route("/api", createAiRouter(ws.upgradeWebSocket));
+  app.use('/api/*', authMiddleware)
+  app.route('/api', authRouter)
+  app.route('/api', tokenRouter)
+  app.route('/api', momentRouter)
+  app.route('/api', blobRouter)
+  app.route('/api', taskRouter)
+  app.route('/api', eventRouter)
+  app.route('/api', auditRouter)
+  app.route('/api', tagRouter)
+  app.route('/api', locationRouter)
+  app.route('/api', createAiRouter(ws.upgradeWebSocket))
 
   // ---- 5. 404 fallback ----------------------------------------------------
-  app.notFound((c) => Res.notFound("接口不存在").build(c));
+  app.notFound((c) => Res.notFound('接口不存在').build(c))
 
-  return app;
+  return app
 }
