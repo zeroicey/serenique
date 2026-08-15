@@ -37,4 +37,5 @@
 - **Flutter 3.44 widget 测试**：`Image.network` 解码是引擎异步，fake-async 下 `pumpAndSettle` 永远超时 → 用 `runAsync` 真实延时 + 交替 pump 的 `settle()` helper（4 个测试文件重复定义了，应抽 `test/helpers.dart`）。
 - **Dart `List.sort` 不稳定**：仅按 sortOrder 排序 + 多处独立排序 = 顺序漂移风险；稳定排序要带 createdAt/id 次键。
 - 预览页占位图标在黑底上用 `Colors.white70`（浅色主题的 onSurfaceVariant 是深色，黑底上看不见）。
+- **生产大文件上传超时排查顺序（上传编排阶段实测）**：后端无报错 → 先怀疑网络链路 + 客户端超时，别一上来改服务端。当天证据：3 张图（共 110KB）200 且 8–263ms 秒传；同窗口大文件上传 71s 后失败（前端超时设太短、客户端中断）。结论：国内→hpcore（反代+EasyTier 隧道）链路慢，大文件上传要放宽前端超时/加进度提示。
 - 下一步（下阶段）：视频 `video_player` / 音频 `just_audio` 播放、上传编排（`image_picker`/`file_picker` → `uploadBlob` → `createMoment({text,attachments})`）、「从小放大」动画（换 transitionBuilder + Hero tag）。

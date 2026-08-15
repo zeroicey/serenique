@@ -1,6 +1,3 @@
-# Claude local settings
-.claude/settings.local.json
-
 # Environment
 .env
 
@@ -12,11 +9,11 @@ apps/cli/bin/
 # Vite build output
 apps/web/dist/
 
-# Superpowers scratch (SDD per-plan workspace)
-.superpowers/
+# pi 运行时状态（.pi/ 其余内容——APPEND_SYSTEM.md、extensions/、agents/、skills/、mcp.json——纳入版本管理）
+.pi/decision-auditor/
 
-# Isolated worktrees
-.worktrees/
-
-# opencode runtime
+# 遗留工具运行时（已迁移 pi，不再使用）
 .omo/
+.superpowers/
+.worktrees/
+.codegraph
