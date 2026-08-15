@@ -1,7 +1,7 @@
 # 需求状态总表
 
 | 文件 | 主题 | 状态 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `2026-08-05-diary-content-forms.md` | 日记内容形态 | ⏳待实施（暂缓） |
 | `2026-08-05-event-module.md` | 事件模块 | ✅已实施 |
 | `2026-08-05-moment-comments.md` | Moment 评论 | ✅已实施 |
@@ -16,6 +16,7 @@
 | `2026-08-08-moment-location.md` | Moment 位置信息 | ✅已实施（API + CLI + Web + Flutter 2026-08-10） |
 | `2026-08-09-ai-agent-module.md` | AI 助手模块（宁序，PI SDK 内嵌） | ✅已实施（后端 + Web 前端 2026-08-09；待部署验收） |
 | `2026-08-13-moment-global-search.md` | Moment 全局搜索（中文/拼音/英文） | ✅已实施（API + Web + Flutter + CLI 四端 2026-08-13；待 db:migrate + 回填后部署验收） |
+| `2026-08-15-face-verification-auth.md` | 人脸核身 / 生物识别登录增强 | 🪦已否决（2026-08-15：Passkey 平台生物识别已覆盖，无需自建） |
 
 ## 约定
 
