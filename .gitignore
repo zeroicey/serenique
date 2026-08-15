@@ -9,6 +9,9 @@ apps/cli/bin/
 # Vite build output
 apps/web/dist/
 
+# wrangler pages deploy 本地缓存（每次部署生成）
+apps/web/.wrangler/
+
 # pi 运行时状态（.pi/ 其余内容——APPEND_SYSTEM.md、extensions/、agents/、skills/、mcp.json——纳入版本管理）
 .pi/decision-auditor/
 
