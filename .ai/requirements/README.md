@@ -17,6 +17,7 @@
 | `2026-08-09-ai-agent-module.md` | AI 助手模块（宁序，PI SDK 内嵌） | ✅已实施（后端 + Web 前端 2026-08-09；待部署验收） |
 | `2026-08-13-moment-global-search.md` | Moment 全局搜索（中文/拼音/英文） | ✅已实施（API + Web + Flutter + CLI 四端 2026-08-13；待 db:migrate + 回填后部署验收） |
 | `2026-08-15-face-verification-auth.md` | 人脸核身 / 生物识别登录增强 | 🪦已否决（2026-08-15：Passkey 平台生物识别已覆盖，无需自建） |
+| `2026-08-16-moment-draft-cache.md` | Moment 新建闪记本地草稿缓存 | ✅已实施 |
 
 ## 约定
 

@@ -53,7 +53,9 @@ export default function MomentCreatePage() {
       { text: values.text, files: mediaFiles, location },
       {
         onSuccess: () => {
-          reset()
+          // reset({ text: '' }) 而非 reset()：后者回退到 defaultValues 快照
+          // （可能是历史草稿），useEffect 会把它写回 store 造成草稿残留
+          reset({ text: '' })
           setMediaFiles([])
           setLocation(null)
           clearDraft()
@@ -66,7 +68,7 @@ export default function MomentCreatePage() {
   const handleCancel = () => {
     setMediaFiles([])
     setLocation(null)
-    clearDraft()
+    // 取消不清草稿：误触取消也应保留已输入文字（localStorage 兜底），下次进入恢复
     navigate('/moment')
   }
 

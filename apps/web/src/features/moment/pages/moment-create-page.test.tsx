@@ -119,4 +119,36 @@ describe('MomentCreatePage', () => {
       expect.any(Object),
     )
   })
+
+  it('取消后草稿保留（localStorage 持久化，误触不丢）', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <MemoryRouter>
+        <MomentCreatePage />
+      </MemoryRouter>,
+    )
+    await user.type(screen.getByPlaceholderText('此刻在想什么？'), '写到一半的内容')
+    expect(useMomentDraftStore.getState().draftText).toBe('写到一半的内容')
+
+    await user.click(screen.getByRole('button', { name: '取消' }))
+    // 取消不清草稿：误触取消后重进页面仍能恢复
+    expect(useMomentDraftStore.getState().draftText).toBe('写到一半的内容')
+  })
+
+  it('发布成功后清除草稿（onSuccess 回调）', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <MemoryRouter>
+        <MomentCreatePage />
+      </MemoryRouter>,
+    )
+    await user.type(screen.getByPlaceholderText('此刻在想什么？'), '即将发布的内容')
+    expect(useMomentDraftStore.getState().draftText).toBe('即将发布的内容')
+
+    // 点击发布触发 mutate；spy 不自动执行 onSuccess，手动触发验证草稿清除
+    await user.click(screen.getByRole('button', { name: '发布' }))
+    const options = mutate.mock.calls[0]?.[1] as { onSuccess?: () => void }
+    options.onSuccess?.()
+    expect(useMomentDraftStore.getState().draftText).toBe('')
+  })
 })
