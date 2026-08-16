@@ -15,6 +15,7 @@ function makeHabit(id: string, overrides: Partial<HabitEntry> = {}): HabitEntry 
   return {
     id,
     name: `习惯${id}`,
+    description: null,
     kind: 'good',
     countable: false,
     sortOrder: 0,
@@ -29,7 +30,6 @@ function makeDaily(habitId: string, overrides: Partial<HabitDailyEntry> = {}): H
     habitId,
     status: 'done',
     count: 0,
-    note: null,
     ...overrides,
   }
 }

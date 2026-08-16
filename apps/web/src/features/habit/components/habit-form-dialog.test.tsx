@@ -31,6 +31,7 @@ function makeHabit(): HabitEntry {
   return {
     id: 'h1',
     name: '跑步',
+    description: null,
     kind: 'good',
     countable: false,
     sortOrder: 2,
@@ -77,6 +78,20 @@ describe('HabitFormDialog · 新建', () => {
     expect(screen.getByText('名称不能为空')).toBeInTheDocument()
     expect(mocks.create).not.toHaveBeenCalled()
   })
+
+  it('填写简介时随 createHabit 提交（空简介省略）', async () => {
+    const user = userEvent.setup()
+    render(<HabitFormDialog />)
+    await user.type(screen.getByLabelText('名称'), '跑步')
+    await user.type(screen.getByLabelText('简介（可选）'), '每天晨跑 5 公里')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(mocks.create.mock.calls[0][0]).toEqual({
+      name: '跑步',
+      kind: 'good',
+      countable: false,
+      description: '每天晨跑 5 公里',
+    })
+  })
 })
 
 describe('HabitFormDialog · 编辑', () => {
@@ -96,6 +111,7 @@ describe('HabitFormDialog · 编辑', () => {
       kind: 'good',
       countable: false,
       sortOrder: 5,
+      description: null,
     })
     expect(mocks.close).toHaveBeenCalled()
   })
@@ -112,6 +128,25 @@ describe('HabitFormDialog · 编辑', () => {
       kind: 'good',
       countable: false,
       sortOrder: undefined,
+      description: null,
+    })
+  })
+
+  it('编辑回填简介，清空时提交 null 清除', async () => {
+    const user = userEvent.setup()
+    store.editingHabit = makeHabit()
+    store.editingHabit = { ...makeHabit(), description: '旧简介' }
+    render(<HabitFormDialog />)
+    expect(screen.getByLabelText('简介（可选）')).toHaveValue('旧简介')
+    await user.clear(screen.getByLabelText('简介（可选）'))
+    await user.click(screen.getByRole('button', { name: '保存' }))
+    expect(mocks.update.mock.calls[0][0]).toEqual({
+      id: 'h1',
+      name: '跑步',
+      kind: 'good',
+      countable: false,
+      sortOrder: 2,
+      description: null,
     })
   })
 })

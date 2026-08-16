@@ -8,6 +8,7 @@ import { SessionSwitcher } from '@/features/ai/components/session-switcher'
 import { AuditNav } from '@/features/audit/components/audit-nav'
 import { AuthGuard } from '@/features/auth/components/auth-guard'
 import { EventNav } from '@/features/event/components/event-nav'
+import { HabitDateNav } from '@/features/habit/components/habit-date-nav'
 import { HabitNav } from '@/features/habit/components/habit-nav'
 import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
 import { MomentNav } from '@/features/moment/components/moment-nav'
@@ -77,7 +78,10 @@ const router = createBrowserRouter([
           {
             path: 'habit',
             element: lazyPage(() => import('@/features/habit/pages/habit-page')),
-            handle: { nav: <HabitNav /> },
+            handle: {
+              nav: <HabitNav />,
+              headerRight: <HabitDateNav />,
+            },
           },
           {
             path: 'habit/overview',

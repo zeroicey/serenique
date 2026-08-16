@@ -30,6 +30,7 @@ function makeHabit(overrides: Partial<HabitEntry> = {}): HabitEntry {
   return {
     id: 'h1',
     name: '跑步',
+    description: null,
     kind: 'good',
     countable: false,
     sortOrder: 0,
@@ -44,7 +45,6 @@ function makeDaily(overrides: Partial<HabitDailyEntry> = {}): HabitDailyEntry {
     habitId: 'h1',
     status: 'done',
     count: 0,
-    note: null,
     ...overrides,
   }
 }
@@ -145,54 +145,21 @@ describe('HabitRow · 计数型', () => {
   })
 })
 
-describe('HabitRow · 备注', () => {
-  it('已有记录时保存备注带原状态一起 upsert', async () => {
-    const user = userEvent.setup()
-    render(<HabitRow habit={makeHabit()} daily={makeDaily({ status: 'done' })} date="2026-08-16" />)
-    await user.click(screen.getByRole('button', { name: '编辑备注' }))
-    await user.type(screen.getByLabelText('备注输入'), '5km')
-    await user.click(screen.getByRole('button', { name: '保存备注' }))
-    expect(mocks.setDaily).toHaveBeenCalledWith({
-      habitId: 'h1',
-      date: '2026-08-16',
-      status: 'done',
-      count: undefined,
-      note: '5km',
-    })
-  })
-
-  it('无记录且备注非空 → 仅传 note（Enter 保存）', async () => {
-    const user = userEvent.setup()
-    render(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" />)
-    await user.click(screen.getByRole('button', { name: '编辑备注' }))
-    await user.type(screen.getByLabelText('备注输入'), '晨跑{Enter}')
-    expect(mocks.setDaily).toHaveBeenCalledWith({
-      habitId: 'h1',
-      date: '2026-08-16',
-      note: '晨跑',
-    })
-  })
-
-  it('已有记录清空备注 → note: null 清除', async () => {
-    const user = userEvent.setup()
+describe('HabitRow · 简介', () => {
+  it('有 description 时名称下方显示简介', () => {
     render(
       <HabitRow
-        habit={makeHabit()}
-        daily={makeDaily({ status: 'not_done', note: '旧备注' })}
+        habit={makeHabit({ description: '每天晨跑 5 公里' })}
+        daily={undefined}
         date="2026-08-16"
       />,
     )
-    await user.click(screen.getByRole('button', { name: '编辑备注' }))
-    const input = screen.getByLabelText('备注输入')
-    await user.clear(input)
-    await user.click(screen.getByRole('button', { name: '保存备注' }))
-    expect(mocks.setDaily).toHaveBeenCalledWith({
-      habitId: 'h1',
-      date: '2026-08-16',
-      status: 'not_done',
-      count: undefined,
-      note: null,
-    })
+    expect(screen.getByText('每天晨跑 5 公里')).toBeInTheDocument()
+  })
+
+  it('无 description 时不渲染简介', () => {
+    render(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" />)
+    expect(screen.queryByTestId('habit-description')).not.toBeInTheDocument()
   })
 })
 

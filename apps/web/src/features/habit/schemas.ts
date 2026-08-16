@@ -9,6 +9,7 @@ export const habitFormSchema = z.object({
   kind: z.enum(['good', 'bad'], { message: '请选择类型' }),
   countable: z.boolean(),
   sortOrder: z.string().trim().regex(/^\d*$/, '排序号须为非负整数').max(6, '排序号过长').optional(),
+  description: z.string().trim().max(500, '简介过长（最多 500 字）').optional(),
 })
 
 export type HabitFormValues = z.infer<typeof habitFormSchema>

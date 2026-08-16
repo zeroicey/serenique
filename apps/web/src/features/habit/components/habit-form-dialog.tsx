@@ -13,12 +13,13 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { useCreateHabit, useUpdateHabit } from '@/features/habit/queries'
 import { type HabitFormValues, habitFormSchema } from '@/features/habit/schemas'
 import { cn } from '@/lib/utils'
 import { useHabitUIStore } from '@/stores/habit-ui'
 
-// 新建 / 编辑习惯选项弹窗：名称 + 类型（好事/坏事）+ 可计数开关 + 排序号。
+// 新建 / 编辑习惯选项弹窗：名称 + 类型（好事/坏事）+ 可计数开关 + 排序号 + 简介（可选）。
 // countable 切换只影响后续写入，历史每日状态不迁移（服务端契约，弹窗内说明）。
 export function HabitFormDialog() {
   const { createOpen, editingHabit, close } = useHabitUIStore()
@@ -35,7 +36,7 @@ export function HabitFormDialog() {
     formState: { errors },
   } = useForm<HabitFormValues>({
     resolver: zodResolver(habitFormSchema),
-    defaultValues: { name: '', kind: 'good', countable: false, sortOrder: '' },
+    defaultValues: { name: '', kind: 'good', countable: false, sortOrder: '', description: '' },
   })
   const kind = watch('kind')
   const countable = watch('countable')
@@ -49,14 +50,16 @@ export function HabitFormDialog() {
         kind: editingHabit.kind,
         countable: editingHabit.countable,
         sortOrder: String(editingHabit.sortOrder),
+        description: editingHabit.description ?? '',
       })
     } else {
-      reset({ name: '', kind: 'good', countable: false, sortOrder: '' })
+      reset({ name: '', kind: 'good', countable: false, sortOrder: '', description: '' })
     }
   }, [createOpen, editingHabit, reset])
 
   const onSubmit = handleSubmit((values) => {
     const sortOrder = values.sortOrder === '' ? undefined : Number(values.sortOrder)
+    const description = values.description?.trim()
     if (editingHabit) {
       updateHabit(
         {
@@ -65,16 +68,19 @@ export function HabitFormDialog() {
           kind: values.kind,
           countable: values.countable,
           sortOrder,
+          // 编辑时总是带 description：空串 → null 清除（服务端契约）。
+          description: description || null,
         },
         { onSuccess: () => close() },
       )
     } else {
-      // 新建契约（POST /api/habits）仅 name/kind/countable；sortOrder 默认 0。
+      // 新建契约（POST /api/habits）name/kind/countable + 可选 description；sortOrder 默认 0。
       createHabit(
         {
           name: values.name,
           kind: values.kind,
           countable: values.countable,
+          ...(description ? { description } : {}),
         },
         { onSuccess: () => close() },
       )
@@ -145,6 +151,21 @@ export function HabitFormDialog() {
             />
             <span>可计数（喝水这类一天多次的习惯，点 +1 记录次数）</span>
           </label>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="habit-description">简介（可选）</Label>
+            <Textarea
+              id="habit-description"
+              placeholder="如：每天晨跑 5 公里"
+              rows={2}
+              maxLength={500}
+              aria-invalid={!!errors.description}
+              {...register('description')}
+            />
+            {errors.description && (
+              <p className="text-xs text-destructive">{errors.description.message}</p>
+            )}
+          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="habit-sort">排序号（越小越靠前）</Label>

@@ -1,4 +1,4 @@
-import { Check, Minus, MoreHorizontal, Plus, SquarePen, StickyNote, Trash2, X } from 'lucide-react'
+import { Check, Minus, MoreHorizontal, Plus, SquarePen, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
 import type { DailyStatus, HabitDailyEntry, HabitEntry } from '@/features/habit/api'
 import { useClearDaily, useDeleteHabit, useSetDaily } from '@/features/habit/queries'
 import { cn } from '@/lib/utils'
@@ -31,16 +30,14 @@ interface HabitRowProps {
 }
 
 // 单行习惯：做没做型 → ✓做了 / ✗没做 三态；计数型 → ×N + ±1。
-// 备注内联编辑（Enter 保存 / Esc 取消）；下拉菜单：编辑 / 删除。
-// 高频点击（做/没做/±1）成功不弹 toast；备注与删除仍给反馈。
+// 名称下显示习惯简介（description，可选）；下拉菜单：编辑 / 删除。
+// 高频点击（做/没做/±1）成功不弹 toast；删除仍给反馈。
 export function HabitRow({ habit, daily, date }: HabitRowProps) {
   const { mutate: setDaily } = useSetDaily()
   const { mutate: clearDaily } = useClearDaily()
   const { mutate: deleteHabit } = useDeleteHabit()
   const { openEdit } = useHabitUIStore()
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [editingNote, setEditingNote] = useState(false)
-  const [noteDraft, setNoteDraft] = useState('')
 
   // 本地乐观状态：连续点击（±1 / 切换状态）时请求未返回前用本地值累加，
   // 避免每次点击都基于旧的 daily prop 计算。API 的 DailyEntry 不返回
@@ -50,7 +47,6 @@ export function HabitRow({ habit, daily, date }: HabitRowProps) {
 
   const count = localCount ?? daily?.count ?? 0
   const status = localStatus ?? daily?.status ?? null
-  const note = daily?.note ?? ''
 
   const setStatus = (next: DailyStatus) => {
     if (status === next) {
@@ -79,29 +75,6 @@ export function HabitRow({ habit, daily, date }: HabitRowProps) {
     }
   }
 
-  const openNoteEdit = () => {
-    setNoteDraft(note)
-    setEditingNote(true)
-  }
-
-  const saveNote = () => {
-    const trimmed = noteDraft.trim()
-    setEditingNote(false)
-    if (daily) {
-      // 已有记录：带原状态 + 新备注一起 upsert（用本地乐观值，避免连续编辑时用旧值）。
-      setDaily({
-        habitId: habit.id,
-        date,
-        status: status ?? undefined,
-        count: habit.countable ? count : undefined,
-        note: trimmed || null,
-      })
-    } else if (trimmed) {
-      // 无记录且备注非空：仅传 note（upsert 契约允许只带 note）。
-      setDaily({ habitId: habit.id, date, note: trimmed })
-    }
-  }
-
   return (
     <>
       <div className="flex w-full items-center gap-3 px-3 py-3">
@@ -117,8 +90,8 @@ export function HabitRow({ habit, daily, date }: HabitRowProps) {
             <span className="break-words text-sm font-medium">{habit.name}</span>
             {habit.countable && <Badge variant="secondary">计数</Badge>}
           </div>
-          {!editingNote && note && (
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{note}</p>
+          {habit.description && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{habit.description}</p>
           )}
         </div>
 
@@ -163,16 +136,6 @@ export function HabitRow({ habit, daily, date }: HabitRowProps) {
           </div>
         )}
 
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label="编辑备注"
-          className="shrink-0"
-          onClick={openNoteEdit}
-        >
-          <StickyNote />
-        </Button>
-
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="习惯操作"
@@ -195,35 +158,6 @@ export function HabitRow({ habit, daily, date }: HabitRowProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-
-      {editingNote && (
-        <div className="flex items-center gap-1.5 px-3 pb-3">
-          <Input
-            aria-label="备注输入"
-            placeholder="备注（可选，如：5km）"
-            value={noteDraft}
-            maxLength={500}
-            autoFocus
-            onChange={(e) => setNoteDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveNote()
-              if (e.key === 'Escape') setEditingNote(false)
-            }}
-          />
-          <Button size="sm" aria-label="保存备注" onClick={saveNote}>
-            <Check />
-            保存
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            aria-label="取消备注"
-            onClick={() => setEditingNote(false)}
-          >
-            <X />
-          </Button>
-        </div>
-      )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

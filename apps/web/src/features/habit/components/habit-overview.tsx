@@ -124,9 +124,6 @@ function HabitOverviewRow({ record }: { record: OverviewRecord }) {
         </span>
       )}
       <span className="min-w-0 flex-1 truncate text-sm">{record.name}</span>
-      {record.note && (
-        <span className="shrink-0 truncate text-xs text-muted-foreground">{record.note}</span>
-      )}
     </div>
   )
 }

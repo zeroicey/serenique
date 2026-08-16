@@ -19,6 +19,8 @@ export type DailyStatus = 'done' | 'not_done'
 export interface HabitEntry {
   id: string
   name: string
+  /** 习惯简介（可选，如「每天晨跑 5 公里」）。 */
+  description: string | null
   kind: HabitKind
   countable: boolean
   sortOrder: number
@@ -32,13 +34,13 @@ export interface HabitDailyEntry {
   status: DailyStatus | null
   /** 计数型：次数（≥0）；做没做型恒 0。 */
   count: number
-  note: string | null
 }
 
 export interface CreateHabitInput {
   name: string
   kind: HabitKind
   countable?: boolean
+  description?: string | null
 }
 
 export interface UpdateHabitInput {
@@ -46,15 +48,15 @@ export interface UpdateHabitInput {
   kind?: HabitKind
   countable?: boolean
   sortOrder?: number
+  description?: string | null
 }
 
-/** upsert 每日状态：做没做型传 status，计数型传 count，note 独立可选。至少一个字段。 */
+/** upsert 每日状态：做没做型传 status，计数型传 count。至少一个字段。 */
 export interface SetDailyInput {
   habitId: string
   date: string
   status?: DailyStatus | null
   count?: number
-  note?: string | null
 }
 
 /** 总览单条记录：每日状态 + 内联习惯名/kind（契约见需求文档；name 为习惯名）。 */
@@ -65,7 +67,6 @@ export interface OverviewRecord {
   countable: boolean
   status: DailyStatus | null
   count: number
-  note: string | null
 }
 
 /** 总览单习惯统计。 */

@@ -33,6 +33,7 @@ function makeHabit(overrides: Partial<HabitEntry> = {}): HabitEntry {
   return {
     id: 'h1',
     name: '跑步',
+    description: null,
     kind: 'good',
     countable: false,
     sortOrder: 0,
@@ -47,7 +48,6 @@ function makeDaily(overrides: Partial<HabitDailyEntry> = {}): HabitDailyEntry {
     habitId: 'h1',
     status: 'done',
     count: 0,
-    note: null,
     ...overrides,
   }
 }
@@ -70,6 +70,19 @@ describe('createHabit', () => {
     expect(result.name).toBe('跑步')
     expect(mockedPost).toHaveBeenCalledWith('/api/habits', {
       json: { name: '喝水', kind: 'good', countable: true },
+    })
+  })
+
+  it('可携带 description 创建', async () => {
+    mockedPost.mockResolvedValue(jsonResponse(makeHabit({ description: '每天晨跑' })))
+    const result = await createHabit({
+      name: '跑步',
+      kind: 'good',
+      description: '每天晨跑',
+    })
+    expect(result.description).toBe('每天晨跑')
+    expect(mockedPost).toHaveBeenCalledWith('/api/habits', {
+      json: { name: '跑步', kind: 'good', description: '每天晨跑' },
     })
   })
 })
@@ -119,14 +132,6 @@ describe('setHabitDaily', () => {
     await setHabitDaily({ habitId: 'h1', date: '2026-08-16', count: 3 })
     expect(mockedPut).toHaveBeenCalledWith('/api/habits/h1/daily/2026-08-16', {
       json: { count: 3 },
-    })
-  })
-
-  it('仅备注时不带 status/count', async () => {
-    mockedPut.mockResolvedValue(jsonResponse(makeDaily({ status: null, count: 0, note: '5km' })))
-    await setHabitDaily({ habitId: 'h1', date: '2026-08-16', note: '5km' })
-    expect(mockedPut).toHaveBeenCalledWith('/api/habits/h1/daily/2026-08-16', {
-      json: { note: '5km' },
     })
   })
 })

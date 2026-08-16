@@ -53,6 +53,7 @@ function makeHabit(id: string): HabitEntry {
   return {
     id,
     name: `习惯${id}`,
+    description: null,
     kind: 'good',
     countable: false,
     sortOrder: 0,
@@ -66,7 +67,6 @@ function makeDaily(habitId: string): HabitDailyEntry {
     habitId,
     status: 'done',
     count: 0,
-    note: null,
   }
 }
 
