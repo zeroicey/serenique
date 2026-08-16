@@ -1,7 +1,7 @@
 # 习惯模块需求文档
 
 - 日期：2026-08-16
-- 状态：✅已实施（API+Web+CLI+AI 四端 2026-08-16；待部署验收）
+- 状态：✅已实施（API+Web+CLI+AI 四端 + 生产/Cloudflare 部署 + iPhone 装机 2026-08-16）
 - 范围：services/api、apps/web、apps/cli、AI 工具（services/api/src/modules/ai）
 - 前置记录：无（全新模块）
 
@@ -33,7 +33,6 @@ habit_daily   每日状态    id uuid PK, habit_id uuid NOT NULL FK→habits ON 
                          date text NOT NULL ('YYYY-MM-DD'),
                          status text CHECK('done'|'not_done') NULL,   ← 做没做型用
                          count int NOT NULL default 0,                ← 计数型用
-                         note text NULL,                              ← 可选备注
                          created_at / updated_at
                          UNIQUE(habit_id, date)
 ```
@@ -50,7 +49,7 @@ habit_daily   每日状态    id uuid PK, habit_id uuid NOT NULL FK→habits ON 
 | ------ | ------ |
 | name | trim 后 1~100 字符 |
 | kind | 仅 'good' / 'bad'，只做视觉区分（绿/红），不参与任何逻辑 |
-| note | 可选，≤500 字符，trim；空串归一化为 null |
+| description | 可选，≤500 字符，trim；空串归一化为 null（习惯简介） |
 | count | 整数 ≥0；计数型设置时校验，做没做型恒 0 |
 | status | 仅 'done' / 'not_done'；null = 未记录 |
 | date | 有效日历日期（往返校验，同 task DueDateSchema） |
@@ -66,11 +65,11 @@ habit_daily   每日状态    id uuid PK, habit_id uuid NOT NULL FK→habits ON 
 | 方法 | 路径 | 说明 |
 | ------ | ------ | ------ |
 | GET | `/api/habits` | 习惯选项列表（sortOrder asc, createdAt asc） |
-| POST | `/api/habits` | 创建 `{ name, kind, countable? }` |
-| PUT | `/api/habits/:id` | 更新 `{ name?, kind?, countable?, sortOrder? }`（至少一个字段） |
+| POST | `/api/habits` | 创建 `{ name, kind, countable?, description? }` |
+| PUT | `/api/habits/:id` | 更新 `{ name?, kind?, countable?, sortOrder?, description? }`（至少一个字段） |
 | DELETE | `/api/habits/:id` | 删除（级联每日状态） |
-| GET | `/api/habit-daily?date=YYYY-MM-DD` | 当天全部状态 `[{ habitId, status, count, note }]` |
-| PUT | `/api/habits/:habitId/daily/:date` | upsert 每日状态 `{ status? \| count?, note? }` |
+| GET | `/api/habit-daily?date=YYYY-MM-DD` | 当天全部状态 `[{ habitId, status, count }]` |
+| PUT | `/api/habits/:habitId/daily/:date` | upsert 每日状态 `{ status? \| count? }` |
 | DELETE | `/api/habits/:habitId/daily/:date` | 清掉当天该习惯的记录（回未记录） |
 | GET | `/api/habit-daily/overview?days=N` | 总览：`{ days, byDate: {date: [记录+习惯名/kind]}, stats: [{ habitId, name, kind, countable, doneDays, notDoneDays, totalCount }] }` |
 
@@ -91,7 +90,7 @@ habit_daily   每日状态    id uuid PK, habit_id uuid NOT NULL FK→habits ON 
 | 2 | 交互模型 | 三态：未记录 / done / not_done；计数型 count=0 即没做 |
 | 3 | 多习惯类型 | countable 双模式：做没做型 + 计数型，创建时选择 |
 | 4 | 没做标记 | 需要（区分「没做」与「漏记」），仅做没做型 |
-| 5 | 备注 | 可选 note 字段，每条每日状态可带一句话 |
+| 5 | 备注 | 习惯简介 description 字段（可选 ≤500），每日记录无备注（D-007） |
 | 6 | 总览 | 按天流水 + 频率统计（doneDays / totalCount）都要 |
 | 7 | 习惯选项管理 | 完整 CRUD + sortOrder 排序 |
 | 8 | 目标感 | 不做连续天数/提醒/进度条，无压力记录 |
