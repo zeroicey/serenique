@@ -10,6 +10,7 @@ import {
 } from '@/modules/habit/habit.domain'
 import { toDailyEntry, toHabitEntry } from '@/modules/habit/habit.mappers'
 import { habitDaily, habits } from '@/modules/habit/habit.schema'
+import { DailyDateSchema } from '@/modules/habit/habit.types'
 import type {
   ClearDailyInput,
   CreateHabitInput,
@@ -99,6 +100,11 @@ export const habitService = {
   },
 
   async setDaily(input: SetDailyInput): Promise<ReturnType<typeof toDailyEntry>> {
+    // 防御性校验：AI 工具直连 service 会绕过 handler 的 DailyDateSchema.parse，
+    // 这里兜底，非法日期不落库（否则破坏 UNIQUE 与 overview 的范围查询）。
+    if (!DailyDateSchema.safeParse(input.date).success) {
+      throw new AppError(ErrorCode.VALIDATION, '日期无效', 400)
+    }
     const [habit] = await db
       .select({ id: habits.id, countable: habits.countable })
       .from(habits)
