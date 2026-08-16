@@ -13,6 +13,8 @@ describe('ai.system-prompt', () => {
   test('说明工具使用方式', () => {
     expect(prompt).toContain('create_task')
     expect(prompt).toContain('create_event')
+    expect(prompt).toContain('set_habit_daily')
+    expect(prompt).toContain('get_habit_overview')
   })
 
   test('要求中文回复', () => {
