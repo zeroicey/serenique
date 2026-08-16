@@ -8,6 +8,7 @@ import 'features/audit/audit_providers.dart';
 import 'features/event/event_providers.dart';
 import 'features/event/widgets/event_date_nav.dart';
 import 'features/event/widgets/event_edit_page.dart';
+import 'features/habit/widgets/habit_date_nav.dart';
 import 'features/moment/moment_providers.dart';
 import 'features/moment/widgets/attachment_picker_sheet.dart';
 import 'features/task/task_providers.dart';
@@ -41,14 +42,17 @@ class AppShell extends ConsumerWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(humanizeError(e))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
     }
   }
 
   /// 短按 +：弹附件选择框 → 选完带附件进入发布页；取消不跳转。
-  Future<void> _addMomentWithAttachment(BuildContext context, WidgetRef ref) async {
+  Future<void> _addMomentWithAttachment(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final picked = await showAttachmentPickerSheet(context);
     if (picked == null || !context.mounted) return;
     ref.read(pickedAttachmentsProvider.notifier).set(picked);
@@ -63,21 +67,21 @@ class AppShell extends ConsumerWidget {
     final taskTodo = ref.watch(taskTodoCountProvider);
     final eventToday = ref.watch(eventTodayCountProvider);
 
-    // 右侧 badge：闪记/任务/日历/日志走真实计数，习惯先写死占位。
+    // 右侧 badge：闪记/任务/日历/日志走真实计数；习惯暂无计数接口，不显示。
     String? badgeFor(String path) => switch (path) {
-          '/moments' => counts.hasValue ? '${counts.value}' : null,
-          '/task' => taskTodo.hasValue && taskTodo.value! > 0
-              ? '${taskTodo.value}'
-              : null,
-          '/event' => eventToday.hasValue && eventToday.value! > 0
-              ? '${eventToday.value}'
-              : null,
-          '/habit' => '5',
-          '/audit' => auditUnread.hasValue && auditUnread.value! > 0
-              ? '${auditUnread.value}'
-              : null,
-          _ => null,
-        };
+      '/moments' => counts.hasValue ? '${counts.value}' : null,
+      '/task' =>
+        taskTodo.hasValue && taskTodo.value! > 0 ? '${taskTodo.value}' : null,
+      '/event' =>
+        eventToday.hasValue && eventToday.value! > 0
+            ? '${eventToday.value}'
+            : null,
+      '/audit' =>
+        auditUnread.hasValue && auditUnread.value! > 0
+            ? '${auditUnread.value}'
+            : null,
+      _ => null,
+    };
 
     // 抽屉选中态：模块子路由（如 /moments/123）也选中对应模块。
     bool isActive(String path) =>
@@ -99,9 +103,13 @@ class AppShell extends ConsumerWidget {
         ),
         title: location.startsWith('/ai')
             ? const AiSessionTitle()
+            : location == '/habit'
+            ? const HabitDateNav()
+            : location == '/habit/overview'
+            ? const Text('习惯总览')
             : location.startsWith('/event')
-                ? const EventDateNav()
-                : Text(moduleTitle(location)),
+            ? const EventDateNav()
+            : Text(moduleTitle(location)),
         // 添加按钮放右上角（不用右下角 FAB，避免挡住评论发送）。
         actions: [
           if (location == '/moments')
@@ -124,15 +132,31 @@ class AppShell extends ConsumerWidget {
             IconButton(
               icon: const Icon(Icons.add),
               tooltip: '新建日程',
-              onPressed: () => context.push('/event/edit',
-                  extra: EventEditArgs(day: ref.read(eventSelectedDayProvider))),
+              onPressed: () => context.push(
+                '/event/edit',
+                extra: EventEditArgs(day: ref.read(eventSelectedDayProvider)),
+              ),
             ),
+          // 习惯页：右上角「总览」+「新建习惯」（总览也有自己的返回导航）。
+          if (location == '/habit') ...[
+            IconButton(
+              icon: const Icon(Icons.insights_outlined),
+              tooltip: '习惯总览',
+              onPressed: () => context.push('/habit/overview'),
+            ),
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: '新建习惯',
+              onPressed: () => context.push('/habit/edit'),
+            ),
+          ],
           // 任务页：新建任务放右上角（与闪记/日程一致；FAB 保留任务组 tab 的新建组）。
           if (location == '/task')
             IconButton(
               icon: const Icon(Icons.add),
               tooltip: '新建任务',
-              onPressed: () => context.push('/task/edit', extra: TaskEditArgs()),
+              onPressed: () =>
+                  context.push('/task/edit', extra: TaskEditArgs()),
             ),
           // 日志页：全部已读放顶部导航栏右侧（无未读时禁用）。
           if (location.startsWith('/audit'))
