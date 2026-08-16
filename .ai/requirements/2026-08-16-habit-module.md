@@ -78,7 +78,7 @@ habit_daily   每日状态    id uuid PK, habit_id uuid NOT NULL FK→habits ON 
 | 端 | 交付 |
 | ---- | ------ |
 | **API** | habit 模块全套（schema/types/domain/mappers/service/handler/router/index）+ 单测/集成测试；db/schema.ts 注册；app.ts 挂载；exports.ts 导出 |
-| **Web** | `/habit` 今天页：日期导航（复用 event-date-nav 模式）+ 习惯行（✓做了/✗没做 或 +1 计数 + 备注输入）+ 习惯选项管理（增删改排序）；`/habit/overview` 总览页：按天流水（绿✓红✗/×N）+ 每习惯频率统计 |
+| **Web** | `/habit` 今天页：日期导航（header 顶栏）+ 习惯行（✓做了/✗没做 或 +1 计数 + 简介展示）+ 习惯选项管理（增删改排序）；`/habit/overview` 总览页：按天流水（绿✓红✗/×N）+ 每习惯频率统计 |
 | **CLI** | `serenique habit`：list / create / update / delete / today / do / not / count / overview（cobra，仿 task 模块） |
 | **AI** | ai.tools.ts 加工具：list_habits、create_habit、update_habit、delete_habit、set_habit_daily、get_habit_overview（自然语言记录/查询/管理习惯） |
 

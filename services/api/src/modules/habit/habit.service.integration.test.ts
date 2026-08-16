@@ -174,6 +174,17 @@ describe.skipIf(!RUN_DB_TESTS)('habit service DB integration', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND', status: 404 })
   })
 
+  test('setDaily rejects an invalid date at the service layer', async () => {
+    const habit = await service.createHabit({ name: uniqueTitle('习惯-日期'), kind: 'good' })
+    createdHabitIds.push(habit.id)
+
+    // AI 工具直连 service 会绕过 handler 的 DailyDateSchema.parse，
+    // 服务层兜底必须拒绝非法日期（如 2026-02-30）。
+    await expect(
+      service.setDaily({ habitId: habit.id, date: '2026-02-30', status: 'done' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION', status: 400 })
+  })
+
   // ---- clearDaily ----------------------------------------------------------
 
   test('clearDaily removes the row for a date', async () => {
