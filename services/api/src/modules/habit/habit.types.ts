@@ -19,13 +19,18 @@ export const DailyDateSchema = z
     return !Number.isNaN(parsed) && new Date(parsed).toISOString().slice(0, 10) === v
   }, '日期无效')
 
-/** 可选备注：≤500 字符，trim；空串归一化为 null（清除）。 */
-const NoteSchema = z.string().trim().max(500)
+/** 可选简介：≤500 字符，trim；空串归一化为 null（清除）。 */
+const DescriptionSchema = z
+  .union([z.string().trim().max(500), z.literal('')])
+  .transform((v) => (v === '' ? null : v))
+  .nullable()
+  .optional()
 
 export const CreateHabitSchema = z.object({
   name: z.string().trim().min(1).max(100),
   kind: HabitKindSchema,
   countable: z.boolean().default(false),
+  description: DescriptionSchema,
 })
 
 export const UpdateHabitSchema = z
@@ -34,13 +39,16 @@ export const UpdateHabitSchema = z
     kind: HabitKindSchema.optional(),
     countable: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
+    // null 显式清除，"" 归一为 null，缺省保持不变。
+    description: DescriptionSchema,
   })
   .refine(
     (v) =>
       v.name !== undefined ||
       v.kind !== undefined ||
       v.countable !== undefined ||
-      v.sortOrder !== undefined,
+      v.sortOrder !== undefined ||
+      v.description !== undefined,
     '至少需要提供一个待更新字段',
   )
 
@@ -51,17 +59,8 @@ export const SetDailySchema = z
     status: DailyStatusSchema.nullable().optional(),
     // 计数型：次数 ≥0。做没做型不可传 count（service 按 countable 校验）。
     count: z.number().int().min(0).optional(),
-    // "" 归一化为 null（清除），null 显式清除，缺省保持不变。
-    note: z
-      .union([NoteSchema, z.literal('')])
-      .transform((v) => (v === '' ? null : v))
-      .nullable()
-      .optional(),
   })
-  .refine(
-    (v) => v.status !== undefined || v.count !== undefined || v.note !== undefined,
-    '至少需要提供一个待更新字段',
-  )
+  .refine((v) => v.status !== undefined || v.count !== undefined, '至少需要提供一个待更新字段')
 
 export const ListDailySchema = z.object({
   date: DailyDateSchema,
@@ -87,6 +86,7 @@ export type OverviewInput = z.infer<typeof OverviewSchema>
 export type HabitEntry = {
   id: string
   name: string
+  description: string | null
   kind: HabitKind
   countable: boolean
   sortOrder: number
@@ -98,5 +98,4 @@ export type DailyEntry = {
   habitId: string
   status: DailyStatus | null
   count: number
-  note: string | null
 }

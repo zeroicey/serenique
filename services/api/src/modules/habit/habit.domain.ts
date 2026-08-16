@@ -33,14 +33,12 @@ export function windowStart(toDate: string, days: number): string {
 export type DailyWritePatch = {
   status?: DailyStatus | null
   count?: number
-  note?: string | null
 }
 
 /** Shape of the current daily row (or null when none exists yet). */
 export type DailyRowLike = {
   status: DailyStatus | null
   count: number
-  note: string | null
 }
 
 export type DailyWriteResult = DailyRowLike
@@ -48,9 +46,8 @@ export type DailyWriteResult = DailyRowLike
 /**
  * Resolve a SetDaily patch into concrete row values, keyed by the habit's
  * recording mode:
- * - countable habit: only count/note allowed; a status in the patch → error.
- * - non-countable habit: only status/note allowed; a count in the patch → error.
- * Note handling: absent → keep current (null on insert); null/'' → null.
+ * - countable habit: only count allowed; a status in the patch → error.
+ * - non-countable habit: only status allowed; a count in the patch → error.
  * Status/count: absent → keep current (null / 0 on insert).
  */
 export function resolveDailyWrite(
@@ -71,7 +68,6 @@ export function resolveDailyWrite(
         ? (current?.status ?? null)
         : patch.status,
     count: countable ? (patch.count === undefined ? (current?.count ?? 0) : patch.count) : 0,
-    note: patch.note === undefined ? (current?.note ?? null) : patch.note,
   }
 }
 
@@ -90,7 +86,6 @@ export type DailyLike = {
   date: string
   status: DailyStatus | null
   count: number
-  note: string | null
 }
 
 export type OverviewDayEntry = {
@@ -100,7 +95,6 @@ export type OverviewDayEntry = {
   countable: boolean
   status: DailyStatus | null
   count: number
-  note: string | null
 }
 
 export type OverviewStatEntry = {
@@ -153,7 +147,6 @@ export function buildOverview(
       countable: habit.countable,
       status: d.status,
       count: d.count,
-      note: d.note,
     })
   }
   for (const bucket of Object.values(byDate)) {

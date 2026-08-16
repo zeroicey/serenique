@@ -41,12 +41,17 @@ describe.skipIf(!RUN_DB_TESTS)('habit service DB integration', () => {
   // ---- Habit option CRUD ---------------------------------------------------
 
   test('habit create / get-via-list / update / delete', async () => {
-    const created = await service.createHabit({ name: uniqueTitle('习惯-crud'), kind: 'good' })
+    const created = await service.createHabit({
+      name: uniqueTitle('习惯-crud'),
+      kind: 'good',
+      description: '晨跑 5km',
+    })
     createdHabitIds.push(created.id)
 
     expect(created.id).toBeTruthy()
     expect(created.countable).toBe(false)
     expect(created.sortOrder).toBe(0)
+    expect(created.description).toBe('晨跑 5km')
 
     const listed = await service.listHabits()
     expect(listed.some((h) => h.id === created.id)).toBe(true)
@@ -58,6 +63,12 @@ describe.skipIf(!RUN_DB_TESTS)('habit service DB integration', () => {
     })
     expect(renamed.name).toContain('改名')
     expect(renamed.sortOrder).toBe(3)
+    // 未传 description → 保持不变
+    expect(renamed.description).toBe('晨跑 5km')
+
+    // null 显式清除简介
+    const cleared = await service.updateHabit({ id: created.id, description: null })
+    expect(cleared.description).toBeNull()
 
     await service.deleteHabit({ id: created.id })
     expect((await service.listHabits()).some((h) => h.id === created.id)).toBe(false)
@@ -95,15 +106,13 @@ describe.skipIf(!RUN_DB_TESTS)('habit service DB integration', () => {
     const done = await service.setDaily({ habitId: habit.id, date: '2026-08-16', status: 'done' })
     expect(done).toMatchObject({ habitId: habit.id, status: 'done', count: 0 })
 
-    // same day upsert → status transitions, note added
-    const withNote = await service.setDaily({
+    // same day upsert → status transitions
+    const flipped = await service.setDaily({
       habitId: habit.id,
       date: '2026-08-16',
       status: 'not_done',
-      note: '休息',
     })
-    expect(withNote.status).toBe('not_done')
-    expect(withNote.note).toBe('休息')
+    expect(flipped.status).toBe('not_done')
 
     // clear back to not-recorded via status null
     const cleared = await service.setDaily({

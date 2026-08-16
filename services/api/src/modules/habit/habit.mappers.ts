@@ -9,6 +9,7 @@ export function toHabitEntry(row: typeof habits.$inferSelect): HabitEntry {
   return {
     id: row.id,
     name: row.name,
+    description: row.description,
     kind: row.kind,
     countable: row.countable,
     sortOrder: row.sortOrder,
@@ -22,6 +23,5 @@ export function toDailyEntry(row: typeof habitDaily.$inferSelect): DailyEntry {
     habitId: row.habitId,
     status: row.status,
     count: row.count,
-    note: row.note,
   }
 }

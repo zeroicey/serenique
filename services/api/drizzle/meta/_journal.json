@@ -120,6 +120,13 @@
       "when": 1786861711447,
       "tag": "0016_typical_rocket_racer",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1786891488398,
+      "tag": "0017_outgoing_silver_sable",
+      "breakpoints": true
     }
   ]
 }

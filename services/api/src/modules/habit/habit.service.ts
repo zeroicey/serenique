@@ -45,6 +45,7 @@ export const habitService = {
       .insert(habits)
       .values({
         name: input.name,
+        description: input.description ?? null,
         kind: input.kind,
         countable: input.countable ?? false,
       })
@@ -110,19 +111,19 @@ export const habitService = {
       .where(and(eq(habitDaily.habitId, input.habitId), eq(habitDaily.date, input.date)))
       .limit(1)
 
-    const { status, count, note } = resolveDailyWrite(current[0] ?? null, input, habit.countable)
+    const { status, count } = resolveDailyWrite(current[0] ?? null, input, habit.countable)
 
     if (current[0]) {
       const [row] = await db
         .update(habitDaily)
-        .set({ status, count, note, updatedAt: new Date() })
+        .set({ status, count, updatedAt: new Date() })
         .where(and(eq(habitDaily.habitId, input.habitId), eq(habitDaily.date, input.date)))
         .returning()
       return toDailyEntry(row)
     }
     const [row] = await db
       .insert(habitDaily)
-      .values({ habitId: input.habitId, date: input.date, status, count, note })
+      .values({ habitId: input.habitId, date: input.date, status, count })
       .returning()
     return toDailyEntry(row)
   },

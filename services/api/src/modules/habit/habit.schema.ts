@@ -19,6 +19,7 @@ import {
 // - countable distinguishes the two recording modes:
 //     countable=false (default) → daily row carries status (done/not_done);
 //     countable=true            → daily row carries count (times performed).
+// - habits.description is an optional short intro shown next to the name.
 // - habit_daily.status is NULLable — NULL means "not recorded" for that day.
 // - UNIQUE (habit_id, date) enforces one row per habit per day.
 // ---------------------------------------------------------------------------
@@ -34,6 +35,7 @@ export const habits = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     name: text('name').notNull(),
+    description: text('description'),
     kind: text('kind').notNull().$type<HabitKind>(),
     countable: boolean('countable').notNull().default(false),
     sortOrder: integer('sort_order').notNull().default(0),
@@ -59,7 +61,6 @@ export const habitDaily = pgTable(
     date: text('date').notNull(),
     status: text('status').$type<DailyStatus>(),
     count: integer('count').notNull().default(0),
-    note: text('note'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .defaultNow()

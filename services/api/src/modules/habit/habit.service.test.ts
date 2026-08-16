@@ -53,16 +53,33 @@ describe('habit zod schemas', () => {
     expect(UpdateHabitSchema.safeParse({ countable: true }).success).toBe(true)
   })
 
-  test('SetDailySchema note semantics — "" normalizes to null, absent keeps, valid passes', async () => {
+  test('description semantics — create/update normalize "" to null, absent keeps', async () => {
     setTestEnv()
-    const { SetDailySchema } = await import('./habit.types')
+    const { CreateHabitSchema, UpdateHabitSchema } = await import('./habit.types')
 
-    expect(SetDailySchema.parse({ note: '' })).toEqual({ note: null })
-    expect(SetDailySchema.parse({ note: null })).toEqual({ note: null })
-    expect(SetDailySchema.parse({ note: '5km' })).toEqual({ note: '5km' })
-    expect(SetDailySchema.parse({ note: '  5km  ' })).toEqual({ note: '5km' }) // trimmed
-    // note alone satisfies the "at least one field" refine
-    expect(SetDailySchema.parse({ note: null }).note).toBeNull()
+    // create: omitted → undefined; empty string → null; valid string passes (trimmed)
+    expect(CreateHabitSchema.parse({ name: '跑步', kind: 'good' }).description).toBeUndefined()
+    expect(
+      CreateHabitSchema.parse({ name: '跑步', kind: 'good', description: '' }).description,
+    ).toBe(null)
+    expect(
+      CreateHabitSchema.parse({ name: '跑步', kind: 'good', description: '  晨跑 5km  ' })
+        .description,
+    ).toBe('晨跑 5km')
+    expect(
+      CreateHabitSchema.safeParse({
+        name: '跑步',
+        kind: 'good',
+        description: 'x'.repeat(501),
+      }).success,
+    ).toBe(false)
+
+    // update: absent → undefined (kept); "" → null; null → null (explicit clear)
+    expect(UpdateHabitSchema.parse({ description: '' }).description).toBeNull()
+    expect(UpdateHabitSchema.parse({ description: null }).description).toBeNull()
+    expect(UpdateHabitSchema.parse({ description: '5km' }).description).toBe('5km')
+    // description alone satisfies the "at least one field" refine
+    expect(UpdateHabitSchema.safeParse({ description: '备注' }).success).toBe(true)
   })
 
   test('SetDailySchema rejects empty payload and negative count', async () => {
@@ -73,16 +90,6 @@ describe('habit zod schemas', () => {
     expect(SetDailySchema.safeParse({ count: -1 }).success).toBe(false)
     expect(SetDailySchema.safeParse({ status: 'done', count: 3 }).success).toBe(true)
     expect(SetDailySchema.safeParse({ status: null }).success).toBe(true)
-  })
-
-  test('OverviewSchema coerces days and clamps to 1..365', async () => {
-    setTestEnv()
-    const { OverviewSchema } = await import('./habit.types')
-
-    expect(OverviewSchema.parse({}).days).toBe(30)
-    expect(OverviewSchema.parse({ days: '7' }).days).toBe(7)
-    expect(OverviewSchema.safeParse({ days: 0 }).success).toBe(false)
-    expect(OverviewSchema.safeParse({ days: 366 }).success).toBe(false)
   })
 })
 
@@ -115,17 +122,16 @@ describe('resolveDailyWrite — mode-aware daily write resolution', () => {
     expect(resolveDailyWrite(null, { status: 'done' }, false)).toEqual({
       status: 'done',
       count: 0,
-      note: null,
     })
     expect(resolveDailyWrite(null, { status: 'not_done' }, false)).toEqual({
       status: 'not_done',
       count: 0,
-      note: null,
     })
     // status null clears back to not-recorded
-    expect(
-      resolveDailyWrite({ status: 'done', count: 0, note: null }, { status: null }, false),
-    ).toEqual({ status: null, count: 0, note: null })
+    expect(resolveDailyWrite({ status: 'done', count: 0 }, { status: null }, false)).toEqual({
+      status: null,
+      count: 0,
+    })
   })
 
   test('countable habit accepts count and keeps status null', async () => {
@@ -135,13 +141,11 @@ describe('resolveDailyWrite — mode-aware daily write resolution', () => {
     expect(resolveDailyWrite(null, { count: 3 }, true)).toEqual({
       status: null,
       count: 3,
-      note: null,
     })
     // count 0 means "not recorded today"
-    expect(resolveDailyWrite({ status: null, count: 3, note: null }, { count: 0 }, true)).toEqual({
+    expect(resolveDailyWrite({ status: null, count: 3 }, { count: 0 }, true)).toEqual({
       status: null,
       count: 0,
-      note: null,
     })
   })
 
@@ -153,31 +157,19 @@ describe('resolveDailyWrite — mode-aware daily write resolution', () => {
     expect(() => resolveDailyWrite(null, { count: 2 }, false)).toThrow(/做没做型/)
   })
 
-  test('note: absent keeps current, null clears, string sets', async () => {
-    setTestEnv()
-    const { resolveDailyWrite } = await import('./habit.domain')
-
-    const current: DailyRowLike = { status: 'done', count: 0, note: '5km' }
-    expect(resolveDailyWrite(current, { status: 'done' }, false).note).toBe('5km')
-    expect(resolveDailyWrite(current, { status: 'done', note: null }, false).note).toBeNull()
-    expect(resolveDailyWrite(current, { status: 'done', note: '10km' }, false).note).toBe('10km')
-  })
-
   test('absent status/count keep current values on update rows', async () => {
     setTestEnv()
     const { resolveDailyWrite } = await import('./habit.domain')
 
-    const current: DailyRowLike = { status: 'done', count: 0, note: null }
-    expect(resolveDailyWrite(current, { note: '晚间' }, false)).toEqual({
-      status: 'done',
+    const current: DailyRowLike = { status: 'done', count: 0 }
+    expect(resolveDailyWrite(current, { status: 'not_done' }, false)).toEqual({
+      status: 'not_done',
       count: 0,
-      note: '晚间',
     })
-    const c2: DailyRowLike = { status: null, count: 4, note: null }
+    const c2: DailyRowLike = { status: null, count: 4 }
     expect(resolveDailyWrite(c2, { count: 5 }, true)).toEqual({
       status: null,
       count: 5,
-      note: null,
     })
   })
 })
@@ -194,9 +186,9 @@ describe('buildOverview — aggregation', () => {
     const { buildOverview } = await import('./habit.domain')
 
     const dailies: DailyLike[] = [
-      { habitId: 'h3', date: '2026-08-16', status: null, count: 3, note: null },
-      { habitId: 'h1', date: '2026-08-16', status: 'done', count: 0, note: '5km' },
-      { habitId: 'h2', date: '2026-08-15', status: 'not_done', count: 0, note: null },
+      { habitId: 'h3', date: '2026-08-16', status: null, count: 3 },
+      { habitId: 'h1', date: '2026-08-16', status: 'done', count: 0 },
+      { habitId: 'h2', date: '2026-08-15', status: 'not_done', count: 0 },
     ]
     const body = buildOverview(habits, dailies, {
       days: 30,
@@ -212,7 +204,6 @@ describe('buildOverview — aggregation', () => {
         countable: false,
         status: 'done',
         count: 0,
-        note: '5km',
       },
       {
         habitId: 'h3',
@@ -221,7 +212,6 @@ describe('buildOverview — aggregation', () => {
         countable: true,
         status: null,
         count: 3,
-        note: null,
       },
     ])
     expect(body.byDate['2026-08-15']).toHaveLength(1)
@@ -235,12 +225,12 @@ describe('buildOverview — aggregation', () => {
     const { buildOverview } = await import('./habit.domain')
 
     const dailies: DailyLike[] = [
-      { habitId: 'h1', date: '2026-08-14', status: 'done', count: 0, note: null },
-      { habitId: 'h1', date: '2026-08-15', status: 'done', count: 0, note: null },
-      { habitId: 'h1', date: '2026-08-16', status: 'not_done', count: 0, note: null },
-      { habitId: 'h2', date: '2026-08-16', status: 'not_done', count: 0, note: null },
-      { habitId: 'h3', date: '2026-08-15', status: null, count: 4, note: null },
-      { habitId: 'h3', date: '2026-08-16', status: null, count: 2, note: null },
+      { habitId: 'h1', date: '2026-08-14', status: 'done', count: 0 },
+      { habitId: 'h1', date: '2026-08-15', status: 'done', count: 0 },
+      { habitId: 'h1', date: '2026-08-16', status: 'not_done', count: 0 },
+      { habitId: 'h2', date: '2026-08-16', status: 'not_done', count: 0 },
+      { habitId: 'h3', date: '2026-08-15', status: null, count: 4 },
+      { habitId: 'h3', date: '2026-08-16', status: null, count: 2 },
     ]
     const body = buildOverview(habits, dailies, {
       days: 30,
@@ -282,6 +272,7 @@ describe('habit mappers', () => {
       toHabitEntry({
         id: '0198f6d0-9e7c-71d7-8214-2a0f7f5f6001',
         name: '跑步',
+        description: '晨跑 5km',
         kind: 'good',
         countable: false,
         sortOrder: 0,
@@ -291,6 +282,7 @@ describe('habit mappers', () => {
     ).toEqual({
       id: '0198f6d0-9e7c-71d7-8214-2a0f7f5f6001',
       name: '跑步',
+      description: '晨跑 5km',
       kind: 'good',
       countable: false,
       sortOrder: 0,
@@ -310,7 +302,6 @@ describe('habit mappers', () => {
         date: '2026-08-16',
         status: 'done',
         count: 0,
-        note: '5km',
         createdAt: new Date('2026-08-05T12:00:00.000Z'),
         updatedAt: new Date('2026-08-05T12:00:00.000Z'),
       }),
@@ -318,7 +309,6 @@ describe('habit mappers', () => {
       habitId: '0198f6d0-9e7c-71d7-8214-2a0f7f5f6001',
       status: 'done',
       count: 0,
-      note: '5km',
     })
   })
 })

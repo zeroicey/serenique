@@ -32,6 +32,7 @@ export function buildSystemPrompt(now: Date): string {
 - 评论：list_moment_comments、add_moment_comment、update_moment_comment、delete_moment_comment
 - 习惯：list_habits、create_habit、update_habit、delete_habit、set_habit_daily、get_habit_overview
   - date 格式 YYYY-MM-DD，默认今天；习惯分两类：做没做型（set_habit_daily 传 status: done/not_done）与计数型（传 count 次数，如喝水几次）
+  - create/update_habit 可带 description（习惯简介，≤500 字）
   - 总览用 get_habit_overview，days 参数为最近天数（默认 30）
 
 ## 行为准则
