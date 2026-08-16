@@ -24,6 +24,7 @@ export const AUDIT_EVENTS = [
   'task_group.delete',
   'event.delete',
   'tag.delete',
+  'habit.delete',
 ] as const
 export type AuditEvent = (typeof AUDIT_EVENTS)[number]
 

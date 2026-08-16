@@ -1,6 +1,7 @@
 import { defineTool, type ToolDefinition } from '@earendil-works/pi-coding-agent'
 import { Type } from 'typebox'
 import { eventService } from '@/modules/event/event.service'
+import { habitService } from '@/modules/habit/habit.service'
 import { momentCommentService } from '@/modules/moment/comment.service'
 import { momentService } from '@/modules/moment/moment.service'
 import { tagService } from '@/modules/tag/tag.service'
@@ -394,6 +395,71 @@ export function buildAiTools(): ToolDefinition[] {
             commentId: p.commentId,
           }),
         ),
+    }),
+    defineTool({
+      name: 'list_habits',
+      label: 'List Habits',
+      description: '列出全部习惯选项（按 sortOrder 排序）',
+      parameters: Type.Object({}),
+      execute: (_id, _p, _s, _u, _c) => run(() => habitService.listHabits()),
+    }),
+    defineTool({
+      name: 'create_habit',
+      label: 'Create Habit',
+      description:
+        '创建习惯选项。kind 为 good（好事）/ bad（坏事，仅视觉区分）；countable=true 表示计数型（如喝水，记录次数），省略则为做没做型（记录做了/没做）',
+      parameters: Type.Object({
+        name: Type.String({ minLength: 1, maxLength: 100 }),
+        kind: Type.Union([Type.Literal('good'), Type.Literal('bad')]),
+        countable: Type.Optional(Type.Boolean()),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => habitService.createHabit(p)),
+    }),
+    defineTool({
+      name: 'update_habit',
+      label: 'Update Habit',
+      description: '更新习惯选项（传哪些改哪些）；sortOrder 用于排序',
+      parameters: Type.Object({
+        id: Type.String(),
+        name: Type.Optional(Type.String({ minLength: 1, maxLength: 100 })),
+        kind: Type.Optional(Type.Union([Type.Literal('good'), Type.Literal('bad')])),
+        countable: Type.Optional(Type.Boolean()),
+        sortOrder: Type.Optional(Type.Integer()),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => habitService.updateHabit(p)),
+    }),
+    defineTool({
+      name: 'delete_habit',
+      label: 'Delete Habit',
+      description: '按 id 删除习惯选项（其全部每日记录一并删除）',
+      parameters: Type.Object({ id: Type.String() }),
+      execute: (_id, p, _s, _u, _c) => run(() => habitService.deleteHabit(p)),
+    }),
+    defineTool({
+      name: 'set_habit_daily',
+      label: 'Set Habit Daily',
+      description:
+        '记录某习惯某天的状态：date 为 YYYY-MM-DD。做没做型传 status（done=做了 / not_done=没做 / null=清除）；计数型传 count（次数 ≥0）；两者都可传 note 备注。省略的字段保持不变',
+      parameters: Type.Object({
+        habitId: Type.String(),
+        date: Type.String(),
+        status: Type.Optional(
+          Type.Union([Type.Literal('done'), Type.Literal('not_done'), Type.Null()]),
+        ),
+        count: Type.Optional(Type.Integer({ minimum: 0 })),
+        note: Type.Optional(Type.String()),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => habitService.setDaily(p)),
+    }),
+    defineTool({
+      name: 'get_habit_overview',
+      label: 'Get Habit Overview',
+      description:
+        '获取最近 days 天（默认 30，最多 365）的习惯总览：按天分组记录 + 每习惯统计（doneDays 做了几天 / notDoneDays 没做几天 / totalCount 总次数）',
+      parameters: Type.Object({
+        days: Type.Optional(Type.Integer({ minimum: 1, maximum: 365 })),
+      }),
+      execute: (_id, p, _s, _u, _c) => run(() => habitService.overview({ days: p.days ?? 30 })),
     }),
   ]
 }

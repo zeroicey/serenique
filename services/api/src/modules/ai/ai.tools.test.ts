@@ -24,11 +24,11 @@ mock.module('@/modules/task/task.service', () => ({
 const { buildAiTools } = await import('./ai.tools')
 
 describe('ai.tools', () => {
-  test('注册 32 个工具且名称唯一', () => {
+  test('注册 38 个工具且名称唯一', () => {
     const tools = buildAiTools()
     const names = tools.map((t) => t.name)
-    expect(names.length).toBe(32)
-    expect(new Set(names).size).toBe(32)
+    expect(names.length).toBe(38)
+    expect(new Set(names).size).toBe(38)
   })
 
   test('create_task 参数 schema 接受最小输入', async () => {

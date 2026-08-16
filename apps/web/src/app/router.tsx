@@ -8,6 +8,7 @@ import { SessionSwitcher } from '@/features/ai/components/session-switcher'
 import { AuditNav } from '@/features/audit/components/audit-nav'
 import { AuthGuard } from '@/features/auth/components/auth-guard'
 import { EventNav } from '@/features/event/components/event-nav'
+import { HabitNav } from '@/features/habit/components/habit-nav'
 import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
 import { MomentNav } from '@/features/moment/components/moment-nav'
 import { TaskGroupSwitcher } from '@/features/task/components/task-group-switcher'
@@ -75,8 +76,13 @@ const router = createBrowserRouter([
           },
           {
             path: 'habit',
-            element: lazyPage(() => import('@/app/pages/placeholder-module-page')),
-            handle: { nav: <ModuleTitleNav title="习惯" /> },
+            element: lazyPage(() => import('@/features/habit/pages/habit-page')),
+            handle: { nav: <HabitNav /> },
+          },
+          {
+            path: 'habit/overview',
+            element: lazyPage(() => import('@/features/habit/pages/habit-overview-page')),
+            handle: { nav: <HabitNav /> },
           },
           {
             path: 'files',

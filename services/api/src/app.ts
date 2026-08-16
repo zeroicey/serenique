@@ -7,6 +7,7 @@ import { auditRouter } from '@/modules/audit'
 import { authMiddleware, authRouter } from '@/modules/auth'
 import { blobRouter } from '@/modules/blob'
 import { eventRouter } from '@/modules/event'
+import { habitRouter } from '@/modules/habit'
 import { locationRouter } from '@/modules/location'
 import { momentRouter } from '@/modules/moment'
 import { tagRouter } from '@/modules/tag'
@@ -59,7 +60,18 @@ export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSoc
   app.get('/health', (c) => Res.ok('服务运行中', { status: 'ok' }).build(c))
   app.get('/', (c) =>
     Res.ok('Serenique API', {
-      modules: ['moment', 'blob', 'task', 'event', 'audit', 'tags', 'auth', 'tokens', 'location'],
+      modules: [
+        'moment',
+        'blob',
+        'task',
+        'event',
+        'habit',
+        'audit',
+        'tags',
+        'auth',
+        'tokens',
+        'location',
+      ],
     }).build(c),
   )
 
@@ -73,6 +85,7 @@ export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSoc
   app.route('/api', blobRouter)
   app.route('/api', taskRouter)
   app.route('/api', eventRouter)
+  app.route('/api', habitRouter)
   app.route('/api', auditRouter)
   app.route('/api', tagRouter)
   app.route('/api', locationRouter)

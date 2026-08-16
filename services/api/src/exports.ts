@@ -74,6 +74,30 @@ export {
   ListEventSchema,
   UpdateEventSchema,
 } from '@/modules/event/event.types'
+export type { OverviewBody } from '@/modules/habit/habit.domain'
+// ---- Habit module ----
+export { habitService } from '@/modules/habit/habit.service'
+export type {
+  ClearDailyInput,
+  CreateHabitInput,
+  DailyEntry,
+  DeleteHabitInput,
+  HabitEntry,
+  ListDailyInput,
+  OverviewInput,
+  SetDailyInput,
+  UpdateHabitInput,
+} from '@/modules/habit/habit.types'
+export {
+  CreateHabitSchema,
+  DailyDateSchema,
+  DailyStatusSchema,
+  HabitKindSchema,
+  ListDailySchema,
+  OverviewSchema,
+  SetDailySchema,
+  UpdateHabitSchema,
+} from '@/modules/habit/habit.types'
 // ---- Location module (AMAP proxy) ----
 export { locationService } from '@/modules/location/location.service'
 export type {
