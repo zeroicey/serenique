@@ -72,6 +72,7 @@ ApiClient _client(String body) => ApiClient(
 const _habitJson = {
   'id': 'h1',
   'name': '跑步',
+  'description': '每天晨跑 5 公里',
   'kind': 'good',
   'countable': false,
   'sortOrder': 0,
@@ -79,12 +80,7 @@ const _habitJson = {
   'updatedAt': 't2',
 };
 
-const _dailyJson = {
-  'habitId': 'h1',
-  'status': 'done',
-  'count': 0,
-  'note': '5km',
-};
+const _dailyJson = {'habitId': 'h1', 'status': 'done', 'count': 0};
 
 String _wrap(Object data) =>
     jsonEncode({'success': true, 'message': 'ok', 'data': data});
@@ -97,7 +93,7 @@ void main() {
     expect(habits[0].name, '跑步');
   });
 
-  test('create：POST body 带 name/kind/countable', () async {
+  test('create：POST body 带 name/kind/countable，description 可选', () async {
     final adapter = _RecordingAdapter(_wrap(_habitJson));
     final api = HabitApi(
       ApiClient(
@@ -106,18 +102,39 @@ void main() {
         dio: Dio(BaseOptions(baseUrl: 'http://x'))..httpClientAdapter = adapter,
       ),
     );
-    final h = await api.create(name: '跑步', kind: 'good', countable: true);
+    final h = await api.create(
+      name: '跑步',
+      kind: 'good',
+      countable: true,
+      description: '每天晨跑 5 公里',
+    );
     expect(h.name, '跑步');
+    expect(h.description, '每天晨跑 5 公里');
     expect(adapter.lastMethod, 'POST');
     expect(adapter.lastPath, '/api/habits');
     expect(jsonDecode(adapter.lastBody!), {
       'name': '跑步',
       'kind': 'good',
       'countable': true,
+      'description': '每天晨跑 5 公里',
     });
   });
 
-  test('update：只传非空字段', () async {
+  test('create：description 缺省不携带该字段', () async {
+    final adapter = _RecordingAdapter(_wrap(_habitJson));
+    final api = HabitApi(
+      ApiClient(
+        baseUrl: 'http://x',
+        tokenReader: () => null,
+        dio: Dio(BaseOptions(baseUrl: 'http://x'))..httpClientAdapter = adapter,
+      ),
+    );
+    await api.create(name: '跑步', kind: 'good');
+    final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
+    expect(body.containsKey('description'), isFalse);
+  });
+
+  test('update：只传非空字段（含 description）', () async {
     final adapter = _RecordingAdapter(_wrap(_habitJson));
     final api = HabitApi(
       ApiClient(
@@ -130,6 +147,9 @@ void main() {
     expect(adapter.lastPath, '/api/habits/h1');
     final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
     expect(body, {'name': '晨跑', 'sortOrder': 2});
+
+    await api.update('h1', description: '新简介');
+    expect(jsonDecode(adapter.lastBody!), {'description': '新简介'});
   });
 
   test('delete：DELETE 路径正确', () async {
@@ -160,7 +180,6 @@ void main() {
     expect(adapter.lastQuery, {'date': '2026-08-16'});
     expect(daily.length, 1);
     expect(daily[0].isDone, isTrue);
-    expect(daily[0].note, '5km');
   });
 
   test('setDaily：做没做型传 status，计数型传 count', () async {
@@ -179,19 +198,6 @@ void main() {
 
     await api.setDaily(habitId: 'h2', date: '2026-08-16', count: 3);
     expect(jsonDecode(adapter.lastBody!), {'count': 3});
-  });
-
-  test('setNote：传 null 显式清除', () async {
-    final adapter = _RecordingAdapter(_wrap({}));
-    final api = HabitApi(
-      ApiClient(
-        baseUrl: 'http://x',
-        tokenReader: () => null,
-        dio: Dio(BaseOptions(baseUrl: 'http://x'))..httpClientAdapter = adapter,
-      ),
-    );
-    await api.setNote(habitId: 'h1', date: '2026-08-16', note: null);
-    expect(jsonDecode(adapter.lastBody!), {'note': null});
   });
 
   test('clearDaily：DELETE 每日状态', () async {

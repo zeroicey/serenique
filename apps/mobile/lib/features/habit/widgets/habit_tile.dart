@@ -1,5 +1,5 @@
 // 习惯行：做没做型 → ✓做了 / ✗没做 三态；计数型 → ×N + ±1。
-// 备注内联显示 + 铅笔按钮弹 dialog 编辑；长按弹出菜单：编辑 / 删除。
+// 名称下方显示习惯简介（habits.description）；长按弹出菜单：编辑 / 删除。
 // 交互不做乐观更新（点击 → 服务端 → invalidate 刷新），个人应用网络延迟可接受。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,7 +30,7 @@ class HabitTile extends ConsumerWidget {
     final actions = ref.read(habitActionsProvider);
     final count = daily?.count ?? 0;
     final status = daily?.status;
-    final note = daily?.note;
+    final description = habit.description;
 
     Future<void> run(Future<void> Function() fn) async {
       try {
@@ -62,40 +62,6 @@ class HabitTile extends ConsumerWidget {
           : actions.setCount(habitId: habit.id, date: date, count: count - 1),
     );
 
-    Future<void> editNote() async {
-      final controller = TextEditingController(text: note ?? '');
-      final result = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('备注 · ${habit.name}'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLength: 500,
-            decoration: const InputDecoration(hintText: '如：跑步 5km'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, null),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('保存'),
-            ),
-          ],
-        ),
-      );
-      if (result == null) return;
-      await run(
-        () => actions.saveNote(
-          habitId: habit.id,
-          date: date,
-          note: result.isEmpty ? null : result,
-        ),
-      );
-    }
-
     final color = habit.isGood ? Colors.green : Colors.redAccent;
 
     return ListTile(
@@ -109,27 +75,20 @@ class HabitTile extends ConsumerWidget {
         habit.name,
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
       ),
-      subtitle: note == null || note.isEmpty
+      subtitle: description == null || description.isEmpty
           ? null
           : Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                note,
+                description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
       trailing: habit.countable
-          ? _countControls(
-              count,
-              decrement,
-              increment,
-              editNote,
-              onEdit,
-              onDelete,
-            )
-          : _statusControls(status, toggleStatus, editNote, onEdit, onDelete),
+          ? _countControls(count, decrement, increment, onEdit, onDelete)
+          : _statusControls(status, toggleStatus, onEdit, onDelete),
       onLongPress: () => _showMenu(context, onEdit, onDelete),
     );
   }
@@ -137,7 +96,6 @@ class HabitTile extends ConsumerWidget {
   Widget _statusControls(
     String? status,
     void Function(String next) toggleStatus,
-    VoidCallback editNote,
     VoidCallback onEdit,
     VoidCallback onDelete,
   ) {
@@ -157,12 +115,6 @@ class HabitTile extends ConsumerWidget {
           Colors.redAccent,
           () => toggleStatus('not_done'),
         ),
-        IconButton(
-          icon: const Icon(Icons.sticky_note_2_outlined, size: 20),
-          tooltip: '备注',
-          visualDensity: VisualDensity.compact,
-          onPressed: editNote,
-        ),
       ],
     );
   }
@@ -171,7 +123,6 @@ class HabitTile extends ConsumerWidget {
     int count,
     VoidCallback decrement,
     VoidCallback increment,
-    VoidCallback editNote,
     VoidCallback onEdit,
     VoidCallback onDelete,
   ) {
@@ -193,12 +144,6 @@ class HabitTile extends ConsumerWidget {
           tooltip: '加一次',
           visualDensity: VisualDensity.compact,
           onPressed: increment,
-        ),
-        IconButton(
-          icon: const Icon(Icons.sticky_note_2_outlined, size: 20),
-          tooltip: '备注',
-          visualDensity: VisualDensity.compact,
-          onPressed: editNote,
         ),
       ],
     );

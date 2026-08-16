@@ -260,15 +260,6 @@ class _RecordRow extends StatelessWidget {
               style: const TextStyle(fontSize: 14),
             ),
           ),
-          if (record.note != null && record.note!.isNotEmpty)
-            Flexible(
-              child: Text(
-                record.note!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ),
         ],
       ),
     );

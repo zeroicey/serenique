@@ -20,10 +20,16 @@ class HabitApi {
     required String name,
     required String kind,
     bool countable = false,
+    String? description,
   }) async {
     final data = await _client.postData(
       '/api/habits',
-      body: {'name': name, 'kind': kind, 'countable': countable},
+      body: {
+        'name': name,
+        'kind': kind,
+        'countable': countable,
+        'description': ?description,
+      },
     );
     return Habit.fromJson(data as Map<String, dynamic>);
   }
@@ -35,6 +41,7 @@ class HabitApi {
     String? kind,
     bool? countable,
     int? sortOrder,
+    String? description,
   }) async {
     final data = await _client.putData(
       '/api/habits/$id',
@@ -43,6 +50,7 @@ class HabitApi {
         'kind': ?kind,
         'countable': ?countable,
         'sortOrder': ?sortOrder,
+        'description': ?description,
       },
     );
     return Habit.fromJson(data as Map<String, dynamic>);
@@ -50,7 +58,7 @@ class HabitApi {
 
   Future<void> delete(String id) => _client.deleteData('/api/habits/$id');
 
-  /// 某天全部状态 `[{ habitId, status, count, note }]`。
+  /// 某天全部状态 `[{ habitId, status, count }]`。
   Future<List<HabitDaily>> listDaily(String date) async {
     final data = await _client.getData(
       '/api/habit-daily',
@@ -62,29 +70,15 @@ class HabitApi {
   }
 
   /// upsert 每日状态：做没做型传 [status]（'done'/'not_done'），计数型传 [count]。
-  /// [note] 非空时一并写入（服务端支持仅 note 的 upsert）。
   Future<void> setDaily({
     required String habitId,
     required String date,
     String? status,
     int? count,
-    String? note,
   }) async {
     await _client.putData(
       '/api/habits/$habitId/daily/$date',
-      body: {'status': ?status, 'count': ?count, 'note': ?note},
-    );
-  }
-
-  /// 保存/清除备注：传 null 即清除（body 里显式 note: null）。
-  Future<void> setNote({
-    required String habitId,
-    required String date,
-    required String? note,
-  }) async {
-    await _client.putData(
-      '/api/habits/$habitId/daily/$date',
-      body: {'note': note},
+      body: {'status': ?status, 'count': ?count},
     );
   }
 

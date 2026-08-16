@@ -51,8 +51,14 @@ class HabitActions {
     required String name,
     required String kind,
     bool countable = false,
+    String? description,
   }) async {
-    final h = await _api.create(name: name, kind: kind, countable: countable);
+    final h = await _api.create(
+      name: name,
+      kind: kind,
+      countable: countable,
+      description: description,
+    );
     _invalidateAll();
     return h;
   }
@@ -63,6 +69,7 @@ class HabitActions {
     String? kind,
     bool? countable,
     int? sortOrder,
+    String? description,
   }) async {
     final h = await _api.update(
       id,
@@ -70,6 +77,7 @@ class HabitActions {
       kind: kind,
       countable: countable,
       sortOrder: sortOrder,
+      description: description,
     );
     _invalidateAll();
     return h;
@@ -100,17 +108,7 @@ class HabitActions {
     _invalidateDaily(date);
   }
 
-  /// 保存/清除备注（null 清除）。
-  Future<void> saveNote({
-    required String habitId,
-    required String date,
-    required String? note,
-  }) async {
-    await _api.setNote(habitId: habitId, date: date, note: note);
-    _invalidateDaily(date);
-  }
-
-  /// 回未记录。
+  /// 回未记录（清除当天该习惯的每日状态）。
   Future<void> clearDaily({
     required String habitId,
     required String date,

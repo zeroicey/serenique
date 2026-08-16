@@ -1,5 +1,5 @@
 // 习惯新建/编辑合一全屏页。[habit] 非空 = 编辑。
-// 字段：名称 + 好坏标签 + 计数型开关 + 排序号。由 /habit/edit 路由承载（ShellRoute 外）。
+// 字段：名称 + 简介 + 好坏标签 + 计数型开关 + 排序号。由 /habit/edit 路由承载（ShellRoute 外）。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_exception.dart';
@@ -25,6 +25,9 @@ class _HabitEditPageState extends ConsumerState<HabitEditPage> {
   late final TextEditingController _name = TextEditingController(
     text: widget.args.habit?.name ?? '',
   );
+  late final TextEditingController _description = TextEditingController(
+    text: widget.args.habit?.description ?? '',
+  );
   late final TextEditingController _sortOrder = TextEditingController(
     text: '${widget.args.habit?.sortOrder ?? 0}',
   );
@@ -43,6 +46,7 @@ class _HabitEditPageState extends ConsumerState<HabitEditPage> {
   @override
   void dispose() {
     _name.dispose();
+    _description.dispose();
     _sortOrder.dispose();
     super.dispose();
   }
@@ -64,6 +68,19 @@ class _HabitEditPageState extends ConsumerState<HabitEditPage> {
                 border: OutlineInputBorder(),
               ),
               maxLength: 100,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _description,
+              decoration: const InputDecoration(
+                labelText: '简介（可选）',
+                hintText: '如：每天晨跑 5 公里，保持活力',
+                border: OutlineInputBorder(),
+                alignLabelWithHint: true,
+              ),
+              maxLength: 500,
+              maxLines: 3,
+              minLines: 1,
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
@@ -118,11 +135,17 @@ class _HabitEditPageState extends ConsumerState<HabitEditPage> {
       ).showSnackBar(const SnackBar(content: Text('排序号须为整数')));
       return;
     }
+    final description = _description.text.trim();
     final actions = ref.read(habitActionsProvider);
     setState(() => _submitting = true);
     try {
       if (widget.args.habit == null) {
-        await actions.create(name: name, kind: _kind, countable: _countable);
+        await actions.create(
+          name: name,
+          kind: _kind,
+          countable: _countable,
+          description: description.isEmpty ? null : description,
+        );
       } else {
         await actions.update(
           widget.args.habit!.id,
@@ -130,6 +153,7 @@ class _HabitEditPageState extends ConsumerState<HabitEditPage> {
           kind: _kind,
           countable: _countable,
           sortOrder: sortOrder,
+          description: description.isEmpty ? null : description,
         );
       }
       if (!mounted) return;

@@ -1,13 +1,14 @@
 // 习惯（Habit）模块数据模型。
 // 契约对齐 services/api/src/modules/habit/habit.types.ts：
-// - HabitEntry: { id, name, kind('good'|'bad'), countable, sortOrder, createdAt, updatedAt }
-// - DailyEntry: { habitId, status('done'|'not_done'|null), count, note } —— 没有 id/date/updatedAt
+// - HabitEntry: { id, name, description, kind('good'|'bad'), countable, sortOrder, createdAt, updatedAt }
+// - DailyEntry: { habitId, status('done'|'not_done'|null), count } —— 没有 id/date/updatedAt
 // - OverviewBody: { days, fromDate, toDate, byDate: {date: [记录+name/kind/countable]}, stats }
 /// 习惯选项。
 class Habit {
   const Habit({
     required this.id,
     required this.name,
+    this.description,
     required this.kind,
     required this.countable,
     required this.sortOrder,
@@ -18,6 +19,7 @@ class Habit {
   factory Habit.fromJson(Map<String, dynamic> json) => Habit(
     id: json['id'] as String,
     name: json['name'] as String,
+    description: json['description'] as String?,
     kind: json['kind'] as String,
     countable: json['countable'] as bool? ?? false,
     sortOrder: json['sortOrder'] as int? ?? 0,
@@ -27,6 +29,9 @@ class Habit {
 
   final String id;
   final String name;
+
+  /// 习惯简介（可选，≤500 字符），列表行名称下方展示。
+  final String? description;
 
   /// 'good'（好事）| 'bad'（坏事），只做视觉区分。
   final String kind;
@@ -46,14 +51,12 @@ class HabitDaily {
     required this.habitId,
     required this.status,
     required this.count,
-    required this.note,
   });
 
   factory HabitDaily.fromJson(Map<String, dynamic> json) => HabitDaily(
     habitId: json['habitId'] as String,
     status: json['status'] as String?,
     count: json['count'] as int? ?? 0,
-    note: json['note'] as String?,
   );
 
   final String habitId;
@@ -63,7 +66,6 @@ class HabitDaily {
 
   /// 计数型次数（≥0）；做没做型恒 0。
   final int count;
-  final String? note;
 
   bool get isDone => status == 'done';
   bool get isNotDone => status == 'not_done';
@@ -78,7 +80,6 @@ class HabitOverviewRecord {
     required this.countable,
     required this.status,
     required this.count,
-    required this.note,
   });
 
   factory HabitOverviewRecord.fromJson(Map<String, dynamic> json) =>
@@ -89,7 +90,6 @@ class HabitOverviewRecord {
         countable: json['countable'] as bool? ?? false,
         status: json['status'] as String?,
         count: json['count'] as int? ?? 0,
-        note: json['note'] as String?,
       );
 
   final String habitId;
@@ -98,7 +98,6 @@ class HabitOverviewRecord {
   final bool countable;
   final String? status;
   final int count;
-  final String? note;
 }
 
 /// 总览单习惯统计。

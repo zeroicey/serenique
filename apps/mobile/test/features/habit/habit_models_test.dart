@@ -7,6 +7,7 @@ void main() {
       final h = Habit.fromJson(const {
         'id': 'h1',
         'name': '跑步',
+        'description': '每天晨跑 5 公里',
         'kind': 'good',
         'countable': false,
         'sortOrder': 0,
@@ -15,6 +16,7 @@ void main() {
       });
       expect(h.id, 'h1');
       expect(h.name, '跑步');
+      expect(h.description, '每天晨跑 5 公里');
       expect(h.kind, 'good');
       expect(h.isGood, isTrue);
       expect(h.countable, isFalse);
@@ -31,6 +33,7 @@ void main() {
       });
       expect(h.countable, isFalse);
       expect(h.isGood, isFalse);
+      expect(h.description, isNull);
     });
   });
 
@@ -40,25 +43,21 @@ void main() {
         'habitId': 'h1',
         'status': 'done',
         'count': 0,
-        'note': '5km',
       });
       expect(d.habitId, 'h1');
       expect(d.isDone, isTrue);
       expect(d.isNotDone, isFalse);
       expect(d.count, 0);
-      expect(d.note, '5km');
     });
 
-    test('未记录：status null + count 0 + note null', () {
+    test('未记录：status null + count 0', () {
       final d = HabitDaily.fromJson(const {
         'habitId': 'h1',
         'status': null,
         'count': 0,
-        'note': null,
       });
       expect(d.status, isNull);
       expect(d.isDone, isFalse);
-      expect(d.note, isNull);
     });
 
     test('计数型：count 3（status 恒 null）', () {
@@ -66,7 +65,6 @@ void main() {
         'habitId': 'h2',
         'status': null,
         'count': 3,
-        'note': null,
       });
       expect(d.count, 3);
       expect(d.isDone, isFalse);
@@ -88,7 +86,6 @@ void main() {
               'countable': false,
               'status': 'done',
               'count': 0,
-              'note': '5km',
             },
             {
               'habitId': 'h2',
@@ -97,7 +94,6 @@ void main() {
               'countable': true,
               'status': null,
               'count': 4,
-              'note': null,
             },
           ],
         },
@@ -129,7 +125,6 @@ void main() {
       expect(records[0].name, '跑步');
       expect(records[0].kind, 'good');
       expect(records[0].status, 'done');
-      expect(records[0].note, '5km');
       expect(records[1].name, '喝水');
       expect(records[1].countable, isTrue);
       expect(records[1].count, 4);
