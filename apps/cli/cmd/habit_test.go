@@ -66,6 +66,52 @@ func TestHabitCreateSendsNameKindCountable(t *testing.T) {
 	}
 }
 
+func TestHabitCreateSendsDescription(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(habitEntryJSON("h1", "跑步", "good", false)))
+	}, true, func(srv *httptest.Server) {
+		habitCreateName = "跑步"
+		habitCreateGood, habitCreateBad, habitCreateCountable = true, false, false
+		habitCreateDescription = "每天 30 分钟"
+		t.Cleanup(func() {
+			habitCreateName, habitCreateGood, habitCreateBad, habitCreateCountable, habitCreateDescription = "", false, false, false, ""
+		})
+		if err := habitCreateCmd.RunE(habitCreateCmd, nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if gotBody["description"] != "每天 30 分钟" {
+		t.Fatalf("description = %v, want 每天 30 分钟", gotBody["description"])
+	}
+}
+
+func TestHabitCreateOmitsEmptyDescription(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(habitEntryJSON("h1", "跑步", "good", false)))
+	}, true, func(srv *httptest.Server) {
+		habitCreateName = "跑步"
+		habitCreateGood, habitCreateBad, habitCreateCountable = true, false, false
+		habitCreateDescription = ""
+		t.Cleanup(func() {
+			habitCreateName, habitCreateGood, habitCreateBad, habitCreateCountable, habitCreateDescription = "", false, false, false, ""
+		})
+		if err := habitCreateCmd.RunE(habitCreateCmd, nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if _, ok := gotBody["description"]; ok {
+		t.Fatalf("description should be omitted when empty, got %v", gotBody)
+	}
+}
+
 func TestHabitCreateRejectsMissingKind(t *testing.T) {
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Error("server should not be reached without --good/--bad")
@@ -203,6 +249,59 @@ func TestHabitUpdateSendsKindAndCountable(t *testing.T) {
 	})
 }
 
+func TestHabitUpdateSendsDescription(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(habitEntryJSON("h1", "跑步", "good", false)))
+	}, true, func(srv *httptest.Server) {
+		resetFlagChanged(habitUpdateCmd)
+		habitUpdateDescription = "晨跑 5 公里"
+		if err := habitUpdateCmd.Flags().Set("description", "晨跑 5 公里"); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			habitUpdateDescription = ""
+			resetFlagChanged(habitUpdateCmd)
+		})
+		if err := habitUpdateCmd.RunE(habitUpdateCmd, []string{"h1"}); err != nil {
+			t.Fatal(err)
+		}
+		if gotBody["description"] != "晨跑 5 公里" {
+			t.Fatalf("description = %v, want 晨跑 5 公里", gotBody["description"])
+		}
+	})
+}
+
+func TestHabitUpdateClearsDescription(t *testing.T) {
+	var gotBody map[string]any
+	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(habitEntryJSON("h1", "跑步", "good", false)))
+	}, true, func(srv *httptest.Server) {
+		resetFlagChanged(habitUpdateCmd)
+		habitUpdateDescription = ""
+		if err := habitUpdateCmd.Flags().Set("description", ""); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			habitUpdateDescription = ""
+			resetFlagChanged(habitUpdateCmd)
+		})
+		if err := habitUpdateCmd.RunE(habitUpdateCmd, []string{"h1"}); err != nil {
+			t.Fatal(err)
+		}
+		// 空串也应显式发送（非 omitempty 丢弃），服务端归一化为 null 清空简介。
+		if v, ok := gotBody["description"]; !ok || v != "" {
+			t.Fatalf("description = %v, want explicit empty string to clear", gotBody["description"])
+		}
+	})
+}
+
 func TestHabitUpdateRequiresField(t *testing.T) {
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		t.Error("server should not be reached when no update field is provided")
@@ -287,7 +386,7 @@ func habitSetDailyServer(t *testing.T, habitsJSON string, method *string, path *
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, body)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":"done","count":0,"note":null}}`))
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":"done","count":0}}`))
 	}, true, func(srv *httptest.Server) {})
 }
 
@@ -307,27 +406,6 @@ func TestHabitDoSendsStatusDone(t *testing.T) {
 	}
 	if gotBody["status"] != "done" {
 		t.Fatalf("status = %v, want done", gotBody["status"])
-	}
-}
-
-func TestHabitDoSendsNote(t *testing.T) {
-	var gotBody map[string]any
-	var method, path string
-	habitSetDailyServer(t, habitListJSON(habitJSON("h1", "跑步", "good", false)), &method, &path, &gotBody)
-
-	habitDoDate, habitDoUndo = "2026-08-16", false
-	if err := habitDoCmd.Flags().Set("note", "5km"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		habitDoDate, habitDoUndo = "", false
-		resetFlagChanged(habitDoCmd)
-	})
-	if err := habitDoCmd.RunE(habitDoCmd, []string{"h1"}); err != nil {
-		t.Fatal(err)
-	}
-	if gotBody["note"] != "5km" {
-		t.Fatalf("note = %v, want 5km", gotBody["note"])
 	}
 }
 
@@ -421,12 +499,12 @@ func TestHabitCountIncIncrementsCurrent(t *testing.T) {
 		case "/api/habit-daily":
 			// 当前 count=2，--inc 应 PUT count=3
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"message":"ok","data":[{"habitId":"h1","status":null,"count":2,"note":null}]}`))
+			w.Write([]byte(`{"success":true,"message":"ok","data":[{"habitId":"h1","status":null,"count":2}]}`))
 		default:
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &gotBody)
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":null,"count":3,"note":null}}`))
+			w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":null,"count":3}}`))
 		}
 	}, true, func(srv *httptest.Server) {})
 
@@ -456,12 +534,12 @@ func TestHabitCountDecFloorAtZero(t *testing.T) {
 			w.Write([]byte(habitListJSON(habitJSON("h1", "喝水", "good", true))))
 		case "/api/habit-daily":
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"message":"ok","data":[{"habitId":"h1","status":null,"count":0,"note":null}]}`))
+			w.Write([]byte(`{"success":true,"message":"ok","data":[{"habitId":"h1","status":null,"count":0}]}`))
 		default:
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &gotBody)
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":null,"count":0,"note":null}}`))
+			w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":null,"count":0}}`))
 		}
 	}, true, func(srv *httptest.Server) {})
 
@@ -531,7 +609,7 @@ func TestHabitTodayFetchesDateQuery(t *testing.T) {
 		}
 		gotQuery = r.URL.Query()
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"message":"ok","data":[{"habitId":"h1","status":"done","count":0,"note":"5km"}]}`))
+		w.Write([]byte(`{"success":true,"message":"ok","data":[{"habitId":"h1","status":"done","count":0}]}`))
 	}, true, func(srv *httptest.Server) {
 		habitTodayDate = "2026-08-16"
 		t.Cleanup(func() { habitTodayDate = "" })
@@ -553,7 +631,7 @@ func TestHabitOverviewSendsDaysAndDecodes(t *testing.T) {
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.Query()
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"message":"ok","data":{"days":7,"byDate":{"2026-08-16":[{"habitId":"h1","name":"跑步","kind":"good","status":"done","count":0,"note":null}]},"stats":[{"habitId":"h1","name":"跑步","kind":"good","countable":false,"doneDays":4,"notDoneDays":1,"totalCount":0}]}}`))
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"days":7,"byDate":{"2026-08-16":[{"habitId":"h1","name":"跑步","kind":"good","status":"done","count":0}]},"stats":[{"habitId":"h1","name":"跑步","kind":"good","countable":false,"doneDays":4,"notDoneDays":1,"totalCount":0}]}}`))
 	}, true, func(srv *httptest.Server) {
 		rec := &recordingPrinter{}
 		printer = rec
@@ -644,16 +722,12 @@ func TestValidateHabitDate(t *testing.T) {
 func TestHabitOverviewItemLine(t *testing.T) {
 	done := client.HabitStatusDone
 	notDone := client.HabitStatusNotDone
-	note := "5km"
 
 	if got := habitOverviewItemLine(client.HabitOverviewItem{Name: "跑步", Status: &done, Count: 0}); got != "✓ 跑步" {
 		t.Errorf("done line = %q, want ✓ 跑步", got)
 	}
 	if got := habitOverviewItemLine(client.HabitOverviewItem{Name: "熬夜", Status: &notDone, Count: 0}); got != "✗ 熬夜" {
 		t.Errorf("not_done line = %q, want ✗ 熬夜", got)
-	}
-	if got := habitOverviewItemLine(client.HabitOverviewItem{Name: "跑步", Status: &done, Count: 0, Note: &note}); got != "✓ 跑步 — 5km" {
-		t.Errorf("note line = %q, want ✓ 跑步 — 5km", got)
 	}
 	if got := habitOverviewItemLine(client.HabitOverviewItem{Name: "喝水", Status: nil, Count: 3}); got != "×3 喝水" {
 		t.Errorf("count line = %q, want ×3 喝水", got)
@@ -671,7 +745,7 @@ func TestHabitDoDefaultsToToday(t *testing.T) {
 		}
 		gotPath = r.URL.Path
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":"done","count":0,"note":null}}`))
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"habitId":"h1","status":"done","count":0}}`))
 	}, true, func(srv *httptest.Server) {
 		habitDoDate, habitDoUndo = "", false
 		t.Cleanup(func() { habitDoDate, habitDoUndo = "", false })

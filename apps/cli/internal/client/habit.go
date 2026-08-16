@@ -47,25 +47,26 @@ func IsHabitStatus(s string) bool {
 
 // HabitEntry mirrors the API's HabitEntry response (habit.types.ts). Countable
 // selects the record mode: false (做没做型, e.g. 跑步) records status; true
-// (计数型, e.g. 喝水) records a count.
+// (计数型, e.g. 喝水) records a count. Description is the habit's own blurb
+// (可选简介, e.g. "每天 30 分钟"), not a per-day remark.
 type HabitEntry struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	Countable bool   `json:"countable"`
-	SortOrder int    `json:"sortOrder"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+	Kind        string  `json:"kind"`
+	Countable   bool    `json:"countable"`
+	SortOrder   int     `json:"sortOrder"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 // HabitDailyEntry mirrors the API's daily status entry: one row per
 // (habit, date). Status is nil when unrecorded (非计数型); Count is the number
-// of times for countable habits (0 = not done). Note is an optional remark.
+// of times for countable habits (0 = not done).
 type HabitDailyEntry struct {
 	HabitID string  `json:"habitId"`
 	Status  *string `json:"status"`
 	Count   int     `json:"count"`
-	Note    *string `json:"note"`
 }
 
 // HabitOverview mirrors GET /api/habit-daily/overview: day-grouped records
@@ -84,7 +85,6 @@ type HabitOverviewItem struct {
 	Kind    string  `json:"kind"`
 	Status  *string `json:"status"`
 	Count   int     `json:"count"`
-	Note    *string `json:"note"`
 }
 
 // HabitStat is one habit's frequency summary over the overview window.
@@ -99,29 +99,31 @@ type HabitStat struct {
 }
 
 // CreateHabitInput mirrors the API's CreateHabitSchema. Countable defaults to
-// false on the server; omitting it is equivalent to sending false.
+// false on the server; omitting it is equivalent to sending false. Description
+// is the habit's optional blurb (简介).
 type CreateHabitInput struct {
-	Name      string `json:"name"`
-	Kind      string `json:"kind"`
-	Countable bool   `json:"countable,omitempty"`
+	Name        string  `json:"name"`
+	Kind        string  `json:"kind"`
+	Countable   bool    `json:"countable,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 // UpdateHabitInput mirrors the API's UpdateHabitSchema: every field is
-// optional and a nil field leaves the existing value unchanged.
+// optional and a nil field leaves the existing value unchanged. A non-nil
+// empty Description clears the blurb (the API normalizes "" to null).
 type UpdateHabitInput struct {
-	Name      *string `json:"name,omitempty"`
-	Kind      *string `json:"kind,omitempty"`
-	Countable *bool   `json:"countable,omitempty"`
-	SortOrder *int    `json:"sortOrder,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Kind        *string `json:"kind,omitempty"`
+	Countable   *bool   `json:"countable,omitempty"`
+	SortOrder   *int    `json:"sortOrder,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 // SetDailyInput mirrors the API's SetDailySchema: for non-countable habits the
-// caller sends Status; for countable habits Count. Note is optional for both;
-// a non-nil empty Note clears the remark (the API normalizes "" to null).
+// caller sends Status; for countable habits Count.
 type SetDailyInput struct {
 	Status *string `json:"status,omitempty"`
 	Count  *int    `json:"count,omitempty"`
-	Note   *string `json:"note,omitempty"`
 }
 
 // =============================================================================
@@ -178,7 +180,8 @@ func (c *Client) ListDaily(ctx context.Context, date string) ([]HabitDailyEntry,
 	return result, nil
 }
 
-// SetDaily upserts one habit's status for one day (status, count, note).
+// SetDaily upserts one habit's status for one day (status for non-countable,
+// count for countable).
 func (c *Client) SetDaily(ctx context.Context, habitID, date string, input SetDailyInput) (*HabitDailyEntry, error) {
 	var result HabitDailyEntry
 	path := fmt.Sprintf("/api/habits/%s/daily/%s", habitID, date)

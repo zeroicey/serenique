@@ -36,7 +36,7 @@ var habitCreateCmd = &cobra.Command{
 计数型习惯用 --countable 标记（如喝水/吃药，记录次数而非做没做）。
 
 示例:
-  serenique habit create --name 跑步 --good
+  serenique habit create --name 跑步 --good --description "每天 30 分钟"
   serenique habit create -n 熬夜 --bad
   serenique habit create -n 喝水 --good --countable`,
 	Args: cobra.NoArgs,
@@ -46,9 +46,10 @@ var habitCreateCmd = &cobra.Command{
 			return err
 		}
 		input := client.CreateHabitInput{
-			Name:      habitCreateName,
-			Kind:      kind,
-			Countable: habitCreateCountable,
+			Name:        habitCreateName,
+			Kind:        kind,
+			Countable:   habitCreateCountable,
+			Description: optionalStr(habitCreateDescription),
 		}
 		result, err := apiClient.CreateHabit(commandContext(cmd), input)
 		if err != nil {
@@ -60,10 +61,11 @@ var habitCreateCmd = &cobra.Command{
 }
 
 var (
-	habitCreateName      string
-	habitCreateGood      bool
-	habitCreateBad       bool
-	habitCreateCountable bool
+	habitCreateName        string
+	habitCreateGood        bool
+	habitCreateBad         bool
+	habitCreateCountable   bool
+	habitCreateDescription string
 )
 
 // =============================================================================
@@ -116,7 +118,9 @@ var habitUpdateCmd = &cobra.Command{
 示例:
   serenique habit update a1b2c3d4 --name "晨跑"
   serenique habit update a1b2c3d4 --bad
-  serenique habit update a1b2c3d4 --countable --sort-order 3`,
+  serenique habit update a1b2c3d4 --countable --sort-order 3
+  serenique habit update a1b2c3d4 --description "晨跑 5 公里"
+  serenique habit update a1b2c3d4 --description ""`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		input := client.UpdateHabitInput{}
@@ -154,8 +158,12 @@ var habitUpdateCmd = &cobra.Command{
 			input.SortOrder = &habitUpdateSortOrder
 			changed = true
 		}
+		if cmd.Flags().Changed("description") {
+			input.Description = &habitUpdateDescription
+			changed = true
+		}
 		if !changed {
-			return fmt.Errorf("至少需要提供一个待更新字段（--name / --good / --bad / --countable / --no-countable / --sort-order）")
+			return fmt.Errorf("至少需要提供一个待更新字段（--name / --good / --bad / --countable / --no-countable / --sort-order / --description）")
 		}
 
 		result, err := apiClient.UpdateHabit(commandContext(cmd), args[0], input)
@@ -174,6 +182,7 @@ var (
 	habitUpdateCountable    bool
 	habitUpdateNotCountable bool
 	habitUpdateSortOrder    int
+	habitUpdateDescription  string
 )
 
 // =============================================================================
@@ -192,7 +201,7 @@ var habitTodayCmd = &cobra.Command{
 	Use:   "today",
 	Short: "查看某天的习惯记录",
 	Long: `查看指定日期（默认今天）各习惯的记录状态：
-做没做型显示 未记录 / ✓做了 / ✗没做，计数型显示 ×N，有备注显示备注。
+做没做型显示 未记录 / ✓做了 / ✗没做，计数型显示 ×N；习惯有简介时显示简介。
 
 示例:
   serenique habit today
@@ -241,11 +250,11 @@ var habitTodayCmd = &cobra.Command{
 				"类型":   habitKindLabel(h.Kind),
 				"记录方式": habitTypeLabel(h.Countable),
 				"状态":   habitStatusLabel(entry, h.Countable),
-				"备注":   nullableStr(entry.Note),
+				"简介":   habitDescText(h.Description, 20),
 			})
 		}
 		printer.PrintMessage(date + " 的习惯记录:")
-		printer.PrintTable([]string{"ID", "名称", "类型", "记录方式", "状态", "备注"}, rows)
+		printer.PrintTable([]string{"ID", "名称", "类型", "记录方式", "状态", "简介"}, rows)
 		return nil
 	},
 }
@@ -259,53 +268,51 @@ var habitTodayDate string
 var habitDoCmd = &cobra.Command{
 	Use:   "do <id>",
 	Short: "标记做了（做没做型习惯）",
-	Long: `将某个做没做型习惯标记为「做了」。可指定日期（默认今天）并附备注。
+	Long: `将某个做没做型习惯标记为「做了」。可指定日期（默认今天）。
 --undo 撤销该天记录（回到未记录）。
 
 示例:
   serenique habit do a1b2c3d4
-  serenique habit do a1b2c3d4 --date 2026-08-16 --note "5km"
+  serenique habit do a1b2c3d4 --date 2026-08-16
   serenique habit do a1b2c3d4 --undo`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return habitSetStatus(cmd, args[0], client.HabitStatusDone, habitDoDate, habitDoNote, habitDoUndo)
+		return habitSetStatus(cmd, args[0], client.HabitStatusDone, habitDoDate, habitDoUndo)
 	},
 }
 
 var (
 	habitDoDate string
-	habitDoNote string
 	habitDoUndo bool
 )
 
 var habitNotCmd = &cobra.Command{
 	Use:   "not <id>",
 	Short: "标记没做（做没做型习惯）",
-	Long: `将某个做没做型习惯标记为「没做」。可指定日期（默认今天）并附备注。
+	Long: `将某个做没做型习惯标记为「没做」。可指定日期（默认今天）。
 --undo 撤销该天记录（回到未记录）。
 
 示例:
   serenique habit not a1b2c3d4
-  serenique habit not a1b2c3d4 --date 2026-08-16 --note "休息日"
+  serenique habit not a1b2c3d4 --date 2026-08-16
   serenique habit not a1b2c3d4 --undo`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return habitSetStatus(cmd, args[0], client.HabitStatusNotDone, habitNotDate, habitNotNote, habitNotUndo)
+		return habitSetStatus(cmd, args[0], client.HabitStatusNotDone, habitNotDate, habitNotUndo)
 	},
 }
 
 var (
 	habitNotDate string
-	habitNotNote string
 	habitNotUndo bool
 )
 
 // habitSetStatus implements the shared do/not logic: resolves the habit,
 // validates it is NOT countable, then either clears the day (--undo) or writes
-// the given status (plus an optional note). date/note/undo are passed in
-// explicitly by the do/not commands so this helper never references the
-// command variables directly (which would create an init cycle).
-func habitSetStatus(cmd *cobra.Command, id, status, date, note string, undo bool) error {
+// the given status. date/undo are passed in explicitly by the do/not commands
+// so this helper never references the command variables directly (which would
+// create an init cycle).
+func habitSetStatus(cmd *cobra.Command, id, status, date string, undo bool) error {
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
@@ -330,9 +337,6 @@ func habitSetStatus(cmd *cobra.Command, id, status, date, note string, undo bool
 	}
 
 	input := client.SetDailyInput{Status: &status}
-	if cmd.Flags().Changed("note") {
-		input.Note = &note
-	}
 	if _, err := apiClient.SetDaily(ctx, id, date, input); err != nil {
 		return err
 	}
@@ -593,7 +597,7 @@ func habitStatusLabel(entry client.HabitDailyEntry, countable bool) string {
 
 // habitOverviewItemLine renders one overview record as a text line: countable
 // habits show ×N (count=0 records are filtered out), non-countable habits show
-// ✓/✗; the note is appended when present.
+// ✓/✗.
 func habitOverviewItemLine(it client.HabitOverviewItem) string {
 	var mark string
 	if it.Count > 0 {
@@ -603,11 +607,7 @@ func habitOverviewItemLine(it client.HabitOverviewItem) string {
 	} else {
 		mark = "✓"
 	}
-	line := fmt.Sprintf("%s %s", mark, it.Name)
-	if it.Note != nil && *it.Note != "" {
-		line += " — " + *it.Note
-	}
-	return line
+	return fmt.Sprintf("%s %s", mark, it.Name)
 }
 
 // habitRow renders one habit option as a table row.
@@ -623,7 +623,7 @@ func habitRow(h client.HabitEntry) map[string]string {
 
 // habitKV renders the shared create/update success detail block.
 func habitKV(h *client.HabitEntry) map[string]string {
-	return map[string]string{
+	kv := map[string]string{
 		"ID":   h.ID,
 		"名称":   h.Name,
 		"类型":   habitKindLabel(h.Kind),
@@ -632,6 +632,28 @@ func habitKV(h *client.HabitEntry) map[string]string {
 		"创建时间": prefix(h.CreatedAt, 10),
 		"更新时间": prefix(h.UpdatedAt, 10),
 	}
+	if h.Description != nil && *h.Description != "" {
+		kv["简介"] = truncateRunes(*h.Description, 40)
+	}
+	return kv
+}
+
+// optionalStr returns a *string pointing to s, or nil when s is empty — used
+// for optional request fields so an empty value is simply omitted.
+func optionalStr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// habitDescText renders a habit's optional description (简介) for table-mode
+// display: an empty/absent description renders as an empty cell.
+func habitDescText(s *string, max int) string {
+	if s == nil || *s == "" {
+		return ""
+	}
+	return truncateRunes(*s, max)
 }
 
 // validateHabitDate rejects a date that is not a valid YYYY-MM-DD calendar
@@ -652,6 +674,7 @@ func init() {
 	habitCreateCmd.Flags().BoolVar(&habitCreateGood, "good", false, "标记为好事")
 	habitCreateCmd.Flags().BoolVar(&habitCreateBad, "bad", false, "标记为坏事")
 	habitCreateCmd.Flags().BoolVar(&habitCreateCountable, "countable", false, "计数型习惯（记录次数，如喝水）")
+	habitCreateCmd.Flags().StringVar(&habitCreateDescription, "description", "", "习惯简介（可选）")
 	habitCreateCmd.MarkFlagRequired("name")
 
 	// ---- habit update ----
@@ -661,6 +684,7 @@ func init() {
 	habitUpdateCmd.Flags().BoolVar(&habitUpdateCountable, "countable", false, "改为计数型")
 	habitUpdateCmd.Flags().BoolVar(&habitUpdateNotCountable, "no-countable", false, "改为做没做型")
 	habitUpdateCmd.Flags().IntVar(&habitUpdateSortOrder, "sort-order", 0, "新排序号")
+	habitUpdateCmd.Flags().StringVar(&habitUpdateDescription, "description", "", "新简介（传空串清空）")
 
 	// ---- habit delete ----
 	habitDeleteCmd = deleteCommand("delete <id>", "删除习惯", `删除指定的习惯及其全部每日记录。此操作不可撤销，默认需要确认。
@@ -676,11 +700,9 @@ func init() {
 
 	// ---- habit do / not ----
 	habitDoCmd.Flags().StringVar(&habitDoDate, "date", "", "日期 (YYYY-MM-DD)，默认今天")
-	habitDoCmd.Flags().StringVar(&habitDoNote, "note", "", "备注（如 5km）")
 	habitDoCmd.Flags().BoolVar(&habitDoUndo, "undo", false, "撤销该天记录（回到未记录）")
 
 	habitNotCmd.Flags().StringVar(&habitNotDate, "date", "", "日期 (YYYY-MM-DD)，默认今天")
-	habitNotCmd.Flags().StringVar(&habitNotNote, "note", "", "备注")
 	habitNotCmd.Flags().BoolVar(&habitNotUndo, "undo", false, "撤销该天记录（回到未记录）")
 
 	// ---- habit count ----
