@@ -42,8 +42,15 @@ export function HabitRow({ habit, daily, date }: HabitRowProps) {
   // 本地乐观状态：连续点击（±1 / 切换状态）时请求未返回前用本地值累加，
   // 避免每次点击都基于旧的 daily prop 计算。API 的 DailyEntry 不返回
   // updatedAt，本地值在请求成功（query invalidate 重挂/刷新）后自然让位。
+  // ⚠️ 切换日期时必须重置：否则会显示上一日的虚假状态，且再点会清除错误日期。
   const [localStatus, setLocalStatus] = useState<DailyStatus | null>(null)
   const [localCount, setLocalCount] = useState<number | null>(null)
+  const [prevDate, setPrevDate] = useState(date)
+  if (prevDate !== date) {
+    setPrevDate(date)
+    setLocalStatus(null)
+    setLocalCount(null)
+  }
 
   const count = localCount ?? daily?.count ?? 0
   const status = localStatus ?? daily?.status ?? null
