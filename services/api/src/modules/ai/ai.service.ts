@@ -328,6 +328,8 @@ export function toRenderMessages(messages: AgentMessage[]): RenderMessage[] {
 export const INITIAL_PAGE_SIZE = 20
 /** 向上滚动每批加载条数。 */
 export const MORE_PAGE_SIZE = 30
+/** load_more 客户端可请求的最大条数（防御：limit<=0 会返回空批次+hasMore=true 空转）。 */
+export const MAX_PAGE_SIZE = 200
 
 export type TailResult = {
   messages: RenderMessage[]
@@ -356,6 +358,52 @@ export function tailRenderMessages(
     total,
     hasMore: start > 0,
   }
+}
+
+export type OlderPage = {
+  messages: RenderMessage[]
+  total: number
+  hasMore: boolean
+  /** 加载后应记录的最早已持有下标（下一次加载的起点，等于本批 nextAnchor）。 */
+  nextAnchor: number
+}
+
+/**
+ * 向上滚动加载更早的一批历史消息。游标 = 客户端当前持有的**最早** RenderMessage
+ * 下标（anchor），分页锚定在稳定的前端边界而非易变的尾部：新鲜轮次只在尾部
+ * 追加，旧下标永不移动，因此返回 [anchor-limit, anchor) 不会与「已在客户端但
+ * 尾部仍在增长」的消息重叠（修复「turn 追加后 load_more 返回重复消息」缺陷）。
+ *
+ * @param messages 完整 AgentMessage[]（session.messages，尾部可能已随 turn 增长）
+ * @param limit    本批取多少条 RenderMessage
+ * @param anchor   客户端当前持有的最早 RenderMessage 下标（初始 = total-已发尾部条数）
+ */
+export function nextOlderPage(messages: AgentMessage[], limit: number, anchor: number): OlderPage {
+  const all = toRenderMessages(messages)
+  const total = all.length
+  const end = Math.min(anchor, total) // anchor 可能因会话截断/重建略超 total，钳到 total
+  const start = Math.max(0, end - limit)
+  return {
+    messages: all.slice(start, end),
+    total,
+    hasMore: start > 0,
+    nextAnchor: start,
+  }
+}
+
+export type SessionPage = TailResult & {
+  /** 初始分页基线：客户端持有尾部后应记录的最早 RenderMessage 下标（= 尾部起点）。 */
+  anchor: number
+}
+
+/**
+ * 会话就绪/切换/新建共用的初始分页状态：只取尾部 INITIAL_PAGE_SIZE 条，并给出
+ * 本次下发的分页基线 anchor（= 尾部起点下标）。每次切会话/建新会话都重算基线
+ * （对当前 total 重新取尾部），保证旧游标不跨会话泄漏。
+ */
+export function sessionPagination(messages: AgentMessage[]): SessionPage {
+  const tail = tailRenderMessages(messages, INITIAL_PAGE_SIZE, 0)
+  return { ...tail, anchor: tail.total - tail.messages.length }
 }
 
 function userText(content: string | { type: string; text?: string }[]): string {

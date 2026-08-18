@@ -183,7 +183,9 @@ class AiController extends Notifier<AiState> {
       case SessionDeletedMessage():
         refreshSessions();
       case ErrorMessage():
-        state = state.copyWith(busy: false, lastError: ev.message);
+        // 复位 loadingMore：load_more 分支异常时收到 error 而非 messages_loaded，
+        // 不置 false 会永久阻断后续懒加载。
+        state = state.copyWith(busy: false, lastError: ev.message, loadingMore: false);
       case AgentStartMessage():
         state = state.copyWith(busy: true);
       case AgentEndMessage():

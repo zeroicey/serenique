@@ -271,6 +271,41 @@ void main() {
     expect(h.state.lastError, isNull);
   });
 
+  test('error 事件复位 loadingMore（load_more 异常不再永久卡死懒加载）', () async {
+    final h = TestHarness();
+    addTearDown(h.container.dispose);
+    await h.connect();
+
+    h.channel.emit(
+      jsonEncode({
+        'type': 'session_ready',
+        'sessionId': 's1',
+        'model': 'm',
+        'messages': [
+          {'role': 'user', 'text': '最新', 'thinking': '', 'toolCalls': []},
+        ],
+        'totalMessageCount': 50,
+        'hasMore': true,
+      }),
+    );
+    await pumpEventQueue();
+
+    h.notifier.loadMore();
+    expect(h.state.loadingMore, isTrue);
+
+    // load_more 分支异常 → 后端回 error 而非 messages_loaded
+    h.channel.emit(jsonEncode({'type': 'error', 'message': 'load_more 失败'}));
+    await pumpEventQueue();
+    expect(h.state.loadingMore, isFalse);
+    expect(h.state.lastError, 'load_more 失败');
+
+    // 复位后可再次发起加载
+    final sentBefore = h.channel.sent.length;
+    h.notifier.loadMore();
+    await pumpEventQueue();
+    expect(h.channel.sent.length, sentBefore + 1);
+  });
+
   test('send：乐观追加 user 消息 + 发 prompt', () async {
     final h = TestHarness();
     addTearDown(h.container.dispose);

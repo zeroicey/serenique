@@ -4,9 +4,10 @@ import { getAuthVars } from '@/modules/auth/auth.middleware'
 import {
   aiService,
   forwardEvents,
-  INITIAL_PAGE_SIZE,
+  MAX_PAGE_SIZE,
   MORE_PAGE_SIZE,
-  tailRenderMessages,
+  nextOlderPage,
+  sessionPagination,
 } from './ai.service'
 
 // ---------------------------------------------------------------------------
@@ -60,8 +61,12 @@ type Conn = {
   unsubscribe?: () => void
   /** onOpen 完成前到达的消息暂存（防御性：Bun 保证 open 先于 message，通常为空）。 */
   pending: string[]
-  /** 已下发的 RenderMessage 条数（分页游标，per-connection）。切会话/建新会话重置。 */
-  deliveredCount: number
+  /**
+   * 分页游标：客户端当前持有的**最早** RenderMessage 下标（per-connection）。
+   * 锚定稳定前端边界，而非易变的尾部——fresh 轮次只在尾部追加，旧下标永不移动，
+   * 故按 anchor 往前取批次不会与客户端已有消息重叠。切会话/建新会话重置。
+   */
+  anchor: number
 }
 
 // 关键：hono bun adapter 的每次事件回调（open/message/close）都会新建一个
@@ -146,15 +151,17 @@ async function resetAfterDelete(conn: Conn, ws: WSContext, deletedId: string) {
 
 /** session_switched 的应答构造（切换/新建/删除当前会话后共用）。只发尾部 N 条，附带分页元信息。 */
 function sessionPayload(sessionId: string, session: AgentSession, conn: Conn) {
-  const tail = tailRenderMessages(session.messages, INITIAL_PAGE_SIZE, 0)
-  conn.deliveredCount = tail.messages.length
+  // 分页基线随会话切换/新建/删除一并重置（对当前会话重新取尾部 + anchor），
+  // 旧游标不跨会话泄漏。
+  const page = sessionPagination(session.messages)
+  conn.anchor = page.anchor
   return JSON.stringify({
     type: 'session_switched',
     sessionId,
     model: `${session.model?.provider}/${session.model?.id}`,
-    messages: tail.messages,
-    totalMessageCount: tail.total,
-    hasMore: tail.hasMore,
+    messages: page.messages,
+    totalMessageCount: page.total,
+    hasMore: page.hasMore,
   })
 }
 
@@ -167,7 +174,7 @@ export function createAiWebSocket(upgradeWebSocket: typeof import('hono/bun').up
       async onOpen(_evt, ws) {
         const conn: Conn = {
           pending: [],
-          deliveredCount: 0,
+          anchor: 0,
           ...(auth.userId ? { userId: auth.userId } : {}),
         }
         connections.set(ws.raw, conn)
@@ -180,17 +187,17 @@ export function createAiWebSocket(upgradeWebSocket: typeof import('hono/bun').up
           conn.session = session
           conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session)
           acquireSession(conn.sessionId)
-          const tail = tailRenderMessages(session.messages, INITIAL_PAGE_SIZE, 0)
-          conn.deliveredCount = tail.messages.length
+          const page = sessionPagination(session.messages)
+          conn.anchor = page.anchor
           safeSend(
             ws,
             JSON.stringify({
               type: 'session_ready',
               sessionId: conn.sessionId,
               model: `${session.model?.provider}/${session.model?.id}`,
-              messages: tail.messages,
-              totalMessageCount: tail.total,
-              hasMore: tail.hasMore,
+              messages: page.messages,
+              totalMessageCount: page.total,
+              hasMore: page.hasMore,
             }),
           )
           for (const raw of conn.pending) handleMessage(ws, raw)
@@ -321,8 +328,10 @@ async function handleMessage(ws: WSContext, raw: string) {
         break
       }
       case 'load_more': {
-        // 分页加载更早的消息：从已下发条数（deliveredCount）往前取 limit 条。
-        // limit 缺省 MORE_PAGE_SIZE。会话实例丢失时无历史可加载，返回空批次。
+        // 分页加载更早的消息：从客户端最早持有下标（conn.anchor）往前取 limit 条。
+        // limit 缺省 MORE_PAGE_SIZE；钳到 [1, MAX_PAGE_SIZE]——limit<=0 会返回
+        // 空批次却 hasMore=true、anchor 不变，web 客户端将无限空转。
+        // 会话实例丢失时无历史可加载，返回空批次。
         const session = conn.session
         if (!session) {
           safeSend(
@@ -336,16 +345,16 @@ async function handleMessage(ws: WSContext, raw: string) {
           )
           break
         }
-        const limit = msg.limit ?? MORE_PAGE_SIZE
-        const tail = tailRenderMessages(session.messages, limit, conn.deliveredCount)
-        conn.deliveredCount += tail.messages.length
+        const limit = Math.min(Math.max(msg.limit ?? MORE_PAGE_SIZE, 1), MAX_PAGE_SIZE)
+        const page = nextOlderPage(session.messages, limit, conn.anchor)
+        conn.anchor = page.nextAnchor
         safeSend(
           ws,
           JSON.stringify({
             type: 'messages_loaded',
-            messages: tail.messages,
-            totalMessageCount: tail.total,
-            hasMore: tail.hasMore,
+            messages: page.messages,
+            totalMessageCount: page.total,
+            hasMore: page.hasMore,
           }),
         )
         break

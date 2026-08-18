@@ -11,13 +11,18 @@ export function MessageList() {
   const activeTurn = useAiStore((s) => s.activeTurn)
   const hasMoreMessages = useAiStore((s) => s.hasMoreMessages)
   const loadingMore = useAiStore((s) => s.loadingMore)
+  const oldestHeldIndex = useAiStore((s) => s.oldestHeldIndex)
   const loadMore = useAiStore((s) => s.loadMore)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // 顶部哨兵：IntersectionObserver 触发懒加载
+  // 顶部哨兵：IntersectionObserver 触发懒加载。哨兵仅在 hasMoreMessages 为真时渲染
+  // （首次挂载前 session_ready 未到、hasMoreMessages 为 false，哨兵不存在）；因此
+  // 依赖里必须包含 hasMoreMessages，才能在哨兵真正出现时重建 observer，否则首次
+  // 加载后 observer 永远不会创建，懒加载在 web 端形同虚设。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 意图性依赖——哨兵出现时需重建 observer
   useEffect(() => {
     const root = scrollRef.current
     const sentinel = topSentinelRef.current
@@ -30,7 +35,7 @@ export function MessageList() {
     )
     io.observe(sentinel)
     return () => io.disconnect()
-  }, [loadMore])
+  }, [loadMore, hasMoreMessages])
 
   // 滚动锚定（prepend 补偿 + 新消息滚底，单 useLayoutEffect 避免抖动）：
   //  - 头部插入更早历史（prepend）：保持视觉位置，按 scrollHeight 差值下移
@@ -74,16 +79,18 @@ export function MessageList() {
             {loadingMore ? '加载更早消息…' : '向上滚动加载更多'}
           </div>
         )}
+        {/* 消息 key = oldestHeldIndex + i：prepend 历史后已持有消息的 key 不变，
+        避免按索引 key={i} 重挂载导致 ThinkingBlock/ToolCard 的展开态被重置。 */}
         {messages.map((m, i) =>
           m.role === 'user' ? (
             <div
-              key={i}
+              key={oldestHeldIndex + i}
               className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right"
             >
               {m.text}
             </div>
           ) : (
-            <div key={i} className="flex flex-col gap-1">
+            <div key={oldestHeldIndex + i} className="flex flex-col gap-1">
               <ThinkingBlock text={m.thinking} />
               <div className="break-words">
                 {/* 历史消息已完整：静态渲染，不动画 */}

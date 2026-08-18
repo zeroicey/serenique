@@ -31,6 +31,6 @@ Serenique 的项目记忆，正式文档。进 `.ai/` 前先读本文件。
 
 - runbooks：`hpcore-deploy.md`、`web-cloudflare-deploy.md`、`ios-device-install.md`、`docker-local-build.md`、`release-process.md`、`cn-access-hcyj.md`（国内加速入口）
 - requirements 状态：见 `requirements/README.md`
-- 最新决策：`2026-08-08-production-cn-entry.md`（生产公网入口 → api.hcyj.xyz/serenique）、`2026-08-08-mcp-sunset.md`（见 `decisions/`，按日期倒序）
+- 最新决策：`2026-08-18-ai-pagination-front-anchor.md`（懒加载分页游标 → 稳定前端边界 anchor）、`2026-08-08-production-cn-entry.md`（生产公网入口 → api.hcyj.xyz/serenique）、`2026-08-08-mcp-sunset.md`（见 `decisions/`，按日期倒序）
 - 迁移归档：`archive/2026-08-15-agents-md-archive.md`（原 AGENTS.md / CLAUDE.md 全文）、`archive/2026-08-04-blob-storage-module-design.md`（blob 完整设计）
 - 最近工作：`worklog/`（按日期倒序）

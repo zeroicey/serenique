@@ -1,8 +1,34 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { useAiStore } from '@/features/ai/store/ai-store'
 import { MessageList } from './message-list'
+
+// jsdom 未实现 IntersectionObserver：提供最小 mock，供懒加载哨兵测试触发回调。
+class MockIntersectionObserver {
+  static instances: MockIntersectionObserver[] = []
+  callback: IntersectionObserverCallback
+  targets: Element[] = []
+  constructor(callback: IntersectionObserverCallback) {
+    this.callback = callback
+    MockIntersectionObserver.instances.push(this)
+  }
+  observe(target: Element) {
+    this.targets.push(target)
+  }
+  unobserve() {}
+  disconnect() {
+    this.targets = []
+  }
+  // 测试辅助：模拟哨兵进入/离开视口
+  fire(intersecting: boolean) {
+    const entries = this.targets.map(
+      (target) =>
+        ({ isIntersecting: intersecting, target }) as unknown as IntersectionObserverEntry,
+    )
+    this.callback(entries, this as unknown as IntersectionObserver)
+  }
+}
 
 function renderWithState() {
   useAiStore.setState({
@@ -94,5 +120,72 @@ describe('MessageList', () => {
     render(<MessageList />)
     expect(screen.queryByText('向上滚动加载更多')).toBeNull()
     expect(screen.queryByText('加载更早消息…')).toBeNull()
+  })
+
+  test('FIX1：哨兵出现后 IntersectionObserver 才创建，进入视口触发 loadMore', () => {
+    MockIntersectionObserver.instances = []
+    const originalIO = globalThis.IntersectionObserver
+    globalThis.IntersectionObserver =
+      MockIntersectionObserver as unknown as typeof IntersectionObserver
+    const loadMore = vi.fn()
+    try {
+      // 首次挂载：hasMoreMessages=false（session_ready 未到）→ 哨兵未渲染 → 不建 observer
+      useAiStore.setState({
+        messages: [{ role: 'user', text: '最新', thinking: '', toolCalls: [] }],
+        activeTurn: null,
+        hasMoreMessages: false,
+        loadingMore: false,
+        loadMore,
+      })
+      render(<MessageList />)
+      expect(MockIntersectionObserver.instances).toHaveLength(0)
+
+      // session_ready 到达：hasMoreMessages=true → 哨兵渲染 + effect 重建 observer
+      act(() => useAiStore.setState({ hasMoreMessages: true }))
+      expect(MockIntersectionObserver.instances).toHaveLength(1)
+
+      // 哨兵进入视口（用户滚到顶部）→ loadMore 被调用
+      const io = MockIntersectionObserver.instances[0]
+      act(() => io.fire(true))
+      expect(loadMore).toHaveBeenCalledTimes(1)
+    } finally {
+      globalThis.IntersectionObserver = originalIO
+    }
+  })
+
+  test('FIX A：prepend 历史消息后已展开的思考块不折叠（key 稳定）', async () => {
+    const user = userEvent.setup()
+    // 初始：2 条已持有消息（尾部），基线 oldestHeldIndex=8
+    useAiStore.setState({
+      messages: [
+        { role: 'user', text: '新问题', thinking: '', toolCalls: [] },
+        { role: 'assistant', text: '回答', thinking: '深层思考', toolCalls: [] },
+      ],
+      oldestHeldIndex: 8,
+      hasMoreMessages: true,
+      loadingMore: false,
+    })
+    render(<MessageList />)
+
+    // 展开思考块
+    const toggle = screen.getByText(/思考|Thinking/i)
+    await user.click(toggle)
+    expect(screen.getByText('深层思考')).toBeTruthy()
+
+    // prepend 更早批次（如初版 key={i}，下标整体右移会重挂载 → 展开态丢失）
+    act(() =>
+      useAiStore.setState({
+        messages: [
+          { role: 'user', text: '更早的问题', thinking: '', toolCalls: [] },
+          { role: 'user', text: '新问题', thinking: '', toolCalls: [] },
+          { role: 'assistant', text: '回答', thinking: '深层思考', toolCalls: [] },
+        ],
+        oldestHeldIndex: 7,
+        hasMoreMessages: true,
+      }),
+    )
+    // 已持有的 assistant 消息 key 仍是 8+1（首位 user 的 key=7、原 user 8、原 assistant 9）
+    expect(screen.getByText('更早的问题')).toBeTruthy()
+    expect(screen.getByText('深层思考')).toBeTruthy()
   })
 })

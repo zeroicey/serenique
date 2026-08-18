@@ -12,7 +12,13 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core'
 process.env.DATABASE_URL = 'postgresql://serenique:serenique@127.0.0.1:1/serenique'
 process.env.BLOB_ROOT = '/tmp/serenique-ai-service-test'
 
-const { toRenderMessages, tailRenderMessages, INITIAL_PAGE_SIZE } = await import('./ai.service')
+const {
+  toRenderMessages,
+  tailRenderMessages,
+  nextOlderPage,
+  sessionPagination,
+  INITIAL_PAGE_SIZE,
+} = await import('./ai.service')
 
 describe('ai.service', () => {
   test('toRenderMessages 关联 toolResult 到 toolCall', () => {
@@ -184,5 +190,180 @@ describe('tailRenderMessages', () => {
     // 上一条 assistant 的 toolCall 有 result（关联完整）
     const res2 = tailRenderMessages(messages, 2, 0)
     expect(res2.messages[0].toolCalls[0].result).toBe('结果')
+  })
+})
+
+describe('nextOlderPage（向上懒加载游标）', () => {
+  // 构造 N 条 RenderMessage（user/assistant 交替）的 AgentMessage[]，同上面 helper。
+  function buildMessages(count: number): AgentMessage[] {
+    const out: AgentMessage[] = []
+    for (let i = 0; i < count; i++) {
+      out.push({ role: 'user', content: `user-${i}` } as unknown as AgentMessage)
+      out.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: `assistant-${i}` }],
+      } as unknown as AgentMessage)
+    }
+    return out
+  }
+
+  test('基本：从 anchor 往前取 limit 条，nextAnchor 刷新', () => {
+    const messages = buildMessages(25) // 50 条 RenderMessage
+    // 初始已发尾部 20 条（[30..49]），anchor=30
+    const page = nextOlderPage(messages, 30, 30)
+    expect(page.total).toBe(50)
+    expect(page.messages).toHaveLength(30)
+    expect(page.messages[0].text).toBe('user-0')
+    expect(page.messages[29].text).toBe('assistant-14')
+    expect(page.hasMore).toBe(false)
+    expect(page.nextAnchor).toBe(0)
+  })
+
+  test('核心回归：turn 尾部追加后 load_more 与已持有消息不重叠', () => {
+    // 原始会话 25 对（50 条 RenderMessage），已发尾部 20 条 [30..49]，anchor=30
+    const initial = tailRenderMessages(buildMessages(25), INITIAL_PAGE_SIZE, 0)
+    const anchor = initial.total - initial.messages.length // 30
+    const held = [...initial.messages] // 客户端已有 [30..49]
+
+    // 一轮 turn 将会话追加到 27 对（54 条）；客户端同时收到流式追加的尾部 4 条 [50..53]
+    const grown = buildMessages(27)
+    const streamed = tailRenderMessages(grown, 4, 0).messages // [50..53]
+    held.push(...streamed) // 客户端现在 [30..53]
+
+    // 用户向上滚动 → load_more：anchor 仍为 30（前端边界稳定，不随尾部增长漂移）
+    const page = nextOlderPage(grown, 30, anchor)
+    expect(page.total).toBe(54)
+    expect(page.messages).toHaveLength(30)
+    expect(page.messages[0].text).toBe('user-0')
+    expect(page.messages[29].text).toBe('assistant-14')
+    expect(page.hasMore).toBe(false)
+    expect(page.nextAnchor).toBe(0)
+
+    // 拼接（历史批次 ++ 已持有）后覆盖全部且不重复
+    const merged = [...page.messages, ...held]
+    const texts = merged.map((m) => m.text)
+    expect(new Set(texts).size).toBe(texts.length)
+    expect(merged).toHaveLength(54)
+    expect(merged[0].text).toBe('user-0')
+    expect(merged[53].text).toBe('assistant-26')
+  })
+
+  test('anchor=total 时钳到 total 并 hasMore', () => {
+    const messages = buildMessages(25) // 50 条
+    const page = nextOlderPage(messages, 30, 50)
+    expect(page.total).toBe(50)
+    expect(page.messages).toHaveLength(30)
+    expect(page.messages[0].text).toBe('user-10')
+    expect(page.messages[29].text).toBe('assistant-24')
+    expect(page.hasMore).toBe(true)
+    expect(page.nextAnchor).toBe(20)
+  })
+
+  test('anchor=0 时无更多，返回空批次', () => {
+    const messages = buildMessages(25)
+    const page = nextOlderPage(messages, 30, 0)
+    expect(page.total).toBe(50)
+    expect(page.messages).toHaveLength(0)
+    expect(page.hasMore).toBe(false)
+    expect(page.nextAnchor).toBe(0)
+  })
+})
+
+describe('sessionPagination（会话就绪/切换/新建的分页基线）', () => {
+  // 与 handler sessionPayload/onOpen 的基线语义一致：只发尾部 INITIAL_PAGE_SIZE 条，
+  // anchor = tail.total - tail.messages.length（客户端最早持有下标）。切会话/建新会话
+  // 都会重新走 sessionPagination，即基线随当前 total 重算（评审 FIX B）。
+  function buildMessages(count: number): AgentMessage[] {
+    const out: AgentMessage[] = []
+    for (let i = 0; i < count; i++) {
+      out.push({ role: 'user', content: `user-${i}` } as unknown as AgentMessage)
+      out.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: `assistant-${i}` }],
+      } as unknown as AgentMessage)
+    }
+    return out
+  }
+
+  test('长会话：尾部 20 条 + anchor=30（尾部起点）', () => {
+    const page = sessionPagination(buildMessages(25)) // 50 条 RenderMessage
+    expect(page.total).toBe(50)
+    expect(page.messages).toHaveLength(20)
+    expect(page.messages[0].text).toBe('user-15')
+    expect(page.hasMore).toBe(true)
+    expect(page.anchor).toBe(30)
+  })
+
+  test('短会话（全部可下发）：anchor=0，hasMore=false', () => {
+    const page = sessionPagination(buildMessages(5)) // 10 条 RenderMessage
+    expect(page.total).toBe(10)
+    expect(page.messages).toHaveLength(10)
+    expect(page.hasMore).toBe(false)
+    expect(page.anchor).toBe(0)
+  })
+
+  test('空会话：anchor=0，hasMore=false', () => {
+    const page = sessionPagination([])
+    expect(page.total).toBe(0)
+    expect(page.messages).toHaveLength(0)
+    expect(page.hasMore).toBe(false)
+    expect(page.anchor).toBe(0)
+  })
+
+  test('基线随当前 total 重算（切回已增长的会话，游标不跨会话泄漏）', () => {
+    // 首次：50 条 → 基线 30
+    expect(sessionPagination(buildMessages(25)).anchor).toBe(30)
+    // 该会话在别处被追加（54 条）后再切回来：基线跟随新 total（34），
+    // 而不是沿用旧游标 30——保证新切片 [34-20, 34) 与客户端按新尾部重载不重叠。
+    const page = sessionPagination(buildMessages(27))
+    expect(page.total).toBe(54)
+    expect(page.anchor).toBe(34)
+    expect(page.messages[0].text).toBe('user-17')
+  })
+})
+
+describe('分页状态机（sessionPagination → nextOlderPage 多次翻页 → 终态）', () => {
+  function buildMessages(count: number): AgentMessage[] {
+    const out: AgentMessage[] = []
+    for (let i = 0; i < count; i++) {
+      out.push({ role: 'user', content: `user-${i}` } as unknown as AgentMessage)
+      out.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: `assistant-${i}` }],
+      } as unknown as AgentMessage)
+    }
+    return out
+  }
+
+  test('初始基线 → 两批 load_more 严格递减不重叠 → 终态 hasMore=false', () => {
+    // 会话 30 对（60 条 RenderMessage），初始发尾部 20 条 [40..59]，anchor=40
+    const init = sessionPagination(buildMessages(30))
+    expect(init.anchor).toBe(40)
+    const held = [...init.messages]
+    let anchor = init.anchor
+
+    // 第一批 load_more（limit 30）：返回 [10..40)，nextAnchor=10
+    const p1 = nextOlderPage(buildMessages(30), 30, anchor)
+    expect(p1.messages).toHaveLength(30)
+    expect(p1.messages[0].text).toBe('user-5')
+    expect(p1.hasMore).toBe(true)
+    held.unshift(...p1.messages)
+    anchor = p1.nextAnchor
+
+    // 第二批 load_more（limit 30）：返回 [0..10)，终态
+    const p2 = nextOlderPage(buildMessages(30), 30, anchor)
+    expect(p2.messages).toHaveLength(10)
+    expect(p2.messages[0].text).toBe('user-0')
+    expect(p2.messages[9].text).toBe('assistant-4')
+    expect(p2.hasMore).toBe(false)
+    expect(p2.nextAnchor).toBe(0)
+    held.unshift(...p2.messages)
+
+    // 两批 + 初始尾部拼接 = 全覆盖 60 条、无重复
+    expect(held).toHaveLength(60)
+    const texts = held.map((m) => m.text)
+    expect(new Set(texts).size).toBe(60)
+    expect(held[0].text).toBe('user-0')
+    expect(held[59].text).toBe('assistant-29')
   })
 })

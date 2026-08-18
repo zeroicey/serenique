@@ -196,6 +196,8 @@ describe('ai-store', () => {
     expect(s.hasMoreMessages).toBe(true)
     expect(s.totalMessages).toBe(50)
     expect(s.messages).toHaveLength(1)
+    // 分页基线：最早持有下标 = total - 已发尾部条数（镜像后端 anchor）
+    expect(s.oldestHeldIndex).toBe(49)
   })
 
   test('loadMore 发 load_more 并置 loadingMore；messages_loaded prepend', () => {
@@ -228,6 +230,67 @@ describe('ai-store', () => {
     expect(s.messages).toHaveLength(2)
     expect(s.messages[0].text).toBe('更早')
     expect(s.messages[1].text).toBe('最新')
+  })
+
+  test('oldestHeldIndex：prepend 时前移，尾部追加/流式消息时不变', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    // 会话就绪：50 条会话发尾部 20 条 → 基线 30
+    ws.emit({
+      type: 'session_ready',
+      sessionId: 's1',
+      model: 'deepseek/v4',
+      messages: Array.from({ length: 20 }, (_, i) => ({
+        role: 'user',
+        text: `已持有-${i}`,
+        thinking: '',
+        toolCalls: [],
+      })),
+      totalMessageCount: 50,
+      hasMore: true,
+    })
+    expect(useAiStore.getState().oldestHeldIndex).toBe(30)
+
+    // prepend 更早批次 10 条：基线前移到 20，且 key 不碰撞（无重复）
+    ws.emit({
+      type: 'messages_loaded',
+      messages: Array.from({ length: 10 }, (_, i) => ({
+        role: 'assistant',
+        text: `更早-${i}`,
+        thinking: '',
+        toolCalls: [],
+      })),
+      totalMessageCount: 50,
+      hasMore: true,
+    })
+    expect(useAiStore.getState().oldestHeldIndex).toBe(20)
+    expect(useAiStore.getState().messages).toHaveLength(30)
+
+    // 尾部增量（乐观 user 追加 / turn_end 落定）：基线不动
+    useAiStore.getState().send('新问题')
+    expect(useAiStore.getState().messages).toHaveLength(31)
+    expect(useAiStore.getState().oldestHeldIndex).toBe(20)
+    // 追加前后 key 集合 = [20..50) 全部唯一
+    const keys = useAiStore
+      .getState()
+      .messages.map((_, i) => useAiStore.getState().oldestHeldIndex + i)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  test('error 事件复位 loadingMore（load_more 异常不再永久卡死懒加载）', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    useAiStore.setState({ loadingMore: true, hasMoreMessages: true })
+    ws.emit({ type: 'error', message: 'load_more 失败' })
+    const s = useAiStore.getState()
+    expect(s.loadingMore).toBe(false)
+    expect(s.lastError).toBe('load_more 失败')
+    // 复位后可以再次发起加载
+    const sentBefore = ws.sent.length
+    useAiStore.getState().loadMore()
+    expect(ws.sent.length).toBe(sentBefore + 1)
   })
 
   test('hasMore=false 时 loadMore 不发请求', () => {

@@ -47,6 +47,12 @@ interface AiState {
   loadingMore: boolean
   /** 当前会话渲染消息总数（来自后端 totalMessageCount）。 */
   totalMessages: number
+  /**
+   * 当前会话客户端持有的**最早** RenderMessage 下标（镜像后端 per-connection
+   * anchor）。用于稳定列表 key：prepend 历史时已持有消息的 key 不变，避免 React
+   * 按索引 key={i} 重挂载导致 ThinkingBlock/ToolCard 展开态重置。
+   */
+  oldestHeldIndex: number
   setWsFactory: (f: WsFactory) => void
   connect: () => Promise<void>
   send: (text: string) => void
@@ -103,6 +109,7 @@ export const useAiStore = create<AiState>((set, get) => ({
   hasMoreMessages: false,
   loadingMore: false,
   totalMessages: 0,
+  oldestHeldIndex: 0,
 
   setWsFactory: (f) => {
     wsFactory = f
@@ -117,7 +124,11 @@ export const useAiStore = create<AiState>((set, get) => ({
     try {
       ws = factory(apiWsUrl())
     } catch (err) {
-      set({ status: 'offline', lastError: err instanceof Error ? err.message : String(err) })
+      set({
+        status: 'offline',
+        lastError: err instanceof Error ? err.message : String(err),
+        loadingMore: false,
+      })
       return
     }
     ws.onopen = () => set({ status: 'online' })
@@ -141,6 +152,8 @@ export const useAiStore = create<AiState>((set, get) => ({
             hasMoreMessages: ev.hasMore,
             loadingMore: false,
             totalMessages: ev.totalMessageCount,
+            // 新会话/切会话：基线随本次尾部重算（镜像后端 sessionPagination.anchor）
+            oldestHeldIndex: ev.totalMessageCount - (ev.messages as RenderMessage[]).length,
           })
           get().refreshSessions()
           break
@@ -152,7 +165,9 @@ export const useAiStore = create<AiState>((set, get) => ({
           get().refreshSessions()
           break
         case 'error':
-          set({ busy: false, lastError: ev.message })
+          // 复位 loadingMore：load_more 分支异常时会收到 error 事件而非
+          // messages_loaded，若不置 false，loadingMore 守卫会永久阻断后续懒加载。
+          set({ busy: false, lastError: ev.message, loadingMore: false })
           break
         case 'messages_loaded':
           // 向上滚动加载更早的消息：prepend 到 messages 前面。loadingMore
@@ -162,6 +177,8 @@ export const useAiStore = create<AiState>((set, get) => ({
             loadingMore: false,
             hasMoreMessages: ev.hasMore,
             totalMessages: ev.totalMessageCount,
+            // prepend 使最早持有下标前移 ev.messages.length；尾部追加不改变它
+            oldestHeldIndex: s.oldestHeldIndex - (ev.messages as RenderMessage[]).length,
           }))
           break
         case 'agent_start':
@@ -239,7 +256,7 @@ export const useAiStore = create<AiState>((set, get) => ({
     }
     ws.onclose = () => {
       ws = null
-      set({ status: 'offline', busy: false })
+      set({ status: 'offline', busy: false, loadingMore: false })
     }
   },
 
