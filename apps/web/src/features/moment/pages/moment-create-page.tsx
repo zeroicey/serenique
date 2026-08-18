@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { MapPin, X } from 'lucide-react'
+import { MapPin, Tag as TagIcon, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
@@ -11,20 +11,26 @@ import { MomentCreateAttachmentGrid } from '@/features/moment/components/moment-
 import { MomentLocationPicker } from '@/features/moment/components/moment-location-picker'
 import { useCreateMomentWithMedia } from '@/features/moment/queries'
 import { type MomentCreateFormValues, momentCreateSchema } from '@/features/moment/schemas'
+import { TagPicker } from '@/features/tag/components/tag-picker'
+import { useTags } from '@/features/tag/queries'
 import { useMomentDraftStore } from '@/stores/moment-draft'
 import type { MediaFile } from '@/types/media'
 
-// 新建闪记：textarea 自动增高 + 附件选择 + 选点位置 + 草稿保存。
+// 新建闪记：textarea 自动增高 + 附件选择 + 选点位置 + 打标签（只选已有）+ 草稿保存。
 export default function MomentCreatePage() {
   const navigate = useNavigate()
   const { draftText, setDraftText, clearDraft } = useMomentDraftStore()
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([])
   const [location, setLocation] = useState<MomentLocation | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [tagIds, setTagIds] = useState<string[]>([])
+  const [editTagsOpen, setEditTagsOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { mutate: createMoment, isPending } = useCreateMomentWithMedia()
   const { data: locationConfig } = useLocationConfig()
   const locationEnabled = locationConfig?.enabled === true
+  const { data: allTags } = useTags()
+  const selectedTags = allTags?.filter((t) => tagIds.includes(t.id)) ?? []
 
   const { register, handleSubmit, watch, setValue, reset } = useForm<MomentCreateFormValues>({
     resolver: zodResolver(momentCreateSchema),
@@ -50,7 +56,7 @@ export default function MomentCreatePage() {
 
   const onSubmit = handleSubmit((values) => {
     createMoment(
-      { text: values.text, files: mediaFiles, location },
+      { text: values.text, files: mediaFiles, location, tags: tagIds },
       {
         onSuccess: () => {
           // reset({ text: '' }) 而非 reset()：后者回退到 defaultValues 快照
@@ -58,6 +64,7 @@ export default function MomentCreatePage() {
           reset({ text: '' })
           setMediaFiles([])
           setLocation(null)
+          setTagIds([])
           clearDraft()
           navigate('/moment')
         },
@@ -68,6 +75,7 @@ export default function MomentCreatePage() {
   const handleCancel = () => {
     setMediaFiles([])
     setLocation(null)
+    setTagIds([])
     // 取消不清草稿：误触取消也应保留已输入文字（localStorage 兜底），下次进入恢复
     navigate('/moment')
   }
@@ -121,6 +129,36 @@ export default function MomentCreatePage() {
               )}
             </div>
           )}
+
+          {/* 打标签：只选已有标签（TagPicker 纯受控，不提供新建入口）。 */}
+          <div className="px-2 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm">标签</span>
+              {selectedTags.length > 0 ? (
+                <button
+                  type="button"
+                  className="flex cursor-pointer items-center gap-1 text-sm"
+                  onClick={() => setEditTagsOpen((v) => !v)}
+                >
+                  <TagIcon size={14} strokeWidth={1.8} />
+                  <span>{selectedTags.map((t) => `#${t.name}`).join(' ')}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="cursor-pointer text-sm text-muted-foreground hover:text-foreground"
+                  onClick={() => setEditTagsOpen((v) => !v)}
+                >
+                  添加标签
+                </button>
+              )}
+            </div>
+            {editTagsOpen && (
+              <div className="mt-2">
+                <TagPicker tags={allTags ?? []} selectedIds={tagIds} onChange={setTagIds} />
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex w-full gap-5 border-t p-4">
           <Button type="submit" className="flex-1 cursor-pointer" disabled={isPending}>

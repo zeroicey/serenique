@@ -24,6 +24,7 @@ function makeMoment(id = 'm1'): MomentEntry {
     attachments: [],
     comments: [],
     commentCount: 0,
+    tags: [],
     createdAt: '2026-08-05T00:00:00.000Z',
     updatedAt: '2026-08-05T00:00:00.000Z',
   }

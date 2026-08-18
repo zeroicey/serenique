@@ -1,5 +1,6 @@
 import { api, apiUrl } from '@/api/client'
 import { unwrap } from '@/api/unwrap'
+import type { TagEntry } from '@/features/tag/api'
 import type { Paged } from '@/types/api'
 
 // Moment 模块 API 契约（手动定义，对齐 services/api 现状）。
@@ -54,6 +55,7 @@ export interface MomentEntry {
   // 列表接口 comments 恒为 []（只带数量）；详情接口内嵌完整评论。
   comments: MomentCommentEntry[]
   commentCount: number
+  tags: TagEntry[]
   createdAt: string
   updatedAt: string
 }
@@ -68,6 +70,8 @@ export interface CreateMomentInput {
   text: string
   attachments?: MomentAttachmentInput[]
   location?: MomentLocation | null
+  /** 内联标签 id（只接受已存在标签；数组内重复自动去重）。 */
+  tags?: string[]
 }
 
 export interface ListMomentsParams {
@@ -75,6 +79,8 @@ export interface ListMomentsParams {
   pageSize?: number
   /** 搜索关键词（中文 / 拼音 / 英文，服务端 ILIKE 三列匹配）。trim 后为空则省略（全量列表）。 */
   q?: string
+  /** 按标签过滤（单值，与 q additive 叠加）。 */
+  tag?: string
 }
 
 export async function listMoments(params?: ListMomentsParams): Promise<Paged<MomentEntry>> {
@@ -84,6 +90,7 @@ export async function listMoments(params?: ListMomentsParams): Promise<Paged<Mom
   }
   const q = params?.q?.trim()
   if (q) searchParams.q = q
+  if (params?.tag) searchParams.tag = params.tag
   const res = await api.get(apiUrl('moments'), { searchParams })
   return unwrap<Paged<MomentEntry>>(res)
 }
@@ -91,6 +98,12 @@ export async function listMoments(params?: ListMomentsParams): Promise<Paged<Mom
 export async function createMoment(input: CreateMomentInput): Promise<MomentEntry> {
   const res = await api.post(apiUrl('moments'), { json: input })
   return unwrap<MomentEntry>(res)
+}
+
+/** PUT 整体替换闪记标签：幂等集合语义（容忍已绑定、空数组清空、不存在 tagId 404 回滚）。 */
+export async function replaceMomentTags(momentId: string, tagIds: string[]): Promise<TagEntry[]> {
+  const res = await api.put(apiUrl(`moments/${momentId}/tags`), { json: { tagIds } })
+  return unwrap<TagEntry[]>(res)
 }
 
 export async function deleteMoment(id: string): Promise<void> {

@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { uploadBlob } from '@/features/blob/api'
+import type { TagEntry } from '@/features/tag/api'
 import type { MediaFile } from '@/types/media'
 import {
   type CreateMomentInput,
@@ -21,19 +22,25 @@ import {
   type MomentEntry,
   type MomentLocation,
   removeMomentAttachment,
+  replaceMomentTags,
 } from './api'
 
 // Moment 数据 hooks。读取走 useInfiniteQuery（滚动分页），写入走 useMutation + invalidate。
 
-// keyword 进入 queryKey：关键词变化 → 新 queryKey → useInfiniteQuery 自动从第 1 页重建
+// keyword/tagId 进入 queryKey：任一变化 → 新 queryKey → useInfiniteQuery 自动从第 1 页重建
 // pages；现有 invalidateQueries({ queryKey: ['moments'] }) 前缀失效逻辑依然兼容。
-export function useMoments(pageSize = 10, keyword = '') {
+export function useMoments(pageSize = 10, keyword = '', tagId = '') {
   return useInfiniteQuery({
-    queryKey: ['moments', keyword, pageSize],
+    queryKey: ['moments', keyword, tagId, pageSize],
     queryFn: ({ pageParam }) =>
-      listMoments({ page: pageParam, pageSize, ...(keyword ? { q: keyword } : {}) }),
+      listMoments({
+        page: pageParam,
+        pageSize,
+        ...(keyword ? { q: keyword } : {}),
+        ...(tagId ? { tag: tagId } : {}),
+      }),
     initialPageParam: 1,
-    // 切换关键词时保留旧列表占位，避免列表闪烁（对齐 audit-page 先例）。
+    // 切换关键词/标签时保留旧列表占位，避免列表闪烁（对齐 audit-page 先例）。
     placeholderData: keepPreviousData,
     getNextPageParam: (lastPage, allPages) => {
       if (lastPage.items.length === 0) return undefined
@@ -71,15 +78,15 @@ export function useRemoveMomentAttachment(): UseMutationResult<
   })
 }
 
-// 新建编排：逐个上传文件 → 以内联 attachments 创建 Moment。
+// 新建编排：逐个上传文件 → 以内联 attachments 创建 Moment；tags 只选已有标签 id。
 export function useCreateMomentWithMedia(): UseMutationResult<
   MomentEntry,
   Error,
-  { text: string; files: MediaFile[]; location: MomentLocation | null }
+  { text: string; files: MediaFile[]; location: MomentLocation | null; tags: string[] }
 > {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ text, files, location }) => {
+    mutationFn: async ({ text, files, location, tags }) => {
       const blobs: string[] = []
       for (const file of files) {
         if (!file.file) throw new Error('文件数据缺失')
@@ -95,14 +102,36 @@ export function useCreateMomentWithMedia(): UseMutationResult<
           displayName: files[i]?.name,
           sortOrder: i,
         })),
+        tags,
       })
     },
     onSuccess: () => {
       toast.success('闪记发布成功')
       queryClient.invalidateQueries({ queryKey: ['moments'] })
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
     },
     onError: (error) => {
       toast.error(error.message || '闪记发布失败')
+    },
+  })
+}
+
+// 编辑标签：PUT 整体替换（幂等集合语义）。成功后刷新闪记列表（内嵌 tags）与标签计数。
+export function useReplaceMomentTags(): UseMutationResult<
+  TagEntry[],
+  Error,
+  { momentId: string; tagIds: string[] }
+> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ momentId, tagIds }) => replaceMomentTags(momentId, tagIds),
+    onSuccess: () => {
+      toast.success('标签已更新')
+      queryClient.invalidateQueries({ queryKey: ['moments'] })
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
+    },
+    onError: (error) => {
+      toast.error(error.message || '标签更新失败')
     },
   })
 }

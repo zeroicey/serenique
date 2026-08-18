@@ -1,8 +1,17 @@
-import { Loader2, Search, X } from 'lucide-react'
+import { Loader2, Search, Tag, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useMoments } from '@/features/moment/queries'
+import type { TagEntry } from '@/features/tag/api'
+import { useTags } from '@/features/tag/queries'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { MomentItem } from './moment-item'
 
@@ -49,11 +58,59 @@ function MomentSearchInput({
   )
 }
 
-// 闪记列表：居中列、顶部搜索框（300ms 防抖，服务端过滤）、滚动自动加载、加载/空/错误态。
+// 标签筛选按钮：下拉单选标签（「全部标签」= 不筛选）。单值过滤，对齐后端 ?tag= 契约。
+interface TagFilterProps {
+  tags: TagEntry[]
+  selectedTagId: string
+  onSelect: (tagId: string) => void
+}
+
+function TagFilter({ tags, selectedTagId, onSelect }: TagFilterProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="icon" aria-label="按标签筛选">
+            <Tag className="h-4 w-4" />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="start" className="max-h-80 w-60">
+        <DropdownMenuItem
+          onClick={() => onSelect('')}
+          className={selectedTagId ? '' : 'bg-primary/10'}
+        >
+          <span className="flex-1">全部标签</span>
+        </DropdownMenuItem>
+        {tags.length === 0 && (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">还没有标签</div>
+        )}
+        {tags.map((t) => (
+          <DropdownMenuItem
+            key={t.id}
+            onClick={() => onSelect(t.id)}
+            className={t.id === selectedTagId ? 'bg-primary/10' : ''}
+          >
+            <span className="flex-1 truncate">#{t.name}</span>
+            <span className="text-xs text-muted-foreground">{t.momentCount}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+// 闪记列表：居中列、顶部搜索框（300ms 防抖）+ 标签筛选（URL ?tag= 驱动，单选）、
+// 滚动自动加载、加载/空/错误态。
 export function MomentList() {
   const [keyword, setKeyword] = useState('')
   const debouncedKeyword = useDebouncedValue(keyword, 300)
   const searchKeyword = debouncedKeyword.trim()
+
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tagId = searchParams.get('tag') ?? ''
+  const { data: tags } = useTags()
+  const selectedTag = tags?.find((t) => t.id === tagId) ?? null
 
   const {
     isPending,
@@ -64,16 +121,18 @@ export function MomentList() {
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
-  } = useMoments(PAGE_SIZE, searchKeyword)
+  } = useMoments(PAGE_SIZE, searchKeyword, tagId)
   const sentinelRef = useRef<HTMLDivElement>(null)
+
+  const setTag = (id: string) => setSearchParams(id ? { tag: id } : {})
 
   useEffect(() => {
     const el = sentinelRef.current
     if (!el) return
     const observer = new IntersectionObserver(
       (entries) => {
-        // 加 isFetching 兜底：关键词切换时 keepPreviousData 占位会让旧数据的
-        // hasNextPage 残留为 true，避免此时误触发下一页请求（新关键词应从第 1 页重建）。
+        // 加 isFetching 兜底：关键词/标签切换时 keepPreviousData 占位会让旧数据的
+        // hasNextPage 残留为 true，避免此时误触发下一页请求（新查询应从第 1 页重建）。
         if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage && !isFetching) {
           void fetchNextPage()
         }
@@ -109,12 +168,33 @@ export function MomentList() {
 
   const searchBox = (
     <div className="w-full max-w-[600px] px-3 pt-4 pb-4">
-      <MomentSearchInput
-        keyword={keyword}
-        onKeywordChange={setKeyword}
-        searching={searching}
-        isFetching={isFetching}
-      />
+      <div className="flex items-center gap-2">
+        <TagFilter tags={tags ?? []} selectedTagId={tagId} onSelect={setTag} />
+        <div className="flex-1">
+          <MomentSearchInput
+            keyword={keyword}
+            onKeywordChange={setKeyword}
+            searching={searching}
+            isFetching={isFetching}
+          />
+        </div>
+      </div>
+      {selectedTag && (
+        <div className="mt-2 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs">
+            #{selectedTag.name}
+            <button
+              type="button"
+              aria-label="清除标签筛选"
+              className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setTag('')}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+          <span className="text-xs text-muted-foreground">仅显示该标签下的闪记</span>
+        </div>
+      )}
     </div>
   )
 
@@ -129,6 +209,14 @@ export function MomentList() {
               <h3 className="text-lg font-medium">未找到匹配的闪记</h3>
               <p className="max-w-sm text-muted-foreground">
                 换个关键词试试，支持中文、拼音或英文。
+              </p>
+            </>
+          ) : tagId ? (
+            <>
+              <p className="text-4xl">🏷️</p>
+              <h3 className="text-lg font-medium">该标签下暂无闪记</h3>
+              <p className="max-w-sm text-muted-foreground">
+                换个标签，或清除标签筛选看看全部闪记。
               </p>
             </>
           ) : (

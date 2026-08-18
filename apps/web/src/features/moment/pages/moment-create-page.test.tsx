@@ -18,6 +18,12 @@ vi.mock('@/features/location/queries', () => ({
   useLocationSearch: vi.fn(),
 }))
 
+vi.mock('@/features/tag/queries', () => ({
+  useTags: vi.fn(),
+}))
+
+import * as tagQueries from '@/features/tag/queries'
+
 // mutate 为 spy（不触发 onSuccess，避免导航卸载）；isPending 固定 false。
 let mutate: ReturnType<typeof vi.fn>
 beforeEach(() => {
@@ -37,6 +43,10 @@ beforeEach(() => {
   } as never)
   vi.mocked(locationQueries.useLocationSearch).mockReturnValue({
     data: [],
+    isPending: false,
+  } as never)
+  vi.mocked(tagQueries.useTags).mockReturnValue({
+    data: [{ id: 't1', name: '工作', momentCount: 1 }],
     isPending: false,
   } as never)
 })
@@ -64,7 +74,28 @@ describe('MomentCreatePage', () => {
     await user.type(screen.getByPlaceholderText('此刻在想什么？'), '今天很开心')
     await user.click(screen.getByRole('button', { name: '发布' }))
     expect(mutate).toHaveBeenCalledWith(
-      { text: '今天很开心', files: [], location: null },
+      { text: '今天很开心', files: [], location: null, tags: [] },
+      expect.any(Object),
+    )
+  })
+
+  it('选择标签后发布内联 tags 携带所选 id', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <MemoryRouter>
+        <MomentCreatePage />
+      </MemoryRouter>,
+    )
+    await user.type(screen.getByPlaceholderText('此刻在想什么？'), '带标签的闪记')
+
+    await user.click(screen.getByRole('button', { name: '添加标签' }))
+    // 只选已有标签，列表中出现 #工作；点选后成为已选（可能同时出现在行触发与挑选面板 chip）
+    await user.click(screen.getByText('#工作'))
+    expect(screen.getAllByText('#工作').length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: '发布' }))
+    expect(mutate).toHaveBeenCalledWith(
+      { text: '带标签的闪记', files: [], location: null, tags: ['t1'] },
       expect.any(Object),
     )
   })
@@ -107,6 +138,7 @@ describe('MomentCreatePage', () => {
         text: '今天很开心',
         files: [],
         location: { name: '三里屯', latitude: 39.9087, longitude: 116.3975 },
+        tags: [],
       },
       expect.any(Object),
     )
@@ -115,7 +147,7 @@ describe('MomentCreatePage', () => {
     await user.click(screen.getByRole('button', { name: '清除位置' }))
     await user.click(screen.getByRole('button', { name: '发布' }))
     expect(mutate).toHaveBeenLastCalledWith(
-      { text: '今天很开心', files: [], location: null },
+      { text: '今天很开心', files: [], location: null, tags: [] },
       expect.any(Object),
     )
   })

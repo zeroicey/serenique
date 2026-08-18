@@ -12,6 +12,7 @@ import { HabitDateNav } from '@/features/habit/components/habit-date-nav'
 import { HabitNav } from '@/features/habit/components/habit-nav'
 import { MomentCreateNav } from '@/features/moment/components/moment-create-nav'
 import { MomentNav } from '@/features/moment/components/moment-nav'
+import { TagNav } from '@/features/tag/components/tag-nav'
 import { TaskGroupSwitcher } from '@/features/task/components/task-group-switcher'
 import { TaskNav } from '@/features/task/components/task-nav'
 
@@ -46,6 +47,11 @@ const router = createBrowserRouter([
             path: 'moment/create',
             element: lazyPage(() => import('@/features/moment/pages/moment-create-page')),
             handle: { nav: <MomentCreateNav /> },
+          },
+          {
+            path: 'tags',
+            element: lazyPage(() => import('@/features/tag/pages/tag-page')),
+            handle: { nav: <TagNav /> },
           },
           {
             path: 'task',
