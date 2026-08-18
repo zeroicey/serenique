@@ -110,8 +110,9 @@ class _MomentCardState extends ConsumerState<MomentCard> {
           .read(momentActionsProvider)
           .replaceTags(_moment.id, picked.map((t) => t.id).toList());
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('标签已更新')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('标签已更新')));
       }
     } on Exception catch (e) {
       if (mounted) {
