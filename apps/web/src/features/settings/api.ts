@@ -37,3 +37,22 @@ export async function revokeToken(id: string): Promise<void> {
   if (res.status === 204) return
   await unwrap<void>(res)
 }
+
+// AI 记忆（用户画像，L2 注入层）契约：用户自维护的自我介绍/偏好，
+// 随每次对话注入给宁序。GET 无记录返回 content 空串（200）；PUT upsert≤2048。
+
+export interface MemoryEntry {
+  id: number
+  content: string
+  updatedAt: string
+}
+
+export async function getAiMemory(): Promise<MemoryEntry> {
+  const res = await api.get(apiUrl('ai/memory'))
+  return unwrap<MemoryEntry>(res)
+}
+
+export async function updateAiMemory(content: string): Promise<MemoryEntry> {
+  const res = await api.put(apiUrl('ai/memory'), { json: { content } })
+  return unwrap<MemoryEntry>(res)
+}

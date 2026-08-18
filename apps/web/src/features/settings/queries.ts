@@ -8,10 +8,13 @@ import {
 import { toast } from 'sonner'
 import {
   createToken,
+  getAiMemory,
   listTokens,
+  type MemoryEntry,
   revokeToken,
   type TokenCreateResult,
   type TokenEntry,
+  updateAiMemory,
 } from './api'
 
 // API 令牌数据 hooks。创建成功不弹 Toast——明文弹窗本身就是反馈；
@@ -46,5 +49,30 @@ export function useRevokeToken(): UseMutationResult<void, Error, string> {
       queryClient.invalidateQueries({ queryKey: tokenKeys.list })
     },
     onError: (error) => toast.error(error.message || '撤销令牌失败'),
+  })
+}
+
+// ---- AI 记忆（用户画像）-----------------------------------------------
+
+export const aiMemoryKeys = {
+  profile: ['ai-memory'] as const,
+}
+
+export function useAiMemory(): UseQueryResult<MemoryEntry> {
+  return useQuery({
+    queryKey: aiMemoryKeys.profile,
+    queryFn: getAiMemory,
+  })
+}
+
+export function useUpdateAiMemory(): UseMutationResult<MemoryEntry, Error, string> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: updateAiMemory,
+    onSuccess: () => {
+      toast.success('用户画像已保存')
+      queryClient.invalidateQueries({ queryKey: aiMemoryKeys.profile })
+    },
+    onError: (error) => toast.error(error.message || '保存用户画像失败'),
   })
 }

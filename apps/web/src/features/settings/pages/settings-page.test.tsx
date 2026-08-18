@@ -10,7 +10,13 @@ import {
   useRenameCredential,
   useUpdateProfile,
 } from '@/features/auth/queries'
-import { useCreateToken, useRevokeToken, useTokens } from '../queries'
+import {
+  useAiMemory,
+  useCreateToken,
+  useRevokeToken,
+  useTokens,
+  useUpdateAiMemory,
+} from '../queries'
 import SettingsPage from './settings-page'
 
 const { setTheme } = vi.hoisted(() => ({ setTheme: vi.fn() }))
@@ -34,6 +40,8 @@ vi.mock('../queries', () => ({
   useTokens: vi.fn(),
   useCreateToken: vi.fn(),
   useRevokeToken: vi.fn(),
+  useAiMemory: vi.fn(),
+  useUpdateAiMemory: vi.fn(),
 }))
 
 const mockedUseProfile = vi.mocked(useProfile)
@@ -46,6 +54,8 @@ const mockedUseLogout = vi.mocked(useLogout)
 const mockedUseTokens = vi.mocked(useTokens)
 const mockedUseCreateToken = vi.mocked(useCreateToken)
 const mockedUseRevokeToken = vi.mocked(useRevokeToken)
+const mockedUseAiMemory = vi.mocked(useAiMemory)
+const mockedUseUpdateAiMemory = vi.mocked(useUpdateAiMemory)
 
 const profile = {
   id: 'u1',
@@ -57,6 +67,7 @@ const profile = {
 }
 
 const updateProfileMutate = vi.fn()
+const updateMemoryMutate = vi.fn()
 const deleteCredentialMutate = vi.fn()
 const renameCredentialMutateAsync = vi.fn().mockResolvedValue({})
 const registerMutateAsync = vi.fn().mockResolvedValue({ authenticated: true, user: null })
@@ -64,7 +75,13 @@ const logoutMutate = vi.fn()
 const revokeTokenMutate = vi.fn()
 const createTokenMutate = vi.fn()
 
-function mockHooks(overrides: { credentials?: unknown[]; tokens?: unknown[] } = {}) {
+function mockHooks(
+  overrides: {
+    credentials?: unknown[]
+    tokens?: unknown[]
+    memory?: { content: string } | null
+  } = {},
+) {
   mockedUseProfile.mockReturnValue({
     data: profile,
     isPending: false,
@@ -112,6 +129,16 @@ function mockHooks(overrides: { credentials?: unknown[]; tokens?: unknown[] } = 
     mutate: revokeTokenMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useRevokeToken>)
+  mockedUseAiMemory.mockReturnValue({
+    data: overrides.memory ?? null,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useAiMemory>)
+  mockedUseUpdateAiMemory.mockReturnValue({
+    mutate: updateMemoryMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof useUpdateAiMemory>)
 }
 
 const credential = {
@@ -133,6 +160,12 @@ const token = {
   createdAt: '2026-08-09T00:00:00Z',
 }
 
+const memory = {
+  id: 1,
+  content: '',
+  updatedAt: '2026-08-19T00:00:00Z',
+}
+
 describe('SettingsPage', () => {
   beforeEach(() => {
     updateProfileMutate.mockClear()
@@ -143,6 +176,7 @@ describe('SettingsPage', () => {
     setTheme.mockClear()
     revokeTokenMutate.mockClear()
     createTokenMutate.mockClear()
+    updateMemoryMutate.mockClear()
     mockHooks()
   })
 
@@ -265,6 +299,40 @@ describe('SettingsPage', () => {
     expect(screen.getByText('撤销 API 令牌')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '撤销' }))
     expect(revokeTokenMutate).toHaveBeenCalledWith('t1')
+  })
+
+  it('AI 记忆 tab：回填用户画像并保存提交 PUT', async () => {
+    const user = userEvent.setup()
+    mockedUseAiMemory.mockReturnValue({
+      data: memory,
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useAiMemory>)
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('button', { name: 'AI 记忆' }))
+
+    await user.type(screen.getByLabelText('用户画像'), '我喜欢喝美式，周末不爱被打扰')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(updateMemoryMutate).toHaveBeenCalledWith('我喜欢喝美式，周末不爱被打扰')
+  })
+
+  it('AI 记忆 tab：超长内容禁用保存（>2048）', () => {
+    mockedUseAiMemory.mockReturnValue({
+      data: memory,
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useAiMemory>)
+    render(<SettingsPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'AI 记忆' }))
+
+    fireEvent.change(screen.getByLabelText('用户画像'), {
+      target: { value: 'a'.repeat(2049) },
+    })
+
+    expect(screen.getByRole('button', { name: '保存' })).toBeDisabled()
   })
 
   it('通用 tab：主题切换调用 setTheme，退出登录触发 logout', async () => {
