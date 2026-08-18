@@ -3,6 +3,7 @@
 // Drizzle Kit reads this file to generate migrations.
 // ---------------------------------------------------------------------------
 
+export { aiMemory } from '@/modules/ai-memory/ai-memory.schema'
 export { auditLogs } from '@/modules/audit/audit.schema'
 export { passkeyCredentials, users } from '@/modules/auth/auth.schema'
 export { blobAttachments, blobs } from '@/modules/blob/blob.schema'

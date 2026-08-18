@@ -3,6 +3,7 @@ import type { upgradeWebSocket } from 'hono/bun'
 import type { Env } from '@/env'
 import { bodyLimit, cors, csrf, logger, rateLimit, secureHeaders, timeout } from '@/middleware'
 import { createAiRouter } from '@/modules/ai'
+import { aiMemoryRouter } from '@/modules/ai-memory'
 import { auditRouter } from '@/modules/audit'
 import { authMiddleware, authRouter } from '@/modules/auth'
 import { blobRouter } from '@/modules/blob'
@@ -46,8 +47,9 @@ export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSoc
   // ---- 2. Global middleware -----------------------------------------------
   //    Order: CORS (preflight) → logger → security headers → rate limit →
   //    CSRF → body limit → timeout。各中间件设计见 middleware/*.ts。
-  //
-  app.use('*', cors())
+  //    `app.use(cors())`（不带 path）= 与 `app.use('*', …)` 等价的全路由挂载
+  //    （Hono 惯例；路径通配 '*' 仅用于路由匹配，与 CORS origin 无关）。
+  app.use(cors())
   app.use('*', logger)
   app.use('*', secureHeaders())
   app.use('*', rateLimit())
@@ -89,6 +91,7 @@ export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSoc
   app.route('/api', auditRouter)
   app.route('/api', tagRouter)
   app.route('/api', locationRouter)
+  app.route('/api', aiMemoryRouter)
   app.route('/api', createAiRouter(ws.upgradeWebSocket))
 
   // ---- 5. 404 fallback ----------------------------------------------------

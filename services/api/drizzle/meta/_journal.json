@@ -127,6 +127,13 @@
       "when": 1786891488398,
       "tag": "0017_outgoing_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787081535853,
+      "tag": "0018_add_ai_memory",
+      "breakpoints": true
     }
   ]
 }

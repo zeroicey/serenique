@@ -5,14 +5,22 @@ import {
   type AgentSession,
   createAgentSession,
   DefaultResourceLoader,
+  type InlineExtension,
   ModelRuntime,
   type SessionInfo,
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent'
 import { aiModel, aiSessionDir } from '@/env'
+import { aiMemoryService } from '@/modules/ai-memory/ai-memory.service'
 import { AppError, ErrorCode } from '@/shared/errors'
-import { buildSystemPrompt } from './ai.system-prompt'
+import { logger } from '@/shared/logger'
+import {
+  buildDynamicSnapshot,
+  createDefaultSources,
+  shareSnapshotCache,
+} from './ai.context-snapshot'
+import { buildBaseSystemPrompt } from './ai.system-prompt'
 import { buildAiTools } from './ai.tools'
 
 // ---------------------------------------------------------------------------
@@ -48,13 +56,15 @@ async function getLoader(): Promise<DefaultResourceLoader> {
       cwd: process.cwd(),
       agentDir: process.cwd(), // 指向项目自身，防止 ~/.pi/agent 资源发现
       settingsManager,
-      noExtensions: true, // 关键：不加载扩展 → pi-mcp-adapter 不会启动
+      noExtensions: true, // 关键：不加载磁盘扩展 → pi-mcp-adapter 不会启动
       noSkills: true,
       noPromptTemplates: true,
       noThemes: true,
       noContextFiles: true,
-      systemPromptOverride: () => buildSystemPrompt(new Date()),
+      systemPromptOverride: () => BASE_SYSTEM_PROMPT,
       appendSystemPromptOverride: () => [],
+      // 进程内内联扩展：动态上下文注入（不必扫描磁盘扩展，见四层上下文方案）。
+      extensionFactories: [contextInjectorExtension],
     })
     await sharedLoader.reload()
   }
@@ -69,6 +79,42 @@ async function resolveModel() {
 
 /** 全部业务工具 + 排除 7 个内置工具。注意不能用 tools: []（会把业务工具过滤掉）。 */
 const EXCLUDED_BUILTIN_TOOLS = ['bash', 'read', 'edit', 'write', 'grep', 'find', 'ls']
+
+// ---- 四层上下文注入（需求 .ai/requirements/2026-08-19-ai-memory-context-design.md）----
+// L1 系统提示词（人格 + 准则 + 工具用法）会话创建时求值一次（静态不变）；
+// L2 用户画像（ai_memory）仅用户编辑时变（按 updatedAt 缓存）；
+// L3 动态快照（时间/任务/日程/闪念/习惯）每轮刷新（数据指纹去重省查询）。
+// before_agent_start 返回 L1+L2+L3 拼接的 systemPrompt → SDK 整块替换本轮
+// 系统提示词、不进消息历史 → 结构上天然不重复不膨胀。
+const BASE_SYSTEM_PROMPT = buildBaseSystemPrompt()
+
+/**
+ * 进程内内联扩展：挂钩 before_agent_start（每次用户提交后、agent 循环前），
+ * 拼 L1+L2+L3 返回给 SDK 作为本轮 system prompt。任一层失败降级：
+ *   - L2/L3 段失败 → 跳过对应段（context-snapshot/ai-memory 内部已兜底）
+ *   - 整体组装异常 → 不返回（undefined）→ SDK 回退 L1 基座
+ */
+export const contextInjectorExtension: InlineExtension = {
+  name: 'serenique-context-injector',
+  hidden: true, // 不显示在启动 Extensions 列表
+  factory: (api) => {
+    api.on('before_agent_start', async () => {
+      try {
+        const [profile, dynamic] = await Promise.all([
+          aiMemoryService.getUserProfileText(),
+          buildDynamicSnapshot(new Date(), createDefaultSources(new Date()), shareSnapshotCache),
+        ])
+        // 空用户画像 → 跳过 L2 段（用户未填写时不注入空白标题）。
+        const layers = [BASE_SYSTEM_PROMPT, profile, dynamic].filter(Boolean)
+        return { systemPrompt: layers.join('\n\n') }
+      } catch (err) {
+        // 快照整体失败：回退为仅 L1（不阻断对话）。
+        logger.warn({ err }, 'AI 动态上下文组装失败，回退基础系统提示词')
+        return undefined
+      }
+    })
+  },
+}
 
 // ---- 同会话单实例注册表 -----------------------------------------------
 // SessionManager 无文件锁：同一会话两个 AgentSession 实例会互相覆盖

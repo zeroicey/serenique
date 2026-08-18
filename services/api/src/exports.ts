@@ -8,6 +8,10 @@
 
 // ---- Env (for startup validation) ----
 export { env as apiEnv } from '@/env'
+// ---- AI memory module（用户画像 L2）----
+export { aiMemoryService } from '@/modules/ai-memory/ai-memory.service'
+export type { AiMemoryEntry, PutAiMemoryInput } from '@/modules/ai-memory/ai-memory.types'
+export { AiMemorySchema } from '@/modules/ai-memory/ai-memory.types'
 // ---- Audit module ----
 export { auditService } from '@/modules/audit/audit.service'
 export type {

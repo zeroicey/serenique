@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte } from 'drizzle-orm'
+import { and, asc, eq, gte, lte, max } from 'drizzle-orm'
 import { db } from '@/db/connection'
 import { fireAuditRecord } from '@/modules/audit/audit.service'
 import type { OverviewBody } from '@/modules/habit/habit.domain'
@@ -10,7 +10,6 @@ import {
 } from '@/modules/habit/habit.domain'
 import { toDailyEntry, toHabitEntry } from '@/modules/habit/habit.mappers'
 import { habitDaily, habits } from '@/modules/habit/habit.schema'
-import { DailyDateSchema } from '@/modules/habit/habit.types'
 import type {
   ClearDailyInput,
   CreateHabitInput,
@@ -21,6 +20,7 @@ import type {
   SetDailyInput,
   UpdateHabitInput,
 } from '@/modules/habit/habit.types'
+import { DailyDateSchema } from '@/modules/habit/habit.types'
 import { AppError, ErrorCode } from '@/shared/errors'
 
 // ---------------------------------------------------------------------------
@@ -142,6 +142,14 @@ export const habitService = {
       .returning({ id: habitDaily.id })
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, '当日记录不存在', 404)
     return { habitId: input.habitId, date: input.date }
+  },
+
+  /** habit_daily 最新一条记录的 updatedAt（打卡/清打卡会推进；无记录为 null）。
+   *  轻量查询（MAX 聚合），供 AI 动态快照的习惯段指纹使用——habits 表本身的
+   *  updatedAt 在打卡时不变，单靠它无法发现每日记录变化。 */
+  async latestDailyUpdatedAt(): Promise<Date | null> {
+    const [row] = await db.select({ latest: max(habitDaily.updatedAt) }).from(habitDaily)
+    return row.latest ?? null
   },
 
   // ---- Overview ----
