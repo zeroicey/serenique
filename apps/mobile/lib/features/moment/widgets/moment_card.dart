@@ -7,15 +7,19 @@ import '../media_preview.dart';
 import '../moment_models.dart';
 import '../moment_providers.dart';
 import '../moment_time.dart';
+import '../../tag/widgets/tag_picker.dart';
 import 'attachment_grid.dart';
 import 'comment_row.dart';
 
 /// 朋友圈样式的闪记卡片：纯文本（「全文/收起」在正文下方）+ 时间行（⋮ 菜单）+ 内嵌评论 + 内联评论输入。
 /// 评论输入默认隐藏：点 ⋮ →「评论」才展开，发送成功后收起；删除也在 ⋮ 菜单里。
 class MomentCard extends ConsumerStatefulWidget {
-  const MomentCard({super.key, required this.moment});
+  const MomentCard({super.key, required this.moment, this.onTagTap});
 
   final Moment moment;
+
+  /// 点标签 chip 的回调（列表页传：写标签过滤态）。null 时标签不可点（仅展示）。
+  final void Function(MomentTag tag)? onTagTap;
 
   @override
   ConsumerState<MomentCard> createState() => _MomentCardState();
@@ -51,8 +55,9 @@ class _MomentCardState extends ConsumerState<MomentCard> {
       setState(() => _showCommentInput = false);
     } on Exception catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -68,9 +73,13 @@ class _MomentCardState extends ConsumerState<MomentCard> {
         content: const Text('删除后不可恢复。'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -80,21 +89,49 @@ class _MomentCardState extends ConsumerState<MomentCard> {
       await ref.read(momentActionsProvider).delete(_moment.id);
     } on Exception catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
       }
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
   }
 
+  /// 编辑标签：底部多选选择器（只选已有）→ PUT 整体替换（幂等集合语义）。
+  Future<void> _editTags() async {
+    final picked = await showTagPicker(
+      context,
+      initialTagIds: _moment.tags.map((t) => t.id).toList(),
+    );
+    if (picked == null || !mounted) return;
+    try {
+      await ref
+          .read(momentActionsProvider)
+          .replaceTags(_moment.id, picked.map((t) => t.id).toList());
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('标签已更新')));
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
+      }
+    }
+  }
+
   /// 有坐标时打开高德深链（经度,纬度 顺序由 amapDeepLink 保证）。
   Future<void> _openLocation(MomentLocation location) async {
-    final ok = await launchUrl(Uri.parse(amapDeepLink(location)),
-        mode: LaunchMode.externalApplication);
+    final ok = await launchUrl(
+      Uri.parse(amapDeepLink(location)),
+      mode: LaunchMode.externalApplication,
+    );
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('无法打开地图')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法打开地图')));
     }
   }
 
@@ -125,7 +162,9 @@ class _MomentCardState extends ConsumerState<MomentCard> {
               moment.text,
               style: style,
               maxLines: _expanded ? null : _collapseLines,
-              overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+              overflow: _expanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
             ),
             // 「全文/收起」直接放在正文下方。
             if (overflows)
@@ -166,33 +205,80 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Row(children: [
-                    Icon(Icons.place_outlined,
-                        size: 13, color: scheme.onSurfaceVariant),
-                    const SizedBox(width: 3),
-                    Expanded(
-                      child: Text(locationLabel(moment.location!),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.place_outlined,
+                        size: 13,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          locationLabel(moment.location!),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                              fontSize: 12, color: scheme.onSurfaceVariant)),
-                    ),
-                  ]),
+                            fontSize: 12,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+            // 标签行：位置行/时间行之间。每个 chip 可点（onTagTap 非空时）进入该标签过滤。
+            // GestureDetector 消费点击，避免冒泡到外层 InkWell（跳详情）。
+            if (moment.tags.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final tag in moment.tags)
+                    GestureDetector(
+                      onTap: widget.onTagTap == null
+                          ? null
+                          : () => widget.onTagTap!(tag),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.secondaryContainer.withValues(
+                            alpha: 0.5,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '#${tag.name}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: scheme.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
             // 时间行：时间靠左，⋮ 菜单在最右。
             Row(
               children: [
                 Expanded(
                   child: Text(
                     formatMomentTime(moment.createdAt),
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.hintColor),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
+                    ),
                   ),
                 ),
                 Theme(
                   data: Theme.of(context).copyWith(
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   child: PopupMenuButton<String>(
                     icon: const Icon(Icons.more_horiz),
                     iconSize: 18,
@@ -205,10 +291,13 @@ class _MomentCardState extends ConsumerState<MomentCard> {
                         if (_showCommentInput) _commentFocus.requestFocus();
                       } else if (value == 'delete') {
                         _delete();
+                      } else if (value == 'tags') {
+                        _editTags();
                       }
                     },
                     itemBuilder: (context) => const [
                       PopupMenuItem(value: 'comment', child: Text('评论')),
+                      PopupMenuItem(value: 'tags', child: Text('编辑标签')),
                       PopupMenuItem(value: 'delete', child: Text('删除')),
                     ],
                   ),
@@ -281,9 +370,7 @@ class _CommentBlock extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final c in comments) CommentRow(comment: c),
-        ],
+        children: [for (final c in comments) CommentRow(comment: c)],
       ),
     );
   }

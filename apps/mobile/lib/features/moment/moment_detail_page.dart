@@ -7,6 +7,7 @@ import 'media_preview.dart';
 import 'moment_models.dart';
 import 'moment_providers.dart';
 import 'moment_time.dart';
+import '../tag/widgets/tag_picker.dart';
 import 'widgets/attachment_grid.dart';
 import 'widgets/comment_input_bar.dart';
 import 'widgets/comment_section.dart';
@@ -27,6 +28,7 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
   bool _loaded = false;
   bool _saving = false;
   bool _deleting = false;
+  bool _editingTags = false;
 
   @override
   void dispose() {
@@ -37,23 +39,53 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
   Future<void> _save() async {
     final text = _controller.text.trim();
     if (text.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('内容不能为空')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('内容不能为空')));
       return;
     }
     setState(() => _saving = true);
     try {
-      await ref
-          .read(momentActionsProvider)
-          .update(widget.id, text);
+      await ref.read(momentActionsProvider).update(widget.id, text);
       if (mounted) context.pop();
     } on Exception catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// 编辑标签：底部多选选择器（只选已有）→ PUT 整体替换。
+  Future<void> _editTags() async {
+    final detail = ref.read(momentDetailProvider(widget.id)).value;
+    if (detail == null) return;
+    final picked = await showTagPicker(
+      context,
+      initialTagIds: detail.tags.map((t) => t.id).toList(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _editingTags = true);
+    try {
+      await ref
+          .read(momentActionsProvider)
+          .replaceTags(widget.id, picked.map((t) => t.id).toList());
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('标签已更新')));
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _editingTags = false);
     }
   }
 
@@ -66,9 +98,13 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
         content: const Text('删除后不可恢复。'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -79,8 +115,9 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
       if (mounted) context.pop();
     } on Exception catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
       }
     } finally {
       if (mounted) setState(() => _deleting = false);
@@ -99,6 +136,11 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
       appBar: AppBar(
         title: const Text('闪记详情'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sell_outlined),
+            tooltip: '标签',
+            onPressed: _editingTags ? null : _editTags,
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             tooltip: '删除',
@@ -120,7 +162,9 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => AsyncErrorView(
-            error: err, onRetry: () => ref.invalidate(momentDetailProvider(widget.id))),
+          error: err,
+          onRetry: () => ref.invalidate(momentDetailProvider(widget.id)),
+        ),
         data: (moment) {
           // 网格与全屏预览共用同一有序列表，保证索引一致。
           final attachments = sortedAttachments(moment.attachments);
@@ -155,10 +199,27 @@ class _MomentDetailPageState extends ConsumerState<MomentDetailPage> {
                         ),
                       ),
                     ],
+                    // 标签行：已打标签 chips 展示（编辑入口在 AppBar「标签」）。
+                    if (moment.tags.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final tag in moment.tags)
+                            Chip(
+                              label: Text('#${tag.name}'),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     Text(
                       formatMomentTime(moment.createdAt),
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     CommentSection(momentId: moment.id),

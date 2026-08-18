@@ -17,6 +17,7 @@ import 'features/moment/moment_detail_page.dart';
 import 'features/moment/moment_list_page.dart';
 import 'features/placeholder/placeholder_page.dart';
 import 'features/settings/settings_page.dart';
+import 'features/tag/tag_page.dart';
 import 'features/task/task_group_detail_page.dart';
 import 'features/task/task_edit_page.dart';
 import 'features/task/task_page.dart';
@@ -45,6 +46,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/moments',
             builder: (context, state) => const MomentListPage(),
           ),
+          GoRoute(path: '/tags', builder: (context, state) => const TagPage()),
           GoRoute(path: '/task', builder: (context, state) => const TaskPage()),
           GoRoute(
             path: '/event',

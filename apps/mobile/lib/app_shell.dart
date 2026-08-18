@@ -25,6 +25,7 @@ class AppShell extends ConsumerWidget {
   static const _items = <({IconData icon, String label, String path})>[
     (icon: Icons.auto_awesome, label: '宁序', path: '/ai'),
     (icon: Icons.bolt, label: '闪记', path: '/moments'),
+    (icon: Icons.sell_outlined, label: '标签', path: '/tags'),
     (icon: Icons.repeat, label: '习惯', path: '/habit'),
     (icon: Icons.check_circle_outline, label: '任务', path: '/task'),
     (icon: Icons.calendar_today_outlined, label: '日历', path: '/event'),
@@ -247,6 +248,7 @@ class AppShell extends ConsumerWidget {
 String moduleTitle(String path) {
   if (path.startsWith('/settings')) return '设置';
   if (path.startsWith('/moments')) return '闪记';
+  if (path.startsWith('/tags')) return '标签';
   if (path.startsWith('/habit')) return '习惯';
   if (path.startsWith('/task')) return '任务';
   if (path.startsWith('/event')) return '日历';

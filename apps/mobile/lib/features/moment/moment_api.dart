@@ -11,26 +11,39 @@ class MomentApi {
   final ApiClient _client;
 
   /// 列表（一页的 items，总数用 [listPage] 拿）。
+  /// [tag] 非空则按标签过滤（GET /api/moments?tag=）。
   Future<List<Moment>> list({
     int page = 1,
     int pageSize = 50,
     String? query,
+    String? tag,
   }) async {
-    return (await listPage(page: page, pageSize: pageSize, query: query)).items;
+    return (await listPage(
+      page: page,
+      pageSize: pageSize,
+      query: query,
+      tag: tag,
+    )).items;
   }
 
   /// 分页列表：条目 + 服务端 total。
-  /// [query] 非空才拼 `q` 参数（对齐 Web：空白关键词 = 全量列表）。
+  /// [query] 非空才拼 `q` 参数（对齐 Web：空白关键词 = 全量列表）；
+  /// [tag] 非空才拼 `tag` 参数（标签过滤，与 q additive）。
   Future<MomentPage> listPage({
     int page = 1,
     int pageSize = 50,
     String? query,
+    String? tag,
   }) async {
-    final data = await _client.getData('/api/moments', query: {
-      'page': page,
-      'pageSize': pageSize,
-      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
-    });
+    final data = await _client.getData(
+      '/api/moments',
+      query: {
+        'page': page,
+        'pageSize': pageSize,
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (tag != null && tag.isNotEmpty) 'tag': tag,
+      },
+    );
     final map = data as Map<String, dynamic>;
     return MomentPage(
       items: (map['items'] as List<dynamic>? ?? const [])
@@ -42,8 +55,10 @@ class MomentApi {
 
   /// 轻量取总数：只拉一页 pageSize=1，读响应里的 total。
   Future<int> count() async {
-    final data =
-        await _client.getData('/api/moments', query: {'page': 1, 'pageSize': 1});
+    final data = await _client.getData(
+      '/api/moments',
+      query: {'page': 1, 'pageSize': 1},
+    );
     return (data as Map<String, dynamic>)['total'] as int;
   }
 
@@ -52,34 +67,67 @@ class MomentApi {
     return Moment.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<MomentBlob> uploadBlob(Uint8List bytes,
-      {required String filename, required String mimeType}) async {
-    final data = await _client.postMultipart('/api/blobs/upload',
-        bytes: bytes, filename: filename, mimeType: mimeType);
+  Future<MomentBlob> uploadBlob(
+    Uint8List bytes, {
+    required String filename,
+    required String mimeType,
+  }) async {
+    final data = await _client.postMultipart(
+      '/api/blobs/upload',
+      bytes: bytes,
+      filename: filename,
+      mimeType: mimeType,
+    );
     return MomentBlob.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<Moment> create(String text,
-      {List<MomentAttachmentInput> attachments = const [],
-      MomentLocation? location}) async {
-    final data = await _client.postData('/api/moments', body: {
-      'text': text,
-      if (attachments.isNotEmpty)
-        'attachments': attachments.map((a) => a.toJson()).toList(),
-      // 后端 Create 不接受 null：location == null 时不带该字段
-      if (location != null) 'location': location.toJson(),
-    });
+  Future<Moment> create(
+    String text, {
+    List<MomentAttachmentInput> attachments = const [],
+    MomentLocation? location,
+    List<String> tags = const [],
+  }) async {
+    final data = await _client.postData(
+      '/api/moments',
+      body: {
+        'text': text,
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((a) => a.toJson()).toList(),
+        // 后端 Create 不接受 null：location == null 时不带该字段
+        if (location != null) 'location': location.toJson(),
+        // 内联标签：只接受已存在的 tagId（不存在 → 404），tags 为空时不带
+        if (tags.isNotEmpty) 'tags': tags,
+      },
+    );
     return Moment.fromJson(data as Map<String, dynamic>);
   }
 
   Future<Moment> update(String id, String text) async {
-    final data =
-        await _client.putData('/api/moments/$id', body: {'text': text});
+    final data = await _client.putData(
+      '/api/moments/$id',
+      body: {'text': text},
+    );
     return Moment.fromJson(data as Map<String, dynamic>);
   }
 
   Future<void> delete(String id) async {
     await _client.deleteData('/api/moments/$id');
+  }
+
+  /// 整体替换闪记标签（PUT /api/moments/:id/tags body {tagIds}）。
+  /// 幂等集合语义：容忍已绑定、空数组清空全部、不存在的 tagId → 404 整体回滚。
+  /// 返回替换后的新 tags（列表接口与详情接口字段形状一致）。
+  Future<List<MomentTag>> replaceMomentTags(
+    String momentId,
+    List<String> tagIds,
+  ) async {
+    final data = await _client.putData(
+      '/api/moments/$momentId/tags',
+      body: {'tagIds': tagIds},
+    );
+    return (data as List<dynamic>)
+        .map((e) => MomentTag.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<MomentComment>> listComments(String momentId) async {
@@ -90,15 +138,22 @@ class MomentApi {
   }
 
   Future<MomentComment> addComment(String momentId, String content) async {
-    final data = await _client
-        .postData('/api/moments/$momentId/comments', body: {'content': content});
+    final data = await _client.postData(
+      '/api/moments/$momentId/comments',
+      body: {'content': content},
+    );
     return MomentComment.fromJson(data as Map<String, dynamic>);
   }
 
   Future<MomentComment> updateComment(
-      String momentId, String commentId, String content) async {
-    final data = await _client.putData('/api/moments/$momentId/comments/$commentId',
-        body: {'content': content});
+    String momentId,
+    String commentId,
+    String content,
+  ) async {
+    final data = await _client.putData(
+      '/api/moments/$momentId/comments/$commentId',
+      body: {'content': content},
+    );
     return MomentComment.fromJson(data as Map<String, dynamic>);
   }
 
@@ -111,8 +166,10 @@ class MomentApi {
   /// 而非后端拼好的完整 url —— 路由反代（如 api.hcyj.xyz/serenique）会
   /// 剥离前缀再转发，后端返回的 url 会丢前缀导致 404。
   Future<BlobAccessLink> createBlobAccessLink(String blobId) async {
-    final data = await _client.postData('/api/blobs/$blobId/access-link',
-        body: {'expiresInSeconds': 3600});
+    final data = await _client.postData(
+      '/api/blobs/$blobId/access-link',
+      body: {'expiresInSeconds': 3600},
+    );
     final path = data['path'] as String;
     final expires = (data['expires'] as num).toInt();
     return BlobAccessLink(

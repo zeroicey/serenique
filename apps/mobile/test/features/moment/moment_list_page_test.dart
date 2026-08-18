@@ -4,12 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serenique_mobile/features/moment/moment_list_page.dart';
 import 'package:serenique_mobile/features/moment/moment_models.dart';
 import 'package:serenique_mobile/features/moment/moment_providers.dart';
+import 'package:serenique_mobile/features/tag/tag_providers.dart';
 import '../../helpers.dart';
 
 /// 评论输入框：搜索栏（SearchBar 内部也是 TextField）常驻，必须用 hint 区分。
-Finder get _commentInput =>
-    find.byWidgetPredicate((w) =>
-        w is TextField && w.decoration?.hintText == '写评论…');
+Finder get _commentInput => find.byWidgetPredicate(
+  (w) => w is TextField && w.decoration?.hintText == '写评论…',
+);
 
 void main() {
   final sample = Moment(
@@ -22,23 +23,31 @@ void main() {
   );
 
   testWidgets('列表页渲染数据', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([sample]),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('第一条闪记'), findsOneWidget);
   });
 
   testWidgets('空列表显示引导', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider.overrideWith(() => FakeMomentListNotifier(const [])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier(const []),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('还没有闪记，点右下角新建'), findsOneWidget);
   });
@@ -49,19 +58,27 @@ void main() {
       text: '第二条闪记',
       comments: const [
         MomentComment(
-            id: 'c1', momentId: 'm2', content: '内联评论', createdAt: 't', updatedAt: 't'),
+          id: 'c1',
+          momentId: 'm2',
+          content: '内联评论',
+          createdAt: 't',
+          updatedAt: 't',
+        ),
       ],
       commentCount: 1,
       createdAt: 't',
       updatedAt: 't',
     );
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider
-            .overrideWith(() => FakeMomentListNotifier([withComments])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([withComments]),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
     // 评论文字嵌在 Text.rich（WidgetSpan 头像）里，toPlainText 开头含 U+FFFC，用包含匹配。
     expect(find.textContaining('内联评论', findRichText: true), findsOneWidget);
@@ -81,12 +98,14 @@ void main() {
       createdAt: 't',
       updatedAt: 't',
     );
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider.overrideWith(() => FakeMomentListNotifier([long])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(() => FakeMomentListNotifier([long])),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('全文'), findsOneWidget);
     expect(find.text('收起'), findsNothing);
@@ -97,12 +116,16 @@ void main() {
   });
 
   testWidgets('卡片 ⋮ 菜单包含评论与删除', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([sample]),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.more_horiz));
     await tester.pumpAndSettle();
@@ -111,12 +134,16 @@ void main() {
   });
 
   testWidgets('评论输入默认隐藏，点 ⋮ →「评论」才显示', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([sample]),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(_commentInput, findsNothing); // 默认不显示评论输入框（搜索栏除外）
 
@@ -128,12 +155,16 @@ void main() {
   });
 
   testWidgets('再点一次「评论」关闭输入框', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider.overrideWith(() => FakeMomentListNotifier([sample])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([sample]),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 打开
@@ -160,13 +191,16 @@ void main() {
       createdAt: 't',
       updatedAt: 't',
     );
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider
-            .overrideWith(() => FakeMomentListNotifier([sample, second])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([sample, second]),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('第一条闪记'), findsOneWidget);
     expect(find.text('第二条闪记'), findsOneWidget);
@@ -199,13 +233,16 @@ void main() {
       createdAt: 't',
       updatedAt: 't',
     );
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        momentListProvider
-            .overrideWith(() => FakeMomentListNotifier([sample, second])),
-      ],
-      child: const MaterialApp(home: MomentListPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([sample, second]),
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 有输入时清除按钮出现；点击后关键词清空、列表恢复全量。
@@ -221,4 +258,63 @@ void main() {
     expect(find.text('第二条闪记'), findsOneWidget);
     expect(find.byIcon(Icons.close), findsNothing);
   });
+
+  testWidgets('标签过滤：显示当前过滤 chip，仅展示匹配闪记，可清除', (tester) async {
+    final tagged = Moment(
+      id: 'm1',
+      text: '带标签的闪记',
+      tags: const [MomentTag(id: 't1', name: '工作', momentCount: 2)],
+      comments: const [],
+      commentCount: 0,
+      createdAt: 't',
+      updatedAt: 't',
+    );
+    final other = Moment(
+      id: 'm2',
+      text: '无关闪记',
+      comments: const [],
+      commentCount: 0,
+      createdAt: 't',
+      updatedAt: 't',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          momentListProvider.overrideWith(
+            () => FakeMomentListNotifier([tagged, other]),
+          ),
+          // 预置过滤条件 + 标签列表（供 chip 名称展示）。
+          momentTagFilterProvider.overrideWith(() => _TagFilter('t1')),
+          tagsProvider.overrideWith(
+            (ref) async => [
+              const MomentTag(id: 't1', name: '工作', momentCount: 2),
+            ],
+          ),
+        ],
+        child: const MaterialApp(home: MomentListPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 过滤 chip 出现（InputChip），列表只剩匹配项
+    expect(find.byType(InputChip), findsOneWidget);
+    expect(find.text('带标签的闪记'), findsOneWidget);
+    expect(find.text('无关闪记'), findsNothing);
+
+    // 点 chip 本体 → 清除过滤，恢复全量
+    await tester.tap(find.byType(InputChip));
+    await tester.pumpAndSettle();
+    expect(find.byType(InputChip), findsNothing);
+    expect(find.text('无关闪记'), findsOneWidget);
+  });
+}
+
+/// 预置固定标签过滤值的 Notifier（供测试初始化过滤态）。
+class _TagFilter extends MomentTagFilterNotifier {
+  _TagFilter(this.value);
+
+  final String? value;
+
+  @override
+  String? build() => value;
 }

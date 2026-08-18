@@ -7,6 +7,7 @@ import '../../../core/network/api_exception.dart';
 import '../location/location_format.dart';
 import '../location/location_providers.dart';
 import '../location/widgets/location_picker_sheet.dart';
+import '../tag/widgets/tag_picker.dart';
 import 'moment_draft_storage.dart';
 import 'moment_models.dart';
 import 'moment_providers.dart';
@@ -32,6 +33,8 @@ class _MomentCreatePageState extends ConsumerState<MomentCreatePage> {
   // 发布成功后置 true：dispose 不再把正文写回草稿（草稿已在 _submit 里删除）
   bool _published = false;
   MomentLocation? _location;
+  // 已选标签（只选已有；点开底部选择器多选，chips 可移除）。
+  List<MomentTag> _selectedTags = const [];
   // dispose() 里不允许用 ref：草稿存储引用在 initState 缓存到字段
   late final MomentDraftStorage _draftStorage;
   List<PickedAttachment> get _picked => ref.read(pickedAttachmentsProvider);
@@ -102,6 +105,21 @@ class _MomentCreatePageState extends ConsumerState<MomentCreatePage> {
 
   void _clearLocation() => setState(() => _location = null);
 
+  Future<void> _pickTags() async {
+    final picked = await showTagPicker(
+      context,
+      initialTagIds: _selectedTags.map((t) => t.id).toList(),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedTags = picked);
+  }
+
+  void _removeTag(MomentTag tag) {
+    setState(
+      () => _selectedTags = _selectedTags.where((t) => t.id != tag.id).toList(),
+    );
+  }
+
   Future<void> _submit() async {
     final text = _controller.text.trim();
     if (text.isEmpty) {
@@ -118,12 +136,15 @@ class _MomentCreatePageState extends ConsumerState<MomentCreatePage> {
           )
           .toList();
       final location = _location;
+      final tags = _selectedTags.map((t) => t.id).toList();
       if (files.isEmpty) {
-        await ref.read(momentActionsProvider).create(text, location: location);
+        await ref
+            .read(momentActionsProvider)
+            .create(text, location: location, tags: tags);
       } else {
         await ref
             .read(momentActionsProvider)
-            .createWithMedia(text, files, location: location);
+            .createWithMedia(text, files, location: location, tags: tags);
       }
       ref.read(pickedAttachmentsProvider.notifier).clear();
       await _clearSavedDraft();
@@ -241,6 +262,60 @@ class _MomentCreatePageState extends ConsumerState<MomentCreatePage> {
               ),
             ),
           ],
+          // 打标签行：只选已有标签。点开 → 底部多选选择器；已选以 chips 展示（可移除）。
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          InkWell(
+            onTap: _pickTags,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.sell_outlined,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _selectedTags.isEmpty
+                          ? '打标签'
+                          : '已选 ${_selectedTags.length} 个标签',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _selectedTags.isEmpty
+                            ? scheme.onSurfaceVariant
+                            : scheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 18, color: scheme.outline),
+                ],
+              ),
+            ),
+          ),
+          // 已选标签 chips（可单个移除）。
+          if (_selectedTags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final tag in _selectedTags)
+                    Chip(
+                      label: Text('#${tag.name}'),
+                      onDeleted: () => _removeTag(tag),
+                      deleteIcon: const Icon(Icons.close, size: 16),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
         ],
       ),
     );

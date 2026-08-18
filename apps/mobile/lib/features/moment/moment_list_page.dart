@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/widgets/async_view.dart';
+import '../tag/tag_providers.dart';
 import 'moment_models.dart';
 import 'moment_providers.dart';
 import 'widgets/moment_card.dart';
@@ -84,8 +85,9 @@ class _MomentListPageState extends ConsumerState<MomentListPage> {
       await ref.read(momentListProvider.notifier).loadMore();
     } on Exception catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -95,6 +97,17 @@ class _MomentListPageState extends ConsumerState<MomentListPage> {
   @override
   Widget build(BuildContext context) {
     final moments = ref.watch(momentListProvider);
+    // 当前标签过滤：默认清空；点卡片标签/标签管理页可设置。
+    final tagFilter = ref.watch(momentTagFilterProvider);
+    MomentTag? activeTag;
+    if (tagFilter != null) {
+      for (final t in ref.watch(tagsProvider).value ?? const <MomentTag>[]) {
+        if (t.id == tagFilter) {
+          activeTag = t;
+          break;
+        }
+      }
+    }
     // 搜索栏作为列表的第一个条目随内容滚动（不置顶）；加载/错误/空态下
     // 仍保留在顶部，保证无结果时也能清除关键词。
     final searchBar = _MomentSearchBar(
@@ -102,26 +115,52 @@ class _MomentListPageState extends ConsumerState<MomentListPage> {
       onChanged: _onSearchChanged,
       onClear: _clearSearch,
     );
+    // 过滤头：搜索栏 + 当前标签过滤 chip（可清除）。
+    final header = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        searchBar,
+        if (activeTag != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InputChip(
+                label: Text('#${activeTag.name}'),
+                // body 与 × 都可清除过滤。
+                onPressed: () =>
+                    ref.read(momentTagFilterProvider.notifier).set(null),
+                onDeleted: () =>
+                    ref.read(momentTagFilterProvider.notifier).set(null),
+              ),
+            ),
+          ),
+      ],
+    );
     return Scaffold(
       body: moments.when(
         loading: () => Column(
           children: [
-            searchBar,
+            header,
             const Expanded(child: Center(child: CircularProgressIndicator())),
           ],
         ),
         error: (err, _) => Column(
           children: [
-            searchBar,
+            header,
             Expanded(
               child: AsyncErrorView(
-                  error: err, onRetry: () => ref.invalidate(momentListProvider)),
+                error: err,
+                onRetry: () => ref.invalidate(momentListProvider),
+              ),
             ),
           ],
         ),
         data: (page) {
-          final searching =
-              ref.read(momentSearchKeywordProvider).trim().isNotEmpty;
+          final searching = ref
+              .read(momentSearchKeywordProvider)
+              .trim()
+              .isNotEmpty;
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(momentListProvider);
@@ -131,16 +170,20 @@ class _MomentListPageState extends ConsumerState<MomentListPage> {
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      searchBar,
+                      header,
                       ListTile(
                         title: Text(
-                          searching ? '未找到匹配的闪记' : '还没有闪记，点右下角新建',
+                          tagFilter != null
+                              ? '该标签下暂无闪记'
+                              : searching
+                              ? '未找到匹配的闪记'
+                              : '还没有闪记，点右下角新建',
                           textAlign: TextAlign.center,
                         ),
                       ),
                     ],
                   )
-                : _buildMomentList(page, searchBar),
+                : _buildMomentList(page, header),
           );
         },
       ),
@@ -171,8 +214,7 @@ class _MomentListPageState extends ConsumerState<MomentListPage> {
                     child: SizedBox(
                       width: 20,
                       height: 20,
-                      child:
-                          CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
                 )
@@ -183,7 +225,11 @@ class _MomentListPageState extends ConsumerState<MomentListPage> {
           onTap: () => context.push('/moments/${m.id}'),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: MomentCard(moment: m),
+            child: MomentCard(
+              moment: m,
+              onTagTap: (tag) =>
+                  ref.read(momentTagFilterProvider.notifier).set(tag.id),
+            ),
           ),
         );
       },
@@ -221,12 +267,14 @@ class _MomentSearchBarState extends State<_MomentSearchBar> {
         controller: widget.controller,
         hintText: '搜索闪记',
         padding: const WidgetStatePropertyAll(
-            EdgeInsets.fromLTRB(16, 8, 16, 8)),
-        constraints:
-            const BoxConstraints(minWidth: 0, maxWidth: double.infinity),
+          EdgeInsets.fromLTRB(16, 8, 16, 8),
+        ),
+        constraints: const BoxConstraints(
+          minWidth: 0,
+          maxWidth: double.infinity,
+        ),
         elevation: const WidgetStatePropertyAll(0),
-        backgroundColor:
-            WidgetStatePropertyAll(scheme.surfaceContainerHighest),
+        backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainerHighest),
         leading: const Icon(Icons.search),
         trailing: [
           if (_hasText)

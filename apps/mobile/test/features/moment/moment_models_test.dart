@@ -8,7 +8,13 @@ void main() {
       'text': '今天天气不错',
       'attachments': <Object>[],
       'comments': [
-        {'id': 'c1', 'momentId': 'm1', 'content': '同意', 'createdAt': 't', 'updatedAt': 't'},
+        {
+          'id': 'c1',
+          'momentId': 'm1',
+          'content': '同意',
+          'createdAt': 't',
+          'updatedAt': 't',
+        },
       ],
       'commentCount': 1,
       'createdAt': 't',
@@ -21,7 +27,12 @@ void main() {
   });
 
   test('Moment.fromJson 缺 comments 时默认为空', () {
-    final m = Moment.fromJson({'id': 'm2', 'text': 'x', 'createdAt': 't', 'updatedAt': 't'});
+    final m = Moment.fromJson({
+      'id': 'm2',
+      'text': 'x',
+      'createdAt': 't',
+      'updatedAt': 't',
+    });
     expect(m.comments, isEmpty);
     expect(m.commentCount, 0);
   });
@@ -32,18 +43,17 @@ void main() {
     int? width,
     int? height,
     int? duration,
-  }) =>
-      {
-        'id': id,
-        'originalName': '$id.jpg',
-        'mimeType': mimeType,
-        'size': 1024,
-        'width': width,
-        'height': height,
-        'duration': duration,
-        'fileUrl': '/api/blobs/$id/file',
-        'createdAt': 't',
-      };
+  }) => {
+    'id': id,
+    'originalName': '$id.jpg',
+    'mimeType': mimeType,
+    'size': 1024,
+    'width': width,
+    'height': height,
+    'duration': duration,
+    'fileUrl': '/api/blobs/$id/file',
+    'createdAt': 't',
+  };
 
   test('Moment.fromJson 解析 attachments 内嵌 blob', () {
     final m = Moment.fromJson({
@@ -79,25 +89,38 @@ void main() {
   });
 
   test('Moment.fromJson 缺 attachments 时默认为空', () {
-    final m = Moment.fromJson({'id': 'm2', 'text': 'x', 'createdAt': 't', 'updatedAt': 't'});
+    final m = Moment.fromJson({
+      'id': 'm2',
+      'text': 'x',
+      'createdAt': 't',
+      'updatedAt': 't',
+    });
     expect(m.attachments, isEmpty);
   });
 
   test('mimeType 分类：image/video/audio 与 displayName 回退', () {
     final image = MomentAttachment.fromJson({
-      'id': 'a1', 'blobId': 'b1', 'sortOrder': 0,
+      'id': 'a1',
+      'blobId': 'b1',
+      'sortOrder': 0,
       'blob': blobJson(id: 'b1', mimeType: 'image/png'),
     });
     final video = MomentAttachment.fromJson({
-      'id': 'a2', 'blobId': 'b2', 'sortOrder': 1,
+      'id': 'a2',
+      'blobId': 'b2',
+      'sortOrder': 1,
       'blob': blobJson(id: 'b2', mimeType: 'video/mp4', duration: 15000),
     });
     final audio = MomentAttachment.fromJson({
-      'id': 'a3', 'blobId': 'b3', 'sortOrder': 2,
+      'id': 'a3',
+      'blobId': 'b3',
+      'sortOrder': 2,
       'blob': blobJson(id: 'b3', mimeType: 'audio/mpeg'),
     });
     final noName = MomentAttachment.fromJson({
-      'id': 'a4', 'blobId': 'b4', 'sortOrder': 3,
+      'id': 'a4',
+      'blobId': 'b4',
+      'sortOrder': 3,
       'blob': blobJson(id: 'b4', mimeType: 'application/pdf'),
     });
 
@@ -114,8 +137,11 @@ void main() {
 
   group('MomentLocation', () {
     test('fromJson 解析全字段', () {
-      final loc = MomentLocation.fromJson(
-          {'name': '星巴克', 'latitude': 39.9827, 'longitude': 116.3162});
+      final loc = MomentLocation.fromJson({
+        'name': '星巴克',
+        'latitude': 39.9827,
+        'longitude': 116.3162,
+      });
       expect(loc.name, '星巴克');
       expect(loc.latitude, 39.9827);
       expect(loc.longitude, 116.3162);
@@ -139,8 +165,11 @@ void main() {
 
     test('toJson 只带非空字段（创建请求体对齐后端 Schema）', () {
       expect(
-        const MomentLocation(name: 'A', latitude: 39.9, longitude: 116.4)
-            .toJson(),
+        const MomentLocation(
+          name: 'A',
+          latitude: 39.9,
+          longitude: 116.4,
+        ).toJson(),
         {'name': 'A', 'latitude': 39.9, 'longitude': 116.4},
       );
       expect(const MomentLocation(latitude: 39.9).toJson(), {'latitude': 39.9});
@@ -151,22 +180,28 @@ void main() {
       const a = MomentLocation(name: 'A', latitude: 39.9);
       expect(a, const MomentLocation(name: 'A', latitude: 39.9));
       expect(a == const MomentLocation(name: 'A', latitude: 39.91), isFalse);
-      expect(a.hashCode,
-          const MomentLocation(name: 'A', latitude: 39.9).hashCode);
+      expect(
+        a.hashCode,
+        const MomentLocation(name: 'A', latitude: 39.9).hashCode,
+      );
     });
   });
 
   group('Moment.location', () {
     Moment withLocation(Object? location) => Moment.fromJson({
-          'id': 'm1',
-          'text': 'x',
-          'location': location,
-          'createdAt': 't',
-          'updatedAt': 't',
-        });
+      'id': 'm1',
+      'text': 'x',
+      'location': location,
+      'createdAt': 't',
+      'updatedAt': 't',
+    });
 
     test('location 对象被解析', () {
-      final m = withLocation({'name': '公园', 'latitude': 39.9, 'longitude': 116.4});
+      final m = withLocation({
+        'name': '公园',
+        'latitude': 39.9,
+        'longitude': 116.4,
+      });
       expect(m.location, isNotNull);
       expect(m.location!.name, '公园');
       expect(m.location!.hasCoordinates, isTrue);
@@ -175,10 +210,59 @@ void main() {
     test('location 为 null / 缺省 → null（不抛错）', () {
       expect(withLocation(null).location, isNull);
       expect(
-        Moment.fromJson({'id': 'm2', 'text': 'x', 'createdAt': 't', 'updatedAt': 't'})
-            .location,
+        Moment.fromJson({
+          'id': 'm2',
+          'text': 'x',
+          'createdAt': 't',
+          'updatedAt': 't',
+        }).location,
         isNull,
       );
+    });
+  });
+
+  group('MomentTag', () {
+    test('MomentTag.fromJson 解析字段', () {
+      final t = MomentTag.fromJson({
+        'id': 't1',
+        'name': '工作',
+        'momentCount': 3,
+        'createdAt': 'a',
+        'updatedAt': 'b',
+      });
+      expect(t.id, 't1');
+      expect(t.name, '工作');
+      expect(t.momentCount, 3);
+    });
+
+    test('Moment.fromJson 解析内嵌 tags', () {
+      final m = Moment.fromJson({
+        'id': 'm1',
+        'text': '记一笔',
+        'tags': [
+          {
+            'id': 't1',
+            'name': '工作',
+            'momentCount': 2,
+            'createdAt': 'a',
+            'updatedAt': 'b',
+          },
+        ],
+        'createdAt': 't',
+        'updatedAt': 't',
+      });
+      expect(m.tags.single.id, 't1');
+      expect(m.tags.single.name, '工作');
+    });
+
+    test('Moment.fromJson 缺 tags 时默认为空', () {
+      final m = Moment.fromJson({
+        'id': 'm2',
+        'text': 'x',
+        'createdAt': 't',
+        'updatedAt': 't',
+      });
+      expect(m.tags, isEmpty);
     });
   });
 }

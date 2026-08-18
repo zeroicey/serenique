@@ -246,8 +246,11 @@ void main() {
     );
     await MomentApi(client).create(
       '带位置',
-      location:
-          const MomentLocation(name: '星巴克', latitude: 39.9827, longitude: 116.3162),
+      location: const MomentLocation(
+        name: '星巴克',
+        latitude: 39.9827,
+        longitude: 116.3162,
+      ),
     );
     final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
     expect(body['location'], {
@@ -341,4 +344,96 @@ void main() {
     expect(page.total, 0);
     expect(adapter.lastQuery, {'page': 1, 'pageSize': 50}); // 无 q 键
   });
+
+  test('listPage：tag 非空时拼 tag 参数（与 q additive）', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {'items': [], 'total': 0},
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    await MomentApi(client).listPage(query: '开会', tag: 't1');
+    expect(adapter.lastQuery, {
+      'page': 1,
+      'pageSize': 50,
+      'q': '开会',
+      'tag': 't1',
+    });
+  });
+
+  test('create：tags 非空时内联 tags 数组', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {'id': 'm1', 'text': 'x', 'createdAt': 't', 'updatedAt': 't'},
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    await MomentApi(client).create('x', tags: ['t1', 't2']);
+    final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
+    expect(body['tags'], ['t1', 't2']);
+  });
+
+  test('create：tags 为空时不带 tags 键', () async {
+    final adapter = _RecordingAdapter(
+      (options) => jsonEncode({
+        'success': true,
+        'message': 'ok',
+        'data': {'id': 'm1', 'text': 'x', 'createdAt': 't', 'updatedAt': 't'},
+      }),
+    );
+    final client = ApiClient(
+      baseUrl: 'https://api.test',
+      tokenReader: () => null,
+      dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+        ..httpClientAdapter = adapter,
+    );
+    await MomentApi(client).create('x');
+    final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
+    expect(body.containsKey('tags'), isFalse);
+  });
+
+  test(
+    'replaceMomentTags：PUT /api/moments/:id/tags body {tagIds} → 返回 tags',
+    () async {
+      final adapter = _RecordingAdapter(
+        (options) => jsonEncode({
+          'success': true,
+          'message': 'ok',
+          'data': [
+            {
+              'id': 't1',
+              'name': '工作',
+              'momentCount': 2,
+              'createdAt': 'a',
+              'updatedAt': 'b',
+            },
+          ],
+        }),
+      );
+      final client = ApiClient(
+        baseUrl: 'https://api.test',
+        tokenReader: () => null,
+        dio: Dio(BaseOptions(baseUrl: 'https://api.test'))
+          ..httpClientAdapter = adapter,
+      );
+      final tags = await MomentApi(client).replaceMomentTags('m1', ['t1']);
+      expect(tags.single.name, '工作');
+      final body = jsonDecode(adapter.lastBody!) as Map<String, dynamic>;
+      expect(body['tagIds'], ['t1']);
+    },
+  );
 }

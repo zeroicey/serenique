@@ -5,9 +5,11 @@ import '../../../core/network/api_client.dart';
 import 'blob_access.dart';
 import 'moment_api.dart';
 import 'moment_models.dart';
+import '../tag/tag_providers.dart';
 
-final momentApiProvider =
-    Provider<MomentApi>((ref) => MomentApi(ref.watch(apiClientProvider)));
+final momentApiProvider = Provider<MomentApi>(
+  (ref) => MomentApi(ref.watch(apiClientProvider)),
+);
 
 /// 搜索关键词（已输入、经防抖后的实际搜索词；空 = 全量列表）。
 class MomentSearchKeywordNotifier extends Notifier<String> {
@@ -19,7 +21,22 @@ class MomentSearchKeywordNotifier extends Notifier<String> {
 
 final momentSearchKeywordProvider =
     NotifierProvider<MomentSearchKeywordNotifier, String>(
-        MomentSearchKeywordNotifier.new);
+      MomentSearchKeywordNotifier.new,
+    );
+
+/// 当前按标签过滤的 tagId（null = 全部列表）。
+/// 由标签管理页/卡片标签点击写入；变化 → 列表 notifier 重建 → 重新从第 1 页按标签拉取。
+class MomentTagFilterNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? value) => state = value;
+}
+
+final momentTagFilterProvider =
+    NotifierProvider<MomentTagFilterNotifier, String?>(
+      MomentTagFilterNotifier.new,
+    );
 
 /// 闪记列表（服务端状态 + 分页，≈ TanStack Query 的 query）。
 /// 搜索词变化 → notifier 重建 → 重新从第 1 页拉取（分页状态天然重置）。
@@ -35,8 +52,9 @@ class MomentListNotifier extends AsyncNotifier<MomentPage> {
   @override
   Future<MomentPage> build() async {
     final keyword = ref.watch(momentSearchKeywordProvider);
+    final tag = ref.watch(momentTagFilterProvider);
     _page = 1;
-    return ref.watch(momentApiProvider).listPage(query: keyword);
+    return ref.watch(momentApiProvider).listPage(query: keyword, tag: tag);
   }
 
   /// 滚动到底部附近时加载下一页，追加到已加载列表。
@@ -45,21 +63,29 @@ class MomentListNotifier extends AsyncNotifier<MomentPage> {
     if (_fetching) return;
     final current = state.value;
     if (current == null || current.items.length >= current.total) return;
-    // 捕获请求时的关键词：若期间用户改了搜索词，build 已重建，
-    // 本次结果过期，直接丢弃（不污染新搜索词的结果）。
+    // 捕获请求时的关键词与标签：若期间用户改了搜索词或过滤标签，build 已重建，
+    // 本次结果过期，直接丢弃（不污染新过滤条件下的结果）。
     final keyword = ref.read(momentSearchKeywordProvider);
+    final tag = ref.read(momentTagFilterProvider);
     final nextPage = _page + 1;
     _fetching = true;
     try {
       final next = await ref
           .read(momentApiProvider)
-          .listPage(page: nextPage, pageSize: _pageSize, query: keyword);
-      if (ref.read(momentSearchKeywordProvider) != keyword) return;
+          .listPage(
+            page: nextPage,
+            pageSize: _pageSize,
+            query: keyword,
+            tag: tag,
+          );
+      if (ref.read(momentSearchKeywordProvider) != keyword ||
+          ref.read(momentTagFilterProvider) != tag) {
+        return;
+      }
       _page = nextPage;
-      state = AsyncData(MomentPage(
-        items: [...current.items, ...next.items],
-        total: next.total,
-      ));
+      state = AsyncData(
+        MomentPage(items: [...current.items, ...next.items], total: next.total),
+      );
     } on Exception catch (e, st) {
       Error.throwWithStackTrace(e, st);
     } finally {
@@ -69,11 +95,15 @@ class MomentListNotifier extends AsyncNotifier<MomentPage> {
 }
 
 final momentListProvider =
-    AsyncNotifierProvider<MomentListNotifier, MomentPage>(MomentListNotifier.new);
+    AsyncNotifierProvider<MomentListNotifier, MomentPage>(
+      MomentListNotifier.new,
+    );
 
 /// 闪记详情（含评论）。
-final momentDetailProvider =
-    FutureProvider.family<Moment, String>((ref, id) async {
+final momentDetailProvider = FutureProvider.family<Moment, String>((
+  ref,
+  id,
+) async {
   return ref.watch(momentApiProvider).get(id);
 });
 
@@ -84,8 +114,12 @@ class MomentActions {
   final Ref _ref;
   MomentApi get _api => _ref.read(momentApiProvider);
 
-  Future<Moment> create(String text, {MomentLocation? location}) async {
-    final created = await _api.create(text, location: location);
+  Future<Moment> create(
+    String text, {
+    MomentLocation? location,
+    List<String> tags = const [],
+  }) async {
+    final created = await _api.create(text, location: location, tags: tags);
     _ref.invalidate(momentListProvider);
     return created;
   }
@@ -96,12 +130,16 @@ class MomentActions {
     String text,
     List<({Uint8List bytes, String filename, String mimeType})> files, {
     MomentLocation? location,
+    List<String> tags = const [],
   }) async {
     final blobs = <String>[];
     for (var i = 0; i < files.length; i++) {
       final f = files[i];
-      final blob =
-          await _api.uploadBlob(f.bytes, filename: f.filename, mimeType: f.mimeType);
+      final blob = await _api.uploadBlob(
+        f.bytes,
+        filename: f.filename,
+        mimeType: f.mimeType,
+      );
       blobs.add(blob.id);
     }
     final created = await _api.create(
@@ -109,9 +147,13 @@ class MomentActions {
       attachments: [
         for (var i = 0; i < blobs.length; i++)
           MomentAttachmentInput(
-              blobId: blobs[i], displayName: files[i].filename, sortOrder: i),
+            blobId: blobs[i],
+            displayName: files[i].filename,
+            sortOrder: i,
+          ),
       ],
       location: location,
+      tags: tags,
     );
     _ref.invalidate(momentListProvider);
     return created;
@@ -122,6 +164,19 @@ class MomentActions {
     _ref.invalidate(momentDetailProvider(id));
     _ref.invalidate(momentListProvider);
     return updated;
+  }
+
+  /// 整体替换闪记标签（PUT 幂等集合语义）。
+  /// 成功后失效详情 / 列表（内嵌 tags 变化）与标签列表（momentCount 变化）。
+  Future<List<MomentTag>> replaceTags(
+    String momentId,
+    List<String> tagIds,
+  ) async {
+    final tags = await _api.replaceMomentTags(momentId, tagIds);
+    _ref.invalidate(momentDetailProvider(momentId));
+    _ref.invalidate(momentListProvider);
+    _ref.invalidate(tagsProvider);
+    return tags;
   }
 
   Future<void> delete(String id) async {
@@ -143,13 +198,14 @@ class MomentActions {
   }
 }
 
-final momentActionsProvider =
-    Provider<MomentActions>((ref) => MomentActions(ref));
+final momentActionsProvider = Provider<MomentActions>(
+  (ref) => MomentActions(ref),
+);
 
 /// 已选附件（未上传）的本地状态：编辑页展示缩略图、提交后清空。
 class PickedAttachments extends Notifier<List<PickedAttachment>> {
   PickedAttachments({List<PickedAttachment>? initial})
-      : _initial = initial ?? const [];
+    : _initial = initial ?? const [];
 
   final List<PickedAttachment> _initial;
   @override
@@ -163,7 +219,8 @@ class PickedAttachments extends Notifier<List<PickedAttachment>> {
 
 final pickedAttachmentsProvider =
     NotifierProvider<PickedAttachments, List<PickedAttachment>>(
-        PickedAttachments.new);
+      PickedAttachments.new,
+    );
 
 /// 签名链接缓存服务：内存缓存 + 过期刷新 + 失败回退直链。
 final blobAccessServiceProvider = Provider<BlobAccessService>((ref) {
@@ -177,7 +234,8 @@ final blobAccessServiceProvider = Provider<BlobAccessService>((ref) {
 
 /// 每个 blobId 的签名链接（autoDispose：瓦片离开屏幕时释放；
 /// 命中 service 内存缓存则不发请求）。
-final blobAccessUrlProvider =
-    FutureProvider.autoDispose.family<String, String>((ref, blobId) {
-  return ref.watch(blobAccessServiceProvider).resolve(blobId);
-});
+final blobAccessUrlProvider = FutureProvider.autoDispose.family<String, String>(
+  (ref, blobId) {
+    return ref.watch(blobAccessServiceProvider).resolve(blobId);
+  },
+);

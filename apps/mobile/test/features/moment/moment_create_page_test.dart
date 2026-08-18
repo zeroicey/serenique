@@ -56,6 +56,7 @@ class _FakeMomentApi extends MomentApi {
   String? createText;
   List<MomentAttachmentInput>? createAttachments;
   MomentLocation? createLocation;
+  List<String>? createTags;
 
   @override
   Future<MomentBlob> uploadBlob(
@@ -81,14 +82,21 @@ class _FakeMomentApi extends MomentApi {
     String text, {
     List<MomentAttachmentInput> attachments = const [],
     MomentLocation? location,
+    List<String> tags = const [],
   }) async {
     createText = text;
     createAttachments = attachments;
     createLocation = location;
+    createTags = tags;
     return Moment(
       id: 'm1',
       text: text,
       location: location,
+      tags: tags.isEmpty
+          ? const []
+          : tags
+                .map((id) => MomentTag(id: id, name: 'tag$id', momentCount: 0))
+                .toList(),
       comments: const [],
       commentCount: 0,
       createdAt: '',
