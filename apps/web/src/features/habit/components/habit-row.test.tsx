@@ -87,14 +87,22 @@ describe('HabitRow · 做没做型', () => {
     )
     // 08-16 点「做了」→ 本地乐观态 done + setDaily
     await user.click(screen.getByRole('button', { name: /做了/ }))
-    expect(mocks.setDaily).toHaveBeenCalledWith({ habitId: 'h1', date: '2026-08-16', status: 'done' })
+    expect(mocks.setDaily).toHaveBeenCalledWith({
+      habitId: 'h1',
+      date: '2026-08-16',
+      status: 'done',
+    })
     // 切到 08-17（未记录）：乐观态必须重置，否则会显示昨日的「已做」且再点触发 clearDaily
     rerender(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-17" />)
     mocks.setDaily.mockClear()
     mocks.clearDaily.mockClear()
     await user.click(screen.getByRole('button', { name: /做了/ }))
     // 重置生效 → 走 setDaily（发往 08-17）；未重置 → 走 clearDaily（错误日期）
-    expect(mocks.setDaily).toHaveBeenCalledWith({ habitId: 'h1', date: '2026-08-17', status: 'done' })
+    expect(mocks.setDaily).toHaveBeenCalledWith({
+      habitId: 'h1',
+      date: '2026-08-17',
+      status: 'done',
+    })
     expect(mocks.clearDaily).not.toHaveBeenCalled()
   })
 })

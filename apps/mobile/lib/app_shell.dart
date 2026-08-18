@@ -89,18 +89,31 @@ class AppShell extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            tooltip: '菜单',
-            onPressed: () {
-              ref.invalidate(countsProvider); // 打开抽屉时刷新计数
-              ref.invalidate(taskTodoCountProvider);
-              ref.invalidate(eventTodayCountProvider);
-              Scaffold.of(context).openDrawer();
-            },
-          ),
-        ),
+        // 总览等二级页显示返回按钮（ShellRoute 内不自动生成），其余模块页仍是菜单。
+        leading: location == '/habit/overview'
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: '返回',
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/habit');
+                  }
+                },
+              )
+            : Builder(
+                builder: (context) => IconButton(
+                  icon: const Icon(Icons.menu),
+                  tooltip: '菜单',
+                  onPressed: () {
+                    ref.invalidate(countsProvider); // 打开抽屉时刷新计数
+                    ref.invalidate(taskTodoCountProvider);
+                    ref.invalidate(eventTodayCountProvider);
+                    Scaffold.of(context).openDrawer();
+                  },
+                ),
+              ),
         title: location.startsWith('/ai')
             ? const AiSessionTitle()
             : location == '/habit'
