@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, lt } from 'drizzle-orm'
+import { and, asc, eq, gt, lt, max, sql } from 'drizzle-orm'
 import { db } from '@/db/connection'
 import { fireAuditRecord } from '@/modules/audit/audit.service'
 import {
@@ -57,6 +57,14 @@ export const eventService = {
       .where(and(lt(events.startAt, to), gt(events.endAt, from)))
       .orderBy(asc(events.startAt), asc(events.createdAt))
     return rows.map(toEventEntry)
+  },
+
+  /** 轻量聚合：事件表条数 + 最新 updated_at（AI 动态快照指纹用，单条聚合查询）。 */
+  async snapshotStats(): Promise<{ count: number; updatedAt: Date | null }> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int`, updatedAt: max(events.updatedAt) })
+      .from(events)
+    return { count: row.count, updatedAt: row.updatedAt }
   },
 
   async get(input: GetEventInput): Promise<EventEntry> {

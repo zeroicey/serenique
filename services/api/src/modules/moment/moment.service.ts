@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, inArray, lt, or, type SQL, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, ilike, inArray, lt, max, or, type SQL, sql } from 'drizzle-orm'
 import { db } from '@/db/connection'
 import { fireAuditRecord } from '@/modules/audit/audit.service'
 import { blobAttachments, blobs } from '@/modules/blob/blob.schema'
@@ -209,6 +209,14 @@ export const momentService = {
 
       return toMomentEntry(row, sortAttachments(attachments), [], 0, tags)
     })
+  },
+
+  /** 轻量聚合：闪念表条数 + 最新 updated_at（AI 动态快照指纹用，单条聚合查询）。 */
+  async snapshotStats(): Promise<{ count: number; updatedAt: Date | null }> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int`, updatedAt: max(moments.updatedAt) })
+      .from(moments)
+    return { count: row.count, updatedAt: row.updatedAt }
   },
 
   async list(input: ListMomentInput): Promise<{ items: MomentEntry[]; total: number }> {

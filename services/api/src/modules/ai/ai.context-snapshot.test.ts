@@ -13,16 +13,19 @@ const {
   addDaysLocal,
   buildDynamicSnapshot,
   dueDateLabel,
+  eventsFingerprint,
   fingerprintOf,
   formatGmtOffset,
   formatLocalDate,
   formatSnapshotTime,
   habitsFingerprint,
+  momentsFingerprint,
   SNAPSHOT_QUOTAS,
   summarizeEvents,
   summarizeHabits,
   summarizeMoments,
   summarizeTasks,
+  tasksFingerprint,
   truncateText,
 } = await import('./ai.context-snapshot')
 
@@ -264,6 +267,51 @@ describe('habitsFingerprint — 习惯段指纹', () => {
       base.latestDailyUpdatedAt,
     )
     expect(day2).not.toBe(day1)
+  })
+})
+
+describe('tasksFingerprint / eventsFingerprint / momentsFingerprint — 段指纹（count + MAX(updated_at)）', () => {
+  const now = new Date(2026, 7, 19, 12, 0)
+  const late = '2026-08-19T10:00:00.000Z'
+
+  test('tasksFingerprint：跨天（数据不变、日期变化）→ 指纹失效（刷新「今天/明天到期」基准）', () => {
+    const day1 = tasksFingerprint(new Date(2026, 7, 19, 23, 59), 3, late)
+    const day2 = tasksFingerprint(new Date(2026, 7, 20, 0, 0), 3, late)
+    expect(day2).not.toBe(day1)
+  })
+
+  test('tasksFingerprint：编辑非新建最近项（count 不变、MAX(updated_at) 变）→ 指纹失效', () => {
+    const before = tasksFingerprint(now, 3, '2026-08-18T10:00:00.000Z')
+    const after = tasksFingerprint(now, 3, '2026-08-19T09:00:00.000Z')
+    expect(after).not.toBe(before)
+  })
+
+  test('eventsFingerprint：跨天窗口日期变化 → 指纹失效', () => {
+    const day1 = eventsFingerprint(new Date(2026, 7, 19, 23, 59), 2, late)
+    const day2 = eventsFingerprint(new Date(2026, 7, 20, 0, 0), 2, late)
+    expect(day2).not.toBe(day1)
+  })
+
+  test('momentsFingerprint：编辑非最新闪念（count 不变、updated_at 变）→ 指纹失效', () => {
+    const before = momentsFingerprint(2, '2026-08-18T10:00:00.000Z')
+    const after = momentsFingerprint(2, '2026-08-19T09:00:00.000Z')
+    expect(after).not.toBe(before)
+  })
+
+  test('新增一条（count 变化、首项不变）→ tasks/moments 指纹均失效', () => {
+    const a = tasksFingerprint(now, 3, late)
+    const b = tasksFingerprint(now, 4, late)
+    const c = momentsFingerprint(2, late)
+    const d = momentsFingerprint(3, late)
+    expect(b).not.toBe(a)
+    expect(d).not.toBe(c)
+  })
+
+  test('truncateText：不切断 emoji surrogate pair（码点安全）', () => {
+    // '👍' 是 {\uD83D, \uDC4D} 代理对；slice() 从中间切开会产生半个 emoji，码点截断不会。
+    const s = '好👍好近' // 4 码点
+    expect(truncateText(s, 3)).toBe('好👍好…') // 第 3 码点正好是 emoji 起始，不切断
+    expect(truncateText('abcde', 3)).toBe('abc…')
   })
 })
 

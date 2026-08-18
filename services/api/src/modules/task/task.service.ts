@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte, max, sql } from 'drizzle-orm'
 import { db } from '@/db/connection'
 import { fireAuditRecord } from '@/modules/audit/audit.service'
 import { nextCompletedAt, resolveTaskUpdate } from '@/modules/task/task.domain'
@@ -154,6 +154,14 @@ export const taskService = {
       db.select({ count: sql<number>`count(*)::int` }).from(tasks).where(where),
     ])
     return { items: items.map(toTaskEntry), total: count }
+  },
+
+  /** 轻量聚合：任务表条数 + 最新 updated_at（AI 动态快照指纹用，单条聚合查询）。 */
+  async snapshotStats(): Promise<{ count: number; updatedAt: Date | null }> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int`, updatedAt: max(tasks.updatedAt) })
+      .from(tasks)
+    return { count: row.count, updatedAt: row.updatedAt }
   },
 
   async getTask(input: GetTaskInput): Promise<TaskEntry> {

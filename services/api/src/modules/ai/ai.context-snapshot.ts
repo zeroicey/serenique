@@ -155,7 +155,9 @@ export function summarizeEvents(events: EventLike[], now: Date): string {
 export type MomentLike = { text: string; createdAt: string }
 
 export function truncateText(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text
+  // 按 Unicode 码点截断（[...text] 展开为码点），避免从 emoji 等代理对中
+  // 间截断产生乱码/半个 emoji（note 项）。
+  return [...text].length > max ? `${[...text].slice(0, max).join('')}…` : text
 }
 
 /** 最新闪念段（§6：最新 3 条，text 截断 60 字）。 */
@@ -225,6 +227,40 @@ export function habitsFingerprint(
   ])
 }
 
+/**
+ * 任务段指纹：当天日期 + todo 任务条数 + 任务表最新 updated_at。
+ * 当天日期分量保证进程跨天后「今天/明天到期」相对标签随日刷新（med 修复）；
+ * MAX(updated_at) 聚合保证编辑任意任务（含非新建最近项）也触发刷新。
+ */
+export function tasksFingerprint(
+  now: Date,
+  count: number,
+  latestUpdatedAt: string | undefined,
+): string {
+  return fingerprintOf([formatLocalDate(now), count, latestUpdatedAt])
+}
+
+/**
+ * 事件段指纹：窗口日期 + 事件条数 + 最新 updated_at。窗口日期分量保证跨天
+ * 「今天」窗口基准更新；MAX(updated_at) 聚合保证编辑任意事件也触发刷新。
+ */
+export function eventsFingerprint(
+  now: Date,
+  count: number,
+  latestUpdatedAt: string | undefined,
+): string {
+  return fingerprintOf([formatLocalDate(now), count, latestUpdatedAt])
+}
+
+/**
+ * 闪念段指纹：条数 + 最新 updated_at（闪念段文本无相对日期标签，故无日期
+ * 分量）。MAX(updated_at) 聚合保证编辑任意闪念（含非最新项，改 text 会刷新
+ * updated_at）也触发刷新。
+ */
+export function momentsFingerprint(count: number, latestUpdatedAt: string | undefined): string {
+  return fingerprintOf([count, latestUpdatedAt])
+}
+
 // ---------------------------------------------------------------------------
 // 编排：指纹缓存 + 每段降级
 // ---------------------------------------------------------------------------
@@ -290,8 +326,8 @@ export function createDefaultSources(now: Date): SnapshotSource[] {
   const tasksSource: SnapshotSource = {
     key: 'tasks',
     fingerprint: async () => {
-      const page = await taskService.listTasks({ page: 1, pageSize: 1, status: 'todo' })
-      return fingerprintOf([page.total, page.items[0]?.updatedAt])
+      const stats = await taskService.snapshotStats()
+      return tasksFingerprint(now, stats.count, stats.updatedAt?.toISOString())
     },
     load: async () => {
       const [page, groups] = await Promise.all([
@@ -311,8 +347,8 @@ export function createDefaultSources(now: Date): SnapshotSource[] {
   const eventsSource: SnapshotSource = {
     key: 'events',
     fingerprint: async () => {
-      const list = await eventService.list({ from: toIso(windowStart), to: toIso(windowEnd) })
-      return fingerprintOf([formatLocalDate(now), list.length, list[0]?.updatedAt])
+      const stats = await eventService.snapshotStats()
+      return eventsFingerprint(now, stats.count, stats.updatedAt?.toISOString())
     },
     load: async () => {
       const list = await eventService.list({ from: toIso(windowStart), to: toIso(windowEnd) })
@@ -324,8 +360,8 @@ export function createDefaultSources(now: Date): SnapshotSource[] {
   const momentsSource: SnapshotSource = {
     key: 'moments',
     fingerprint: async () => {
-      const page = await momentService.list({ page: 1, pageSize: 1 })
-      return fingerprintOf([page.total, page.items[0]?.createdAt])
+      const stats = await momentService.snapshotStats()
+      return momentsFingerprint(stats.count, stats.updatedAt?.toISOString())
     },
     load: async () => {
       const page = await momentService.list({ page: 1, pageSize: SNAPSHOT_QUOTAS.maxMoments })
@@ -337,11 +373,16 @@ export function createDefaultSources(now: Date): SnapshotSource[] {
   const habitsSource: SnapshotSource = {
     key: 'habits',
     fingerprint: async () => {
-      const [habits, latestDaily] = await Promise.all([
-        habitService.listHabits(),
+      const [stats, latestDaily] = await Promise.all([
+        habitService.snapshotStats(),
         habitService.latestDailyUpdatedAt(),
       ])
-      return habitsFingerprint(now, habits.length, habits[0]?.updatedAt, latestDaily?.toISOString())
+      return habitsFingerprint(
+        now,
+        stats.count,
+        stats.updatedAt?.toISOString(),
+        latestDaily?.toISOString(),
+      )
     },
     load: async () => {
       const overview = await habitService.overview({ days: SNAPSHOT_QUOTAS.habitOverviewDays })

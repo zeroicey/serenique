@@ -12,7 +12,8 @@ import { logger } from '@/shared/logger'
 // get：无记录返回空画像（200，前端首次即空框，不 404——单行资源惯例）。
 // upsert：固定主键 INSERT ... ON CONFLICT 覆盖（PUT 幂等）。
 // getUserProfileText：供 ai.service 的 before_agent_start 钩子组装 L2 段；
-//   按 updatedAt 缓存（进程级单例），画像未编辑则不重读 DB（不参与每轮刷新）。
+//   按 updatedAt 判断——画像未编辑（updatedAt 未变）则复用缓存文本、不重建
+//   （轻量读 updatedAt，非每轮全量），编辑后缓存失效。
 // ---------------------------------------------------------------------------
 
 /** L2 段缓存：画像未编辑时复用文本，避免每轮读 DB。 */
@@ -43,7 +44,8 @@ export const aiMemoryService = {
 
   /**
    * 用户画像 → 直接可注入的 L2 段文本（含标题；空画像返回 ''）。按 updatedAt
-   * 缓存：画像未编辑（updatedAt 未变）就直接复用，不重读 DB。
+   * 判断：画像未编辑（updatedAt 与缓存一致）就复用缓存文本、不重建；编辑后
+   * （updatedAt 变）重建并刷新缓存。每次仍轻量读一次 updatedAt 作判断。
    */
   async getUserProfileText(): Promise<string> {
     const entry = await aiMemoryService.get()

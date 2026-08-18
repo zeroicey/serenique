@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, max } from 'drizzle-orm'
+import { and, asc, eq, gte, lte, max, sql } from 'drizzle-orm'
 import { db } from '@/db/connection'
 import { fireAuditRecord } from '@/modules/audit/audit.service'
 import type { OverviewBody } from '@/modules/habit/habit.domain'
@@ -52,6 +52,14 @@ export const habitService = {
       })
       .returning()
     return toHabitEntry(row)
+  },
+
+  /** 轻量聚合：习惯表条数 + 最新 updated_at（AI 动态快照指纹用，单条聚合查询）。 */
+  async snapshotStats(): Promise<{ count: number; updatedAt: Date | null }> {
+    const [row] = await db
+      .select({ count: sql<number>`count(*)::int`, updatedAt: max(habits.updatedAt) })
+      .from(habits)
+    return { count: row.count, updatedAt: row.updatedAt }
   },
 
   async listHabits(): Promise<HabitEntry[]> {
