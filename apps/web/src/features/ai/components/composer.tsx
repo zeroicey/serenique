@@ -1,19 +1,40 @@
 import { Send, Square } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useAiStore } from '@/features/ai/store/ai-store'
 
 // 输入区：一个输入框 + 一个按钮。
 // - 空闲：按钮「发送」，Enter 发送（Shift+Enter 换行，IME 组合键不触发）。
 // - AI 回复中：输入框禁用（不打断、不排队，一条对一条），按钮变停止图标，点击中止。
+// - 斜杠命令（对齐 Hermes / 需求 §3.2）：/new /compact 拦截转 WS（不进模型）；
+//   未知 `/xxx` 本地 toast 提示且不发送（留输入让用户改）。
 export function Composer() {
   const busy = useAiStore((s) => s.busy)
   const send = useAiStore((s) => s.send)
   const abort = useAiStore((s) => s.abort)
+  const newSession = useAiStore((s) => s.newSession)
+  const compactSession = useAiStore((s) => s.compact)
   const [text, setText] = useState('')
 
   function submit() {
-    if (busy || !text.trim()) return
-    send(text.trim())
+    if (busy) return
+    const t = text.trim()
+    if (!t) return
+    if (t === '/new') {
+      newSession()
+      setText('')
+      return
+    }
+    if (t === '/compact') {
+      compactSession()
+      setText('')
+      return
+    }
+    if (t.startsWith('/')) {
+      toast.error('未知命令')
+      return // 保留输入，用户可删改
+    }
+    send(t)
     setText('')
   }
 

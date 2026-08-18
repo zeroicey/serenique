@@ -188,4 +188,39 @@ describe('MessageList', () => {
     expect(screen.getByText('更早的问题')).toBeTruthy()
     expect(screen.getByText('深层思考')).toBeTruthy()
   })
+
+  test('渲染派生边界 marker（kind=system）：「已开启新会话」', () => {
+    useAiStore.setState({
+      messages: [
+        { kind: 'system', text: '已开启新会话', thinking: '', toolCalls: [] },
+        { role: 'user', text: '新问题', thinking: '', toolCalls: [] },
+      ],
+      activeTurn: null,
+    })
+    render(<MessageList />)
+    expect(screen.getByText('已开启新会话')).toBeTruthy()
+  })
+
+  test('压缩摘要（kind=compaction）默认折叠，点击展开 detail', async () => {
+    const user = userEvent.setup()
+    useAiStore.setState({
+      messages: [
+        {
+          kind: 'compaction',
+          text: '已压缩早期对话',
+          detail: '摘要内容',
+          thinking: '',
+          toolCalls: [],
+        },
+        { role: 'user', text: '最新', thinking: '', toolCalls: [] },
+      ],
+      activeTurn: null,
+    })
+    render(<MessageList />)
+    // 默认折叠：固定文案可见、摘要内容不可见
+    expect(screen.getByText('已压缩早期对话')).toBeTruthy()
+    expect(screen.queryByText('摘要内容')).toBeNull()
+    await user.click(screen.getByText('已压缩早期对话'))
+    expect(screen.getByText('摘要内容')).toBeTruthy()
+  })
 })

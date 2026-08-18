@@ -163,6 +163,8 @@ void main() {
       hasMoreMessages: false,
       loadingMore: false,
       totalMessages: 0,
+      compacting: false,
+      resyncTick: 0,
     );
 
     // connecting：断线重连期间 → 细进度条指示

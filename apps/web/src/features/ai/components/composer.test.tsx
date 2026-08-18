@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, test } from 'vitest'
+import { toast } from 'sonner'
+import { describe, expect, test, vi } from 'vitest'
 import { useAiStore } from '@/features/ai/store/ai-store'
 import { Composer } from './composer'
 
@@ -75,5 +76,66 @@ describe('Composer', () => {
       isComposing: true,
     })
     expect(sent).toBeNull()
+  })
+
+  test('/new 触发 newSession 并清空输入（不进模型）', () => {
+    let newCalled = false
+    let sent: string | null = null
+    useAiStore.setState({
+      busy: false,
+      newSession: () => {
+        newCalled = true
+      },
+      send: (t: string) => {
+        sent = t
+      },
+    })
+    render(<Composer />)
+    const input = screen.getByPlaceholderText(/输入消息/) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '/new' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(newCalled).toBe(true)
+    expect(sent).toBeNull()
+    expect(input.value).toBe('')
+  })
+
+  test('/compact 触发 compact 并清空输入（不进模型）', () => {
+    let compactCalled = false
+    let sent: string | null = null
+    useAiStore.setState({
+      busy: false,
+      compact: () => {
+        compactCalled = true
+      },
+      send: (t: string) => {
+        sent = t
+      },
+    })
+    render(<Composer />)
+    const input = screen.getByPlaceholderText(/输入消息/) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '/compact' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(compactCalled).toBe(true)
+    expect(sent).toBeNull()
+    expect(input.value).toBe('')
+  })
+
+  test('未知斜杠命令 toast 提示未知命令、不发送、保留输入', () => {
+    const error = vi.spyOn(toast, 'error').mockImplementation(() => '')
+    let sent: string | null = null
+    useAiStore.setState({
+      busy: false,
+      send: (t: string) => {
+        sent = t
+      },
+    })
+    render(<Composer />)
+    const input = screen.getByPlaceholderText(/输入消息/) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '/foo' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(sent).toBeNull()
+    expect(error).toHaveBeenCalledWith('未知命令')
+    expect(input.value).toBe('/foo')
+    error.mockRestore()
   })
 })

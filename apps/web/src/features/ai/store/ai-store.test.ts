@@ -85,6 +85,7 @@ describe('ai-store', () => {
       text: '帮我创建任务',
       thinking: '',
       toolCalls: [],
+      optimistic: true, // 本地标记：链延续 marker 插到它之前（评审建议 1）
     })
   })
 
@@ -301,5 +302,96 @@ describe('ai-store', () => {
     const sentBefore = ws.sent.length
     useAiStore.getState().loadMore()
     expect(ws.sent.length).toBe(sentBefore)
+  })
+
+  test('session_switched chainContinuation：保留时间线、追加 system marker、不重置分页基线', () => {
+    useAiStore.setState({
+      currentSessionId: 's1',
+      model: 'deepseek/v4',
+      messages: [{ role: 'user', text: '旧消息', thinking: '', toolCalls: [] }],
+      totalMessages: 30,
+      hasMoreMessages: true,
+      oldestHeldIndex: 20,
+    })
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    ws.emit({
+      type: 'session_switched',
+      sessionId: 's2',
+      model: 'deepseek/v4',
+      messages: [],
+      totalMessageCount: 0,
+      hasMore: false,
+      chainContinuation: true,
+      reason: 'auto_timeout',
+      marker: '已开启新会话',
+    })
+    const s = useAiStore.getState()
+    // 切到新链尾 + 追加 marker
+    expect(s.currentSessionId).toBe('s2')
+    expect(s.messages).toHaveLength(2)
+    expect(s.messages[0]).toMatchObject({ role: 'user', text: '旧消息' })
+    expect(s.messages[1]).toMatchObject({ kind: 'system', text: '已开启新会话' })
+    // 链延续不重置分页基线/元信息（后端只发 marker，分页不携带新值）
+    expect(s.totalMessages).toBe(30)
+    expect(s.hasMoreMessages).toBe(true)
+    expect(s.oldestHeldIndex).toBe(20)
+  })
+
+  test('session_compacted：以重同步尾页 + 新 anchor 重建分页基线（含压缩摘要）', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    useAiStore.setState({
+      currentSessionId: 's1',
+      messages: [{ role: 'user', text: '旧消息', thinking: '', toolCalls: [] }],
+      totalMessages: 50,
+      hasMoreMessages: true,
+      oldestHeldIndex: 30,
+    })
+    ws.emit({
+      type: 'session_compacted',
+      sessionId: 's1',
+      messages: [
+        {
+          kind: 'compaction',
+          text: '已压缩早期对话',
+          detail: '摘要内容',
+          thinking: '',
+          toolCalls: [],
+        },
+        { role: 'user', text: '最新', thinking: '', toolCalls: [] },
+      ],
+      totalMessageCount: 12,
+      hasMore: false,
+      anchor: 10,
+    })
+    const s = useAiStore.getState()
+    expect(s.messages).toHaveLength(2)
+    expect(s.messages[0]).toMatchObject({ kind: 'compaction', detail: '摘要内容' })
+    expect(s.messages[1]).toMatchObject({ role: 'user', text: '最新' })
+    expect(s.oldestHeldIndex).toBe(10)
+    expect(s.totalMessages).toBe(12)
+    expect(s.hasMoreMessages).toBe(false)
+    expect(s.loadingMore).toBe(false)
+  })
+
+  test('compaction_start 置位 compacting，compaction_end 复位', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    ws.emit({ type: 'compaction_start', reason: 'manual' })
+    expect(useAiStore.getState().compacting).toBe(true)
+    ws.emit({ type: 'compaction_end', reason: 'manual', aborted: false, willRetry: false })
+    expect(useAiStore.getState().compacting).toBe(false)
+  })
+
+  test('compact action 发送 c2s compact', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    useAiStore.getState().compact()
+    expect(JSON.parse(ws.sent[ws.sent.length - 1])).toEqual({ type: 'compact' })
   })
 })

@@ -25,8 +25,15 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
     final notifier = ref.read(aiControllerProvider.notifier);
     final text = _input.text.trim();
     if (text.isEmpty || ref.read(aiControllerProvider).busy) return;
-    notifier.send(text);
-    _input.clear();
+    // 斜杠命令拦截在 controller.sendInput（/new /compact → 命令；未知 → false）。
+    final consumed = notifier.sendInput(text);
+    if (consumed) {
+      _input.clear();
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('未知命令，可用：/new /compact')));
+    }
   }
 
   @override
@@ -59,8 +66,10 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                 ),
               ),
             ),
@@ -69,13 +78,15 @@ class _ComposerBarState extends ConsumerState<ComposerBar> {
                 ? IconButton.filled(
                     tooltip: '停止',
                     icon: const Icon(Icons.stop, size: 20),
-                    onPressed: () => ref.read(aiControllerProvider.notifier).abort(),
+                    onPressed: () =>
+                        ref.read(aiControllerProvider.notifier).abort(),
                   )
                 : IconButton.filled(
                     tooltip: '发送',
                     icon: const Icon(Icons.send, size: 20),
-                    onPressed:
-                        busy || status != AiConnStatus.online ? null : _send,
+                    onPressed: busy || status != AiConnStatus.online
+                        ? null
+                        : _send,
                   ),
           ],
         ),

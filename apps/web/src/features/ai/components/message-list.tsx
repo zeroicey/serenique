@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Streamdown } from 'streamdown'
 import 'streamdown/styles.css'
 import { useAiStore } from '@/features/ai/store/ai-store'
@@ -6,13 +6,70 @@ import { ThinkingBlock } from './thinking-block'
 import { ToolCard } from './tool-card'
 import { TurnView } from './turn-view'
 
+// 会话边界分隔条：派生「已开启新会话」marker（kind='system'，评审 S4）。
+function SystemMarker({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 py-1 text-center text-xs text-muted-foreground">
+      <div className="h-px flex-1 bg-border" />
+      <span>{text}</span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  )
+}
+
+// 压缩摘要项：真实压缩摘要（kind='compaction'），默认折叠，点击展开 detail（summary）。
+// 独立组件承载自身展开态（避免在 map 内使用 hook）。
+function CompactionItem({ text, detail }: { text: string; detail?: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+      <button
+        type="button"
+        className="flex w-full items-center gap-1"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span>{text}</span>
+        {detail ? <span className="ml-auto">{open ? '收起摘要' : '展开摘要'}</span> : null}
+      </button>
+      {open && detail ? <div className="mt-2 whitespace-pre-wrap">{detail}</div> : null}
+    </div>
+  )
+}
+
 export function MessageList() {
   const messages = useAiStore((s) => s.messages)
   const activeTurn = useAiStore((s) => s.activeTurn)
   const hasMoreMessages = useAiStore((s) => s.hasMoreMessages)
   const loadingMore = useAiStore((s) => s.loadingMore)
   const oldestHeldIndex = useAiStore((s) => s.oldestHeldIndex)
+  const compactionSummary = useAiStore((s) => s.compactionSummary)
+  const compactionTailStart = useAiStore((s) => s.compactionTailStart)
   const loadMore = useAiStore((s) => s.loadMore)
+
+  // 单条消息渲染（历史已完整：静态渲染，不动画）。kind 分支优先：
+  // 派生边界 marker / 压缩摘要独立渲染，其余按 role 二分支。
+  const renderMessage = (m: (typeof messages)[number]) => {
+    if (m.kind === 'system') return <SystemMarker text={m.text} />
+    if (m.kind === 'compaction') return <CompactionItem text={m.text} detail={m.detail} />
+    if (m.role === 'user') {
+      return (
+        <div className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right">
+          {m.text}
+        </div>
+      )
+    }
+    return (
+      <div className="flex flex-col gap-1">
+        <ThinkingBlock text={m.thinking} />
+        <div className="break-words">
+          <Streamdown isAnimating={false}>{m.text}</Streamdown>
+        </div>
+        {m.toolCalls.map((tc) => (
+          <ToolCard key={tc.id} card={{ ...tc, running: false }} />
+        ))}
+      </div>
+    )
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -80,28 +137,31 @@ export function MessageList() {
           </div>
         )}
         {/* 消息 key = oldestHeldIndex + i：prepend 历史后已持有消息的 key 不变，
-        避免按索引 key={i} 重挂载导致 ThinkingBlock/ToolCard 的展开态被重置。 */}
-        {messages.map((m, i) =>
-          m.role === 'user' ? (
-            <div
-              key={oldestHeldIndex + i}
-              className="self-end max-w-[85%] break-words whitespace-pre-wrap text-right"
-            >
-              {m.text}
-            </div>
-          ) : (
-            <div key={oldestHeldIndex + i} className="flex flex-col gap-1">
-              <ThinkingBlock text={m.thinking} />
-              <div className="break-words">
-                {/* 历史消息已完整：静态渲染，不动画 */}
-                <Streamdown isAnimating={false}>{m.text}</Streamdown>
-              </div>
-              {m.toolCalls.map((tc) => (
-                <ToolCard key={tc.id} card={{ ...tc, running: false }} />
-              ))}
-            </div>
-          ),
-        )}
+        避免按索引 key={i} 重挂载导致 ThinkingBlock/ToolCard 的展开态被重置。
+        压缩摘要卡片（评审 B2）：渲染在可见窗口的尾页起始处（compactionTailStart），
+        向上滚动 prepend 更早批次后卡片仍保持位于更早批次之后。 */}
+        {compactionSummary
+          ? (() => {
+              const start = Math.min(compactionTailStart, messages.length)
+              const renderBefore = (m: (typeof messages)[number], j: number) => (
+                <div key={oldestHeldIndex + j}>{renderMessage(m)}</div>
+              )
+              const renderTail = (m: (typeof messages)[number], j: number) => (
+                <div key={oldestHeldIndex + start + j}>{renderMessage(m)}</div>
+              )
+              return (
+                <>
+                  {messages.slice(0, start).map(renderBefore)}
+                  <CompactionItem
+                    key="compaction-snapshot"
+                    text="已压缩早期对话"
+                    detail={compactionSummary}
+                  />
+                  {messages.slice(start).map(renderTail)}
+                </>
+              )
+            })()
+          : messages.map((m, i) => <div key={oldestHeldIndex + i}>{renderMessage(m)}</div>)}
         {activeTurn && <TurnView turn={activeTurn} />}
       </div>
       <div ref={bottomRef} />

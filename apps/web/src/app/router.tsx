@@ -4,7 +4,6 @@ import AppLayout from '@/app/layout/app-layout'
 import { PageLoading } from '@/app/layout/page-loading'
 import { ModuleTitleNav } from '@/app/pages/module-title-nav'
 import { AiNav } from '@/features/ai/components/ai-nav'
-import { SessionSwitcher } from '@/features/ai/components/session-switcher'
 import { AuditNav } from '@/features/audit/components/audit-nav'
 import { AuthGuard } from '@/features/auth/components/auth-guard'
 import { EventNav } from '@/features/event/components/event-nav'
@@ -72,13 +71,12 @@ const router = createBrowserRouter([
             handle: { nav: <AuditNav /> },
           },
           // 宁序（AI 助手）已接入真实页面；习惯 / 素材库仍为占位模块（开发中）。
-          // header：左侧标题+在线点（AiNav），右侧会话切换浮动下拉（SessionSwitcher）。
+          // header：左侧标题+在线点（AiNav）。单一对话流无会话切换 UI。
           {
             path: 'ai',
             element: lazyPage(() => import('@/features/ai/pages/ai-page')),
             handle: {
               nav: <AiNav />,
-              headerRight: <SessionSwitcher />,
             },
           },
           {

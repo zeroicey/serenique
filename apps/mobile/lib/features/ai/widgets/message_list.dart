@@ -2,6 +2,7 @@
 // 向上滚动到顶部时懒加载更早的消息（prepend），保持视觉滚动位置不跳动。
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../ai_models.dart';
 import '../ai_providers.dart';
 import 'assistant_message.dart';
 
@@ -76,6 +77,12 @@ class _MessageListState extends ConsumerState<MessageList> {
     final loadingMore = ref.watch(
       aiControllerProvider.select((s) => s.loadingMore),
     );
+    final compactionSummary = ref.watch(
+      aiControllerProvider.select((s) => s.compactionSummary),
+    );
+    final compactionTailStart = ref.watch(
+      aiControllerProvider.select((s) => s.compactionTailStart),
+    );
     // activeTurn 实例在轮次内保持不变（就地更新字段），仅 watch text 才能在
     // 正文出现时触发「AI 正在思考…」→ MarkdownStream 的重建。值本身未被使用。
     ref.watch(aiControllerProvider.select((s) => s.activeTurn?.text));
@@ -110,13 +117,24 @@ class _MessageListState extends ConsumerState<MessageList> {
         if (!_appendingOlder) _scrollToBottom();
       },
     );
+    // 分页重同步（会话压缩，评审 B1）：重建了消息窗口 → 滚到底部而非当作
+    // prepend 补偿（_appendingOlder 置 false，跳过上方 prepend 的补偿逻辑）。
+    ref.listen(aiControllerProvider.select((s) => s.resyncTick), (prev, next) {
+      if (prev == null || next == prev) return;
+      _appendingOlder = false;
+      _scrollToBottom();
+    });
 
     final scheme = Theme.of(context).colorScheme;
 
-    // 计数：有更多历史时头部多一个加载指示项
+    // 计数：有更多历史时头部多一个加载指示项；压缩摘要卡片多一项（评审 B2）
     final hasHeader = hasMoreMessages;
-    final itemCount =
-        messages.length + (activeTurn != null ? 1 : 0) + (hasHeader ? 1 : 0);
+    final hasComp =
+        compactionSummary != null && compactionTailStart <= messages.length;
+    final itemCount = messages.length +
+        (activeTurn != null ? 1 : 0) +
+        (hasHeader ? 1 : 0) +
+        (hasComp ? 1 : 0);
 
     return ListView.builder(
       controller: _scroll,
@@ -143,7 +161,25 @@ class _MessageListState extends ConsumerState<MessageList> {
             ),
           );
         }
-        final msgIndex = hasHeader ? index - 1 : index;
+        final base = hasHeader ? index - 1 : index;
+        // 压缩摘要卡（评审 B2）：插在可见窗口的 compactionTailStart 处（更早批次
+        // 之后、保留消息之前），可展开展示压缩摘要，不参与 messages 数组/分页计数。
+        if (hasComp && base == compactionTailStart) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: CompactionSummaryCard(
+              message: RenderMessage(
+                role: 'assistant',
+                text: '已压缩早期对话',
+                thinking: '',
+                toolCalls: const [],
+                kind: 'compaction',
+                detail: compactionSummary,
+              ),
+            ),
+          );
+        }
+        final msgIndex = base - (hasComp && base > compactionTailStart ? 1 : 0);
         if (activeTurn != null && msgIndex == messages.length) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -151,6 +187,34 @@ class _MessageListState extends ConsumerState<MessageList> {
           );
         }
         final m = messages[msgIndex];
+        // 系统边界 marker（链延续的「已开启新会话」）与压缩摘要：不走左右气泡。
+        if (m.isSystemMarker) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                Expanded(child: Divider(color: scheme.outlineVariant)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    m.text,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Expanded(child: Divider(color: scheme.outlineVariant)),
+              ],
+            ),
+          );
+        }
+        if (m.isCompactionSummary) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: CompactionSummaryCard(message: m),
+          );
+        }
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: m.role == 'user'
@@ -175,6 +239,76 @@ class _MessageListState extends ConsumerState<MessageList> {
                 ),
         );
       },
+    );
+  }
+}
+
+/// 可折叠的「已压缩早期对话」摘要卡：默认折叠，点击展开 detail（kind='compaction'）。
+class CompactionSummaryCard extends StatefulWidget {
+  const CompactionSummaryCard({super.key, required this.message});
+  final RenderMessage message;
+
+  @override
+  State<CompactionSummaryCard> createState() => _CompactionSummaryCardState();
+}
+
+class _CompactionSummaryCardState extends State<CompactionSummaryCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final summary = widget.message.detail?.isNotEmpty == true
+        ? widget.message.detail!
+        : widget.message.text;
+    return Material(
+      color: scheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.compress,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '已压缩早期对话',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+              if (_expanded && summary.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    summary,
+                    style: const TextStyle(fontSize: 13, height: 1.4),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

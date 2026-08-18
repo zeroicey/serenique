@@ -7,19 +7,24 @@ class SessionItem {
     required this.name,
     required this.messageCount,
     required this.modified,
+    this.parentSessionPath,
   });
 
   factory SessionItem.fromJson(Map<String, Object?> json) => SessionItem(
-        id: json['id'] as String,
-        name: (json['name'] as String?) ?? '',
-        messageCount: (json['messageCount'] as num?)?.toInt() ?? 0,
-        modified: (json['modified'] as String?) ?? '',
-      );
+    id: json['id'] as String,
+    name: (json['name'] as String?) ?? '',
+    messageCount: (json['messageCount'] as num?)?.toInt() ?? 0,
+    modified: (json['modified'] as String?) ?? '',
+    parentSessionPath: json['parentSessionPath'] as String?,
+  );
 
   final String id;
   final String name;
   final int messageCount;
   final String modified;
+
+  /// 链上父会话文件路径（自动会话链；单一对话流不展示，保留供调试）。
+  final String? parentSessionPath;
 }
 
 class RenderToolCall {
@@ -44,26 +49,37 @@ class RenderMessage {
     required this.text,
     required this.thinking,
     required this.toolCalls,
+    this.kind,
+    this.detail,
+    this.optimistic = false,
   });
 
   /// 与后端 toRenderMessages 输出对齐；role 取 'user' | 'assistant'。
+  /// kind 区分消息形态（评审 S4）：普通对话无 kind；派生边界 marker =
+  /// 'system'（自动切换/手动 /new 的链段落分隔）；真实压缩摘要 =
+  /// 'compaction'（detail 为可展开的摘要内容）。
   factory RenderMessage.fromJson(Map<String, Object?> json) {
     final toolCalls = <RenderToolCall>[];
     for (final raw in (json['toolCalls'] as List? ?? const [])) {
       if (raw is! Map<String, Object?>) continue;
-      toolCalls.add(RenderToolCall(
-        id: raw['id'] as String? ?? '',
-        name: raw['name'] as String? ?? '',
-        args: raw['args'],
-        result: raw['result'] as String? ?? '',
-        isError: raw['isError'] as bool? ?? false,
-      ));
+      toolCalls.add(
+        RenderToolCall(
+          id: raw['id'] as String? ?? '',
+          name: raw['name'] as String? ?? '',
+          args: raw['args'],
+          result: raw['result'] as String? ?? '',
+          isError: raw['isError'] as bool? ?? false,
+        ),
+      );
     }
     return RenderMessage(
       role: json['role'] as String? ?? 'assistant',
       text: json['text'] as String? ?? '',
       thinking: json['thinking'] as String? ?? '',
       toolCalls: toolCalls,
+      kind: json['kind'] as String?,
+      detail: json['detail'] as String?,
+      // optimistic 是本地标记（不进协议/不落库）：fromJson 恒为 false。
     );
   }
 
@@ -71,6 +87,14 @@ class RenderMessage {
   final String text;
   final String thinking;
   final List<RenderToolCall> toolCalls;
+  final String? kind;
+  final String? detail;
+
+  /// 本地专用（不进协议、不落库）：标记本轮乐观追加的 userMsg，链延续 marker 插到它之前。
+  final bool optimistic;
+
+  bool get isSystemMarker => kind == 'system';
+  bool get isCompactionSummary => kind == 'compaction';
 }
 
 class ToolCardState {

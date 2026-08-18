@@ -63,6 +63,14 @@ final class ClientLoadMore extends ClientMessage {
   };
 }
 
+/// 手动压缩当前会话（前端 /compact 斜杠命令 → c2s）。服务端 session.compact()；
+/// 进度经 compaction_start/compaction_end（s2c）回显。
+final class ClientCompact extends ClientMessage {
+  const ClientCompact();
+  @override
+  Map<String, Object?> toJson() => {'type': 'compact'};
+}
+
 sealed class ServerMessage {
   const ServerMessage();
 
@@ -92,7 +100,43 @@ sealed class ServerMessage {
           (json['messages'] as List? ?? const []).toList(),
           totalMessageCount: (json['totalMessageCount'] as num?)?.toInt() ?? 0,
           hasMore: (json['hasMore'] as bool?) ?? false,
+          chainContinuation: (json['chainContinuation'] as bool?) ?? false,
+          reason: json['reason'] as String?,
+          marker: json['marker'] as String?,
         );
+      case 'session_compacted':
+        return SessionCompactedMessage(
+          json['sessionId'] as String,
+          (json['messages'] as List? ?? const []).toList(),
+          totalMessageCount: (json['totalMessageCount'] as num?)?.toInt() ?? 0,
+          hasMore: (json['hasMore'] as bool?) ?? false,
+          anchor: (json['anchor'] as num?)?.toInt() ?? 0,
+          summary: json['summary'] as String?,
+        );
+      case 'compaction_start':
+        return CompactionStartMessage(
+          (json['reason'] as String?) ?? 'threshold',
+        );
+      case 'compaction_end':
+        {
+          final rawResult = json['result'];
+          final result = rawResult is Map<String, Object?>
+              ? CompactionResult(
+                  summary: (rawResult['summary'] as String?) ?? '',
+                  tokensBefore:
+                      (rawResult['tokensBefore'] as num?)?.toInt() ?? 0,
+                  firstKeptEntryId:
+                      (rawResult['firstKeptEntryId'] as String?) ?? '',
+                )
+              : null;
+          return CompactionEndMessage(
+            (json['reason'] as String?) ?? 'threshold',
+            result: result,
+            aborted: (json['aborted'] as bool?) ?? false,
+            willRetry: (json['willRetry'] as bool?) ?? false,
+            errorMessage: json['errorMessage'] as String?,
+          );
+        }
       case 'session_deleted':
         return SessionDeletedMessage(json['sessionId'] as String);
       case 'messages_loaded':
@@ -174,12 +218,81 @@ final class SessionSwitchedMessage extends ServerMessage {
     this.messages, {
     required this.totalMessageCount,
     required this.hasMore,
+    this.chainContinuation = false,
+    this.reason,
+    this.marker,
   });
   final String sessionId;
   final String model;
   final List<Object?> messages;
   final int totalMessageCount;
   final bool hasMore;
+
+  /// 链延续语义（评审 B2）：切到链尾新会话（自动 24h / 手动 /new）。为 true 时
+  /// 前端**保留**已加载时间线，仅按 [marker] 追加一条系统提示，不重置 messages/anchor。
+  final bool chainContinuation;
+
+  /// 链延续原因：'auto_timeout' | 'manual'。
+  final String? reason;
+
+  /// 链延续时新增会话边界的 marker 文案（如「已开启新会话」），非链延续时为空。
+  final String? marker;
+}
+
+/// 压缩完成后的分页基线重同步（评审 B1）：会话内消息折叠为摘要，合并流 total
+/// 缩小、旧 anchor 失效 → 服务端重算尾页+total+新 anchor 下发。前端以本负载
+/// 重建分页基线（更早历史已被摘要替代）。
+final class SessionCompactedMessage extends ServerMessage {
+  const SessionCompactedMessage(
+    this.sessionId,
+    this.messages, {
+    required this.totalMessageCount,
+    required this.hasMore,
+    required this.anchor,
+    this.summary,
+  });
+  final String sessionId;
+  final List<Object?> messages;
+  final int totalMessageCount;
+  final bool hasMore;
+  final int anchor;
+
+  /// 压缩摘要文本（评审 B2）：前端将其渲染为可见窗口的「已压缩早期对话」可展开卡片。
+  final String? summary;
+}
+
+/// 压缩开始（reason：manual|threshold|overflow）。
+final class CompactionStartMessage extends ServerMessage {
+  const CompactionStartMessage(this.reason);
+  final String reason;
+}
+
+/// 压缩结果（reason：manual|threshold|overflow；result 为压缩摘要）。
+final class CompactionEndMessage extends ServerMessage {
+  const CompactionEndMessage(
+    this.reason, {
+    this.result,
+    required this.aborted,
+    required this.willRetry,
+    this.errorMessage,
+  });
+  final String reason;
+  final CompactionResult? result;
+  final bool aborted;
+  final bool willRetry;
+  final String? errorMessage;
+}
+
+/// compaction_end.result：压缩摘要负载。
+class CompactionResult {
+  const CompactionResult({
+    required this.summary,
+    required this.tokensBefore,
+    required this.firstKeptEntryId,
+  });
+  final String summary;
+  final int tokensBefore;
+  final String firstKeptEntryId;
 }
 
 final class SessionDeletedMessage extends ServerMessage {

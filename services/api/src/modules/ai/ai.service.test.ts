@@ -15,10 +15,17 @@ process.env.BLOB_ROOT = '/tmp/serenique-ai-service-test'
 const {
   toRenderMessages,
   tailRenderMessages,
+  tailRenderStream,
   nextOlderPage,
+  nextOlderPageFromStream,
   sessionPagination,
+  streamPagination,
+  insertSessionMarkers,
+  isSessionIdle,
   INITIAL_PAGE_SIZE,
 } = await import('./ai.service')
+
+import type { RenderMessage } from './ai.service'
 
 describe('ai.service', () => {
   test('toRenderMessages 关联 toolResult 到 toolCall', () => {
@@ -365,5 +372,203 @@ describe('分页状态机（sessionPagination → nextOlderPage 多次翻页 →
     expect(new Set(texts).size).toBe(60)
     expect(held[0].text).toBe('user-0')
     expect(held[59].text).toBe('assistant-29')
+  })
+})
+
+describe('compactionSummary 渲染（评审 B1/S4：压缩摘要 → kind=compaction）', () => {
+  test('压缩摘要消息渲染为可展开的 compaction marker', () => {
+    const messages = [
+      {
+        role: 'compactionSummary',
+        summary: '你完成了周末旅行安排',
+        tokensBefore: 12000,
+        timestamp: 1000,
+      },
+    ] as unknown as AgentMessage[]
+
+    const out = toRenderMessages(messages)
+    expect(out).toHaveLength(1)
+    expect(out[0].kind).toBe('compaction')
+    expect(out[0].text).toBe('已压缩早期对话')
+    expect(out[0].detail).toBe('你完成了周末旅行安排')
+  })
+
+  test('压缩摘要与后续消息共存、顺序保留', () => {
+    const messages = [
+      { role: 'compactionSummary', summary: '摘要', tokensBefore: 100, timestamp: 1 },
+      { role: 'user', content: '继续', timestamp: 2 },
+    ] as unknown as AgentMessage[]
+    const out = toRenderMessages(messages)
+    expect(out).toHaveLength(2)
+    expect(out[0].kind).toBe('compaction')
+    expect(out[1]).toMatchObject({ role: 'user', text: '继续' })
+  })
+})
+
+describe('insertSessionMarkers（合并流边界 marker）', () => {
+  function seg(prefix: string, n: number): RenderMessage[] {
+    return Array.from({ length: n }, (_, i) => ({
+      role: 'user' as const,
+      text: `${prefix}-${i}`,
+      thinking: '',
+      toolCalls: [],
+    }))
+  }
+
+  test('单段不插 marker', () => {
+    const stream = insertSessionMarkers([seg('a', 2)])
+    expect(stream).toHaveLength(2)
+    expect(stream.some((m) => m.kind === 'system')).toBe(false)
+  })
+
+  test('多段：从第 2 段起每段前插 marker，marker 计入下标', () => {
+    const stream = insertSessionMarkers([seg('a', 2), seg('b', 3), seg('c', 1)])
+    // [a0,a1] + marker + [b0,b1,b2] + marker + [c0] = 8
+    expect(stream).toHaveLength(8)
+    expect(stream[2]).toMatchObject({ kind: 'system', text: '已开启新会话' })
+    expect(stream[3].text).toBe('b-0')
+    expect(stream[6]).toMatchObject({ kind: 'system', text: '已开启新会话' })
+    expect(stream[7].text).toBe('c-0')
+  })
+})
+
+describe('合并流分页（streamPagination / nextOlderPageFromStream / tailRenderStream）', () => {
+  function seg(prefix: string, n: number): RenderMessage[] {
+    return Array.from({ length: n }, (_, i) => ({
+      role: 'user' as const,
+      text: `${prefix}-${i}`,
+      thinking: '',
+      toolCalls: [],
+    }))
+  }
+
+  test('初始尾部跨会话且 marker 计入 total', () => {
+    // 合并流 = [s0×2, marker, s1×40]，total=43；尾部 20 条 = s1[20..39]
+    const stream = insertSessionMarkers([seg('s0', 2), seg('s1', 40)])
+    expect(stream).toHaveLength(43)
+    const page = streamPagination(stream)
+    expect(page.total).toBe(43)
+    expect(page.messages).toHaveLength(20)
+    expect(page.hasMore).toBe(true)
+    expect(page.anchor).toBe(23)
+    expect(page.messages[0].text).toBe('s1-20')
+    expect(page.messages[19].text).toBe('s1-39')
+  })
+
+  test('tailRenderStream 从给定 offset 往前取更早批次', () => {
+    const stream = insertSessionMarkers([seg('s0', 2), seg('s1', 40)])
+    const res = tailRenderStream(stream, 30, 20) // 已发 20，再取 30
+    expect(res.total).toBe(43)
+    expect(res.messages).toHaveLength(23) // 剩 [0..23) = s0×2 + marker + s1[0..19]
+    expect(res.messages[2]).toMatchObject({ kind: 'system', text: '已开启新会话' })
+    expect(res.messages[3].text).toBe('s1-0')
+    expect(res.hasMore).toBe(false)
+  })
+
+  test('load_more 跨会话边界返回 marker + 更早段且不重叠', () => {
+    const stream = insertSessionMarkers([seg('s0', 2), seg('s1', 40)])
+    const tail = streamPagination(stream)
+    expect(tail.anchor).toBe(23)
+    const held = [...tail.messages] // [23..42]
+
+    // 第一批：limit 30 → [0..23)，nextAnchor=0，终态
+    const p = nextOlderPageFromStream(stream, 30, tail.anchor)
+    expect(p.messages).toHaveLength(23)
+    expect(p.messages[0].text).toBe('s0-0')
+    expect(p.messages[2]).toMatchObject({ kind: 'system', text: '已开启新会话' })
+    expect(p.messages[3].text).toBe('s1-0')
+    expect(p.hasMore).toBe(false)
+    expect(p.nextAnchor).toBe(0)
+
+    const merged = [...p.messages, ...held]
+    expect(merged).toHaveLength(43)
+    const texts = merged.map((m) => m.text)
+    expect(new Set(texts).size).toBe(texts.length)
+  })
+})
+
+describe('压缩重同步后分页（评审 B1：相对新 total 不重叠、anchor 正确）', () => {
+  function buildMessages(count: number): AgentMessage[] {
+    const out: AgentMessage[] = []
+    for (let i = 0; i < count; i++) {
+      out.push({ role: 'user', content: `user-${i}` } as unknown as AgentMessage)
+      out.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: `assistant-${i}` }],
+      } as unknown as AgentMessage)
+    }
+    return out
+  }
+
+  test('压缩后服务端重同步 → 客户端按新 total 重载不重叠', () => {
+    // 压缩前：会话 25 对（50 条 RenderMessage），客户端已持尾部 20 条，anchor=30
+    const before = buildMessages(25)
+    expect(toRenderMessages(before)).toHaveLength(50)
+
+    // 压缩后：SDK 把前缀折叠为 compactionSummary + 保留尾部 12 对（24 条）
+    const compressed: AgentMessage[] = [
+      {
+        role: 'compactionSummary',
+        summary: '早期对话摘要',
+        tokensBefore: 48000,
+        timestamp: 500,
+      } as unknown as AgentMessage,
+      ...buildMessages(12),
+    ]
+    const compressedStream = toRenderMessages(compressed) // 25 条
+    expect(compressedStream).toHaveLength(25)
+    expect(compressedStream[0].kind).toBe('compaction')
+
+    // 重同步：服务端下发新尾页 + 新 anchor（对压缩后合并流重新取尾）
+    const resync = streamPagination(compressedStream)
+    expect(resync.total).toBe(25)
+    expect(resync.messages).toHaveLength(20)
+    expect(resync.anchor).toBe(5)
+    const held = [...resync.messages] // 客户端重建时间线 = [5..24]
+
+    // 之后 load_more from anchor=5：取 [0..5) = 压缩摘要 + 保留的 4 条，与 held 不重叠
+    const page = nextOlderPageFromStream(compressedStream, 30, resync.anchor)
+    expect(page.messages).toHaveLength(5)
+    expect(page.messages[0].kind).toBe('compaction')
+    expect(page.messages[1].text).toBe('user-0')
+    expect(page.hasMore).toBe(false)
+    expect(page.nextAnchor).toBe(0)
+
+    const merged = [...page.messages, ...held]
+    expect(merged).toHaveLength(25)
+    expect(merged[0].text).toBe('已压缩早期对话')
+  })
+})
+
+describe('isSessionIdle（24h 自动切换判定，评审 S2）', () => {
+  function userAt(ts: number): AgentMessage {
+    return { role: 'user', content: 'x', timestamp: ts } as unknown as AgentMessage
+  }
+
+  test('空会话不触发', () => {
+    expect(isSessionIdle([], 1_000_000)).toBe(false)
+  })
+
+  test('无 timestamp 的消息不算超时（防御）', () => {
+    expect(
+      isSessionIdle([{ role: 'user', content: 'x' }] as unknown as AgentMessage[], 1_000_000),
+    ).toBe(false)
+  })
+
+  test('间隔 < 24h 复用当前会话', () => {
+    const now = 1_000_000
+    expect(isSessionIdle([userAt(now - 3600 * 1000)], now)).toBe(false)
+  })
+
+  test('间隔 ≥ 24h 触发新会话', () => {
+    const now = 1_000_000
+    expect(isSessionIdle([userAt(now - 24 * 3600 * 1000)], now)).toBe(true)
+    expect(isSessionIdle([userAt(now - 48 * 3600 * 1000)], now)).toBe(true)
+  })
+
+  test('只取最后一条消息的时间戳', () => {
+    const now = 1_000_000
+    const messages = [userAt(now - 30 * 24 * 3600 * 1000), userAt(now - 1000)]
+    expect(isSessionIdle(messages, now)).toBe(false)
   })
 })

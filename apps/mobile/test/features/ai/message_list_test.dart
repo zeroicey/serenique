@@ -20,6 +20,8 @@ AiState stateWith({
   List<RenderMessage> messages = const [],
   TurnState? activeTurn,
   AiConnStatus status = AiConnStatus.online,
+  String? compactionSummary,
+  int compactionTailStart = 0,
 }) {
   return AiState(
     status: status,
@@ -33,6 +35,10 @@ AiState stateWith({
     hasMoreMessages: false,
     loadingMore: false,
     totalMessages: 0,
+    compacting: false,
+    resyncTick: 0,
+    compactionSummary: compactionSummary,
+    compactionTailStart: compactionTailStart,
   );
 }
 
@@ -223,5 +229,119 @@ void main() {
 
     expect(find.text('向上滚动加载更多'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('system marker 渲染为会话边界分隔文案', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        aiControllerProvider.overrideWith(
+          () => FakeAiController(
+            stateWith(
+              messages: [
+                const RenderMessage(
+                  role: 'assistant',
+                  text: '已开启新会话',
+                  thinking: '',
+                  toolCalls: [],
+                  kind: 'system',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(host(container));
+    await tester.pump();
+
+    expect(find.text('已开启新会话'), findsOneWidget);
+  });
+
+  testWidgets('compaction 摘要卡默认折叠，点击展开 detail', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        aiControllerProvider.overrideWith(
+          () => FakeAiController(
+            stateWith(
+              messages: [
+                const RenderMessage(
+                  role: 'compactionSummary',
+                  text: '已压缩早期对话',
+                  thinking: '',
+                  toolCalls: [],
+                  kind: 'compaction',
+                  detail: '我们聊了任务与事件安排，创建了 3 个任务',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(host(container));
+    await tester.pump();
+
+    // 默认折叠：标题可见、摘要内容不可见
+    expect(find.text('已压缩早期对话'), findsOneWidget);
+    expect(find.text('我们聊了任务与事件安排，创建了 3 个任务'), findsNothing);
+
+    await tester.tap(find.text('已压缩早期对话'));
+    await tester.pumpAndSettle();
+    expect(find.text('我们聊了任务与事件安排，创建了 3 个任务'), findsOneWidget);
+  });
+
+  testWidgets('压缩摘要卡片渲染在 compactionTailStart 处（更早批次之后）',
+      (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        aiControllerProvider.overrideWith(
+          () => FakeAiController(
+            stateWith(
+              messages: [
+                const RenderMessage(
+                  role: 'assistant',
+                  text: '更早批次',
+                  thinking: '',
+                  toolCalls: [],
+                ),
+                const RenderMessage(
+                  role: 'assistant',
+                  text: '保留消息1',
+                  thinking: '',
+                  toolCalls: [],
+                ),
+                const RenderMessage(
+                  role: 'assistant',
+                  text: '保留消息2',
+                  thinking: '',
+                  toolCalls: [],
+                ),
+              ],
+              compactionSummary: '早期对话摘要：聊了任务与日程',
+              compactionTailStart: 1,
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(host(container));
+    await tester.pump();
+
+    // 卡片出现在「更早批次」与「保留消息」之间（tailStart=1 处）
+    expect(find.text('已压缩早期对话'), findsOneWidget);
+    expect(find.text('更早批次'), findsOneWidget);
+    expect(find.text('保留消息1'), findsOneWidget);
+    expect(find.text('保留消息2'), findsOneWidget);
+    // 默认折叠：点开前摘要不可见，点击可见
+    expect(find.text('早期对话摘要：聊了任务与日程'), findsNothing);
+    await tester.tap(find.text('已压缩早期对话'));
+    await tester.pumpAndSettle();
+    expect(find.text('早期对话摘要：聊了任务与日程'), findsOneWidget);
   });
 }

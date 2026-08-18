@@ -13,11 +13,20 @@ export type RenderToolCall = {
   result: string
   isError: boolean
 }
+// 渲染层消息（与后端 toRenderMessages 输出对齐）：assistant 消息由 activeTurn 落定生成。
+// kind/detail（评审 S4）：
+//  - 普通对话消息：role='user'|'assistant'，无 kind
+//  - 派生边界 marker：kind='system'（自动切换 / /new 的链段落分隔）
+//  - 真实压缩摘要：kind='compaction'（来自 compactionSummary，可展开 detail）
 export type RenderMessage = {
-  role: 'user' | 'assistant'
+  role?: 'user' | 'assistant'
   text: string
   thinking: string
   toolCalls: RenderToolCall[]
+  kind?: 'system' | 'compaction'
+  detail?: string
+  /** 本地专用（不进协议、不落库）：标记本轮乐观追加的 userMsg，链延续 marker 插到它之前。 */
+  optimistic?: boolean
 }
 export type ToolCardState = RenderToolCall & { running: boolean }
 export type TurnState = {
@@ -26,7 +35,13 @@ export type TurnState = {
   text: string
   toolCards: Map<string, ToolCardState>
 }
-export type SessionItem = { id: string; name: string; messageCount: number; modified: string }
+export type SessionItem = {
+  id: string
+  name: string
+  messageCount: number
+  modified: string
+  parentSessionPath?: string
+}
 
 type WsFactory = (url: string) => WebSocket
 let wsFactory: WsFactory | null = null
@@ -53,6 +68,16 @@ interface AiState {
    * 按索引 key={i} 重挂载导致 ThinkingBlock/ToolCard 展开态重置。
    */
   oldestHeldIndex: number
+  /** 是否正在压缩上下文（compaction_start / compaction_end 之间）。 */
+  compacting: boolean
+  /**
+   * 压缩摘要卡片（评审 B2）：session_compacted 下发的摘要文本，UI 把它渲染为
+   * 可见窗口头部的「已压缩早期对话」可展开卡片。**不进 messages 数组、不算 total**
+   * （分页计数零扰动）；插入位置由 compactionTailStart 决定。
+   */
+  compactionSummary: string | null
+  /** 摘要卡片应插入的本地数组下标：= session_compacted 时尾页条数，load_more prepend 时前移 batch 长度。 */
+  compactionTailStart: number
   setWsFactory: (f: WsFactory) => void
   connect: () => Promise<void>
   send: (text: string) => void
@@ -61,6 +86,7 @@ interface AiState {
   switchSession: (id: string) => void
   deleteSession: (id: string) => void
   refreshSessions: () => void
+  compact: () => void
   loadMore: () => void
 }
 
@@ -110,6 +136,9 @@ export const useAiStore = create<AiState>((set, get) => ({
   loadingMore: false,
   totalMessages: 0,
   oldestHeldIndex: 0,
+  compacting: false,
+  compactionSummary: null,
+  compactionTailStart: 0,
 
   setWsFactory: (f) => {
     wsFactory = f
@@ -142,6 +171,48 @@ export const useAiStore = create<AiState>((set, get) => ({
       switch (ev.type) {
         case 'session_ready':
         case 'session_switched': {
+          // 链延续（自动 24h 切换 / 手动 /new，评审 B2）：切到链尾新会话，**保留**
+          // 已加载时间线，仅追加一条系统 marker；不重置 messages/anchor/分页元信息
+          // ——合并流只在尾部增长，base 语义不变（旧下标不移动）。
+          if (ev.type === 'session_switched' && ev.chainContinuation) {
+            // 链延续 marker 顺序（评审建议 1）：权威合并流是 [marker, 本轮 userMsg,
+            // ...]，而 send() 乐观追加的 userMsg 已在末尾 → 把 marker 插到本轮乐观
+            // userMsg **之前**，live 与重载显示一致。
+            const markerMsg: RenderMessage = {
+              kind: 'system',
+              text: ev.marker ?? '已开启新会话',
+              thinking: '',
+              toolCalls: [],
+            }
+            set((s) => {
+              const lastOpt = s.messages
+                .map((m, i) => (m.optimistic ? i : -1))
+                .filter((i) => i >= 0)
+                .pop()
+              let messages: RenderMessage[]
+              if (lastOpt !== undefined) {
+                messages = [
+                  ...s.messages.slice(0, lastOpt),
+                  markerMsg,
+                  ...s.messages
+                    .slice(lastOpt)
+                    .map((m, i) => (i === 0 ? { ...m, optimistic: false } : m)),
+                ]
+              } else {
+                messages = [...s.messages, markerMsg]
+              }
+              return {
+                currentSessionId: ev.sessionId,
+                model: ev.model,
+                busy: false,
+                activeTurn: null,
+                lastError: null,
+                messages,
+              }
+            })
+            break
+          }
+          // 会话就绪 / 完整切换（删除后重建等）：重置分页基线（镜像后端 anchor）
           set({
             currentSessionId: ev.sessionId,
             model: ev.model,
@@ -152,8 +223,11 @@ export const useAiStore = create<AiState>((set, get) => ({
             hasMoreMessages: ev.hasMore,
             loadingMore: false,
             totalMessages: ev.totalMessageCount,
-            // 新会话/切会话：基线随本次尾部重算（镜像后端 sessionPagination.anchor）
+            // 基线随本次尾部重算（= total - 已发尾部条数）
             oldestHeldIndex: ev.totalMessageCount - (ev.messages as RenderMessage[]).length,
+            // 换会话/重建：压缩摘要卡片不跨会话残留（评审 B2）
+            compactionSummary: null,
+            compactionTailStart: 0,
           })
           get().refreshSessions()
           break
@@ -179,8 +253,50 @@ export const useAiStore = create<AiState>((set, get) => ({
             totalMessages: ev.totalMessageCount,
             // prepend 使最早持有下标前移 ev.messages.length；尾部追加不改变它
             oldestHeldIndex: s.oldestHeldIndex - (ev.messages as RenderMessage[]).length,
+            // 压缩摘要卡片相对位置（评审 B2）：prepend 后卡片应仍在更早批次之后
+            compactionTailStart: s.compactionTailStart + (ev.messages as RenderMessage[]).length,
           }))
           break
+        case 'session_compacted': {
+          // 压缩分页基线重同步（评审 B1/B2）：会话内旧消息折叠为摘要、合并流 total 缩小、
+          // 旧 anchor 失效 → 以服务端重算的尾页 + 新 anchor 重建基线。摘要文本存
+          // compactionSummary（不并入 messages/total），渲染在尾页起始处（可展开）。
+          set((s) => {
+            let messages = ev.messages as RenderMessage[]
+            // 清理仍在窗口中的乐观 userMsg 标记（切换/turn 兜底）
+            const lastOpt = s.messages
+              .map((m, i) => (m.optimistic ? i : -1))
+              .filter((i) => i >= 0)
+              .pop()
+            if (lastOpt !== undefined) messages = messages.map((m) => ({ ...m, optimistic: false }))
+            return {
+              currentSessionId: ev.sessionId,
+              busy: false,
+              activeTurn: null,
+              loadingMore: false,
+              messages,
+              totalMessages: ev.totalMessageCount,
+              hasMoreMessages: ev.hasMore,
+              oldestHeldIndex: ev.anchor,
+              compactionSummary: (ev.summary ?? '').trim() ? (ev.summary as string) : null,
+              compactionTailStart: (ev.messages as RenderMessage[]).length,
+            }
+          })
+          break
+        }
+        case 'compaction_start':
+          set({ compacting: true })
+          break
+        case 'compaction_end': {
+          // 压缩结束：复位压缩中状态；分页基线重同步由随后的 session_compacted 负责。
+          // 失败/aborted 时透传 errorMessage 展示（评审建议 2），无失败则清空 lastError。
+          const err = ev.errorMessage
+          set({
+            compacting: false,
+            ...(err ? { lastError: `压缩失败：${err}` } : { lastError: null }),
+          })
+          break
+        }
         case 'agent_start':
           set({ busy: true })
           break
@@ -266,7 +382,13 @@ export const useAiStore = create<AiState>((set, get) => ({
     // 不本地追加则实时对话中用户消息永不显示（直到重载/切会话才有历史）。
     // 若未来后端加 user 回显，此处需去重（按 text+时间或等回显替代）。
     // 交互简化（2026-08-10）：AI 回复中输入框禁用，send 只发 prompt（不再 busy→steer）。
-    const userMsg: RenderMessage = { role: 'user', text, thinking: '', toolCalls: [] }
+    const userMsg: RenderMessage = {
+      role: 'user',
+      text,
+      thinking: '',
+      toolCalls: [],
+      optimistic: true, // 本地标记：链延续 marker 需插到它之前（评审建议 1）
+    }
     set((s) => ({ messages: [...s.messages, userMsg] }))
     sendMsg({ type: 'prompt', text })
   },
@@ -275,6 +397,7 @@ export const useAiStore = create<AiState>((set, get) => ({
   switchSession: (id) => sendMsg({ type: 'switch_session', sessionId: id }),
   deleteSession: (id) => sendMsg({ type: 'delete_session', sessionId: id }),
   refreshSessions: () => sendMsg({ type: 'list_sessions' }),
+  compact: () => sendMsg({ type: 'compact' }),
   loadMore: () => {
     // 防并发：正在加载或无更多历史时不重复请求
     const s = get()

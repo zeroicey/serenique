@@ -102,6 +102,60 @@ void main() {
       expect(msg.totalMessageCount, 3);
       expect(msg.hasMore, isTrue);
     });
+
+    test('session_switched 链延续字段解析（chainContinuation/reason/marker）', () {
+      final msg =
+          ServerMessage.fromJson(
+                jsonDecode(
+                  '{"type":"session_switched","sessionId":"s2","model":"m","messages":[],"totalMessageCount":0,"hasMore":false,"chainContinuation":true,"reason":"manual","marker":"已开启新会话"}',
+                ),
+              )!
+              as SessionSwitchedMessage;
+      expect(msg.sessionId, 's2');
+      expect(msg.chainContinuation, isTrue);
+      expect(msg.reason, 'manual');
+      expect(msg.marker, '已开启新会话');
+      expect(msg.messages, isEmpty);
+    });
+
+    test('session_compacted 分页重同步解析（含 anchor + summary）', () {
+      final msg =
+          ServerMessage.fromJson(
+                jsonDecode(
+                  '{"type":"session_compacted","sessionId":"s1","messages":[{"role":"compactionSummary","kind":"compaction","text":"已压缩","detail":"早期对话摘要","thinking":"","toolCalls":[]}],"totalMessageCount":30,"hasMore":true,"anchor":10,"summary":"早期对话摘要"}',
+                ),
+              )!
+              as SessionCompactedMessage;
+      expect(msg.sessionId, 's1');
+      expect(msg.messages.length, 1);
+      expect(msg.totalMessageCount, 30);
+      expect(msg.hasMore, isTrue);
+      expect(msg.anchor, 10);
+      expect(msg.summary, '早期对话摘要'); // 评审 B2：压缩摘要文本
+    });
+
+    test('compaction_start / compaction_end 解析', () {
+      final start =
+          ServerMessage.fromJson(
+                jsonDecode('{"type":"compaction_start","reason":"overflow"}'),
+              )!
+              as CompactionStartMessage;
+      expect(start.reason, 'overflow');
+
+      final end =
+          ServerMessage.fromJson(
+                jsonDecode(
+                  '{"type":"compaction_end","reason":"manual","result":{"summary":"摘要","tokensBefore":5000,"firstKeptEntryId":"e1"},"aborted":false,"willRetry":false}',
+                ),
+              )!
+              as CompactionEndMessage;
+      expect(end.reason, 'manual');
+      expect(end.result!.summary, '摘要');
+      expect(end.result!.tokensBefore, 5000);
+      expect(end.result!.firstKeptEntryId, 'e1');
+      expect(end.aborted, isFalse);
+      expect(end.willRetry, isFalse);
+    });
   });
 
   group('ClientMessage.toJson', () {
@@ -127,6 +181,10 @@ void main() {
         jsonEncode(const ClientLoadMore(limit: 30)),
         '{"type":"load_more","limit":30}',
       );
+    });
+
+    test('ClientCompact 序列化', () {
+      expect(jsonEncode(const ClientCompact()), '{"type":"compact"}');
     });
   });
 }

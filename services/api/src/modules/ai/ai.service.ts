@@ -6,6 +6,7 @@ import {
   createAgentSession,
   DefaultResourceLoader,
   ModelRuntime,
+  type SessionInfo,
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent'
@@ -129,6 +130,8 @@ export async function listSessions(): Promise<
       name: info.name ?? (info.firstMessage ? info.firstMessage.slice(0, 30) : '新会话'),
       messageCount: info.messageCount,
       modified: info.modified.toISOString(),
+      // 链上父会话路径（自动会话链，评审 S1：SDK 原生 parentSession）；前端单一对话流不展示，保留供调试/内部
+      parentSessionPath: info.parentSessionPath,
     }))
 }
 
@@ -147,8 +150,13 @@ export async function openSession(path: string) {
   return { sm, session: await getOrCreateSession(sm) }
 }
 
-export async function createNewSession() {
-  const sm = SessionManager.create(process.cwd(), SESSION_DIR)
+export async function createNewSession(parentSessionId?: string) {
+  const sm = SessionManager.create(
+    process.cwd(),
+    SESSION_DIR,
+    parentSessionId ? { parentSession: parentSessionId } : undefined,
+  )
+  await refreshChainIndex()
   return { sm, session: await getOrCreateSession(sm) }
 }
 
@@ -183,12 +191,118 @@ export async function deleteSession(id: string): Promise<void> {
   if (!path) throw new AppError(ErrorCode.NOT_FOUND, `会话不存在: ${id}`, 404)
   releaseSession(id)
   await unlink(path)
+  void refreshChainIndex().catch(() => {}) // 链索引失效
+}
+
+// ---- 自动会话链（评审 D-017/D-018/D-020）-------------------------------
+// 单一对话流下会话按 parentSession 串成纯线性链（S0←S1←…←Sn，Sn=链尾=当前）。
+// 链指针由 SDK 原生 NewSessionOptions.parentSession 落盘（随 jsonl header 写），
+// 跨重启可重建；进程内链索引（SessionInfo 缓存）供合并流组装快速回溯。
+
+/** 24h 间隔自动切换阈值（决策 #3；判定 = 末条消息 .timestamp 距今，非文件 mtime S2）。 */
+export const SESSION_IDLE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+
+/** 累计会话数超过该值时禁止继续自动建链（防失控：链上会话数量护栏）。 */
+export const MAX_CHAIN_LENGTH = 200
+
+let chainIndexCache: Map<string, SessionInfo> | undefined
+
+async function refreshChainIndex(): Promise<void> {
+  const infos = await SessionManager.list(process.cwd(), SESSION_DIR)
+  chainIndexCache = new Map(infos.map((info) => [info.id, info]))
+}
+
+async function getChainIndex(): Promise<Map<string, SessionInfo>> {
+  if (!chainIndexCache) await refreshChainIndex()
+  return chainIndexCache!
+}
+
+// ---- 链尾注册表（评审 B3：两标签页并发 24h 判定不产生分叉）------------
+// 同一父会话的「自动子会话」in-flight 去重：并发判定只会创建一个新链尾并复用。
+// 手动 /new 不走此注册表（总是显式 createNewSession 新建）。
+const autoChildRegistry = new Map<string, Promise<{ sm: SessionManager; session: AgentSession }>>()
+
+export function getOrCreateAutoChild(
+  parentSessionId: string,
+): Promise<{ sm: SessionManager; session: AgentSession }> {
+  let pending = autoChildRegistry.get(parentSessionId)
+  if (!pending) {
+    pending = createNewSession(parentSessionId)
+    autoChildRegistry.set(parentSessionId, pending)
+    pending.catch(() => void autoChildRegistry.delete(parentSessionId))
+  }
+  return pending
+}
+
+/** 链上所有会话 id（根→尾）。尾部未落盘（新建未对话）时从 header parent 起步。 */
+async function collectChainIds(
+  sm: SessionManager,
+  index: Map<string, SessionInfo>,
+): Promise<string[]> {
+  const byPath = new Map<string, SessionInfo>()
+  for (const info of index.values()) byPath.set(info.path, info)
+
+  const tailId = sm.getSessionId()
+  const ids: string[] = [tailId]
+  // 链上总长度护栏（防历史坏数据无限回溯）。
+  let parentPath = index.get(tailId)?.parentSessionPath
+  if (!parentPath) {
+    const headerParent = sm.getHeader()?.parentSession
+    if (headerParent) parentPath = index.get(headerParent)?.path
+  }
+  let depth = 0
+  while (parentPath) {
+    const parent = byPath.get(parentPath)
+    if (!parent || ids.includes(parent.id) || depth++ >= MAX_CHAIN_LENGTH) break // 防环/护栏
+    ids.push(parent.id)
+    parentPath = parent.parentSessionPath
+  }
+  return ids.reverse()
+}
+
+/**
+ * 组装当前链的「合并流」（评审 D-018/D-020）：链上各会话 RenderMessage 按链结构
+ * 顺序拼接（根→尾），会话边界插入派生的「已开启新会话」marker，marker **计入**
+ * 合并下标（front-anchor 分页下标单调的前提）。合并流 = 纯函数语义：同一链在同一
+ * 时刻组装结果稳定，重连可重建；尾部用内存实例，更早会话磁盘恢复（registry 单实例）。
+ */
+export async function buildMergedStream(tailSession: AgentSession): Promise<RenderMessage[]> {
+  const sm = tailSession.sessionManager
+  const index = await getChainIndex()
+  const ids = await collectChainIds(sm, index)
+  const segments: RenderMessage[][] = []
+  // 本次新打开的历史段（组装完释放，防长链内存累积，评审建议 3）：
+  // 单一对话流 + switch 停用下历史会话不被任何连接持有（conn 恒为链尾），
+  // 释放仅 dispose 无监听实例，安全；registry 已存在的活实例复用不释放。
+  const opened: string[] = []
+  for (const id of ids) {
+    if (id === sm.getSessionId()) {
+      segments.push(toRenderMessages(tailSession.messages))
+    } else {
+      const info = index.get(id)
+      if (!info) break
+      try {
+        const reused = sessionRegistry.has(id)
+        const { session } = await openSession(info.path)
+        segments.push(toRenderMessages(session.messages))
+        if (!reused) opened.push(id)
+      } catch {
+        break // 历史段读取失败：截断到已成功段，缺早期历史可接受，不断服务
+      }
+    }
+  }
+  for (const id of opened) releaseSession(id)
+  return insertSessionMarkers(segments)
 }
 
 // ---- 事件转发 ----------------------------------------------------------
 // target: 收 JSON 字符串（WS 发送）。转发事件与 pi-test/server.ts 对齐。
 // 返回退订函数；close 后由调用方兜底（本函数不感知 WS 状态）。
-export function forwardEvents(target: (json: string) => void, session: AgentSession): () => void {
+export function forwardEvents(
+  target: (json: string) => void,
+  session: AgentSession,
+  onCompactionEnd?: () => void,
+): () => void {
   return session.subscribe((event) => {
     switch (event.type) {
       case 'message_update': {
@@ -241,6 +355,34 @@ export function forwardEvents(target: (json: string) => void, session: AgentSess
       case 'agent_end':
         target(JSON.stringify({ type: event.type }))
         break
+      case 'compaction_start':
+        // 就地压缩开始（自动 threshold/overflow 或手动 compact 触发）
+        target(JSON.stringify({ type: 'compaction_start', reason: event.reason }))
+        break
+      case 'compaction_end': {
+        // 压缩完成 = 分页基线重同步点（评审 B1）：会话内消息折叠为摘要、合并流
+        // total 缩小、旧 anchor 失效。转发事件后由 handler 回调触发重同步下发。
+        target(
+          JSON.stringify({
+            type: 'compaction_end',
+            reason: event.reason,
+            aborted: event.aborted,
+            willRetry: event.willRetry,
+            ...(event.errorMessage ? { errorMessage: event.errorMessage } : {}),
+            ...(event.result && !event.aborted
+              ? {
+                  result: {
+                    summary: event.result.summary,
+                    tokensBefore: event.result.tokensBefore,
+                    firstKeptEntryId: event.result.firstKeptEntryId,
+                  },
+                }
+              : {}),
+          }),
+        )
+        onCompactionEnd?.()
+        break
+      }
     }
   })
 }
@@ -275,11 +417,38 @@ export type RenderToolCall = {
   result: string
   isError: boolean
 }
+// 扁平结构（非 union）：保证既有消费方（web/flutter render）访问 role/text/
+// thinking/toolCalls 保持合法。requested kind 字段区分消息形态（评审 S4）：
+//  - 普通对话消息：role='user'|'assistant'，无 kind
+//  - 派生边界 marker：kind='system'（自动切换/手动 /new 的链段落分隔）
+//  - 真实压缩摘要：kind='compaction'（来自 compactionSummary，可展开 detail）
 export type RenderMessage = {
-  role: 'user' | 'assistant'
+  role?: 'user' | 'assistant'
   text: string
   thinking: string
   toolCalls: RenderToolCall[]
+  kind?: 'system' | 'compaction'
+  detail?: string
+}
+
+/** 派生「已开启新会话」的系统 marker 文案。 */
+export const SESSION_BOUNDARY_MARKER_TEXT = '已开启新会话'
+
+/** 压缩摘要 marker 的固定文案。 */
+export const COMPACTION_MARKER_TEXT = '已压缩早期对话'
+
+/**
+ * 把各会话的 RenderMessage 段拼成合并流（纯函数）：从第 2 段起每段前插一条
+ * 「已开启新会话」marker，marker 计入合并下标（front-anchor 分页单调前提）。
+ */
+export function insertSessionMarkers(segments: RenderMessage[][]): RenderMessage[] {
+  const out: RenderMessage[] = []
+  for (let i = 0; i < segments.length; i++) {
+    if (i > 0)
+      out.push({ kind: 'system', text: SESSION_BOUNDARY_MARKER_TEXT, thinking: '', toolCalls: [] })
+    out.push(...segments[i])
+  }
+  return out
 }
 
 /** 消息历史 → 前端渲染模型（纯函数）。toolResult 不产生独立消息，按 toolCallId 关联到 assistant 的 toolCall。 */
@@ -313,6 +482,15 @@ export function toRenderMessages(messages: AgentMessage[]): RenderMessage[] {
         }
       }
       out.push({ role: 'assistant', text, thinking, toolCalls })
+    } else if ((m as { role?: string }).role === 'compactionSummary') {
+      // SDK 就地压缩后 session.messages 里的摘要消息（评审 §4 实证），当前静默丢弃
+      out.push({
+        kind: 'compaction',
+        text: COMPACTION_MARKER_TEXT,
+        detail: (m as { summary?: string }).summary ?? '',
+        thinking: '',
+        toolCalls: [],
+      })
     }
   }
   return out
@@ -344,20 +522,38 @@ export type TailResult = {
  * @param limit     取多少条 RenderMessage
  * @param offset    从尾部往前跳过多少条已下发的 RenderMessage（默认 0）
  */
+/**
+ * 对完整合并 RenderMessage[] 从尾部取分页（marker 计入下标）。
+ *
+ * @param stream 合并流（含派生 marker 的 RenderMessage[]）
+ * @param limit  取多少条
+ * @param offset 从尾部往前跳过多少条已下发的（默认 0）
+ */
+export function tailRenderStream(
+  stream: RenderMessage[],
+  limit: number = INITIAL_PAGE_SIZE,
+  offset: number = 0,
+): TailResult {
+  const total = stream.length
+  const end = Math.max(0, total - offset)
+  const start = Math.max(0, end - limit)
+  return {
+    messages: stream.slice(start, end),
+    total,
+    hasMore: start > 0,
+  }
+}
+
+/**
+ * 单会话历史 → 尾部切片（保留签名：内部先转 RenderMessage[] 再委托
+ * tailRenderStream）。新代码应直接对合并流调用 tailRenderStream。
+ */
 export function tailRenderMessages(
   messages: AgentMessage[],
   limit: number = INITIAL_PAGE_SIZE,
   offset: number = 0,
 ): TailResult {
-  const all = toRenderMessages(messages)
-  const total = all.length
-  const end = Math.max(0, total - offset)
-  const start = Math.max(0, end - limit)
-  return {
-    messages: all.slice(start, end),
-    total,
-    hasMore: start > 0,
-  }
+  return tailRenderStream(toRenderMessages(messages), limit, offset)
 }
 
 export type OlderPage = {
@@ -378,17 +574,35 @@ export type OlderPage = {
  * @param limit    本批取多少条 RenderMessage
  * @param anchor   客户端当前持有的最早 RenderMessage 下标（初始 = total-已发尾部条数）
  */
-export function nextOlderPage(messages: AgentMessage[], limit: number, anchor: number): OlderPage {
-  const all = toRenderMessages(messages)
-  const total = all.length
-  const end = Math.min(anchor, total) // anchor 可能因会话截断/重建略超 total，钳到 total
+/**
+ * 向上滚动加载更早的一批历史消息（合并流版，评审 D-015 anchor 语义原样推广）：
+ * 游标 = 客户端当前持有的最早 RenderMessage 下标（anchor），分页锚定在稳定的
+ * 前端边界而非易变尾部——fresh 轮次只在尾部追加，旧下标永不移动。marker 计入
+ * 下标，跨会话边界时批次自然包含 marker。
+ *
+ * @param stream 合并流（完整 RenderMessage[]，尾部可能已随 turn 增长）
+ * @param limit  本批取多少条
+ * @param anchor 客户端当前持有的最早 RenderMessage 下标
+ */
+export function nextOlderPageFromStream(
+  stream: RenderMessage[],
+  limit: number,
+  anchor: number,
+): OlderPage {
+  const total = stream.length
+  const end = Math.min(anchor, total) // anchor 可能因压缩重同步/重建略超 total，钳到 total
   const start = Math.max(0, end - limit)
   return {
-    messages: all.slice(start, end),
+    messages: stream.slice(start, end),
     total,
     hasMore: start > 0,
     nextAnchor: start,
   }
+}
+
+/** 单会话历史向上懒加载（保留签名：委托 nextOlderPageFromStream）。 */
+export function nextOlderPage(messages: AgentMessage[], limit: number, anchor: number): OlderPage {
+  return nextOlderPageFromStream(toRenderMessages(messages), limit, anchor)
 }
 
 export type SessionPage = TailResult & {
@@ -401,9 +615,36 @@ export type SessionPage = TailResult & {
  * 本次下发的分页基线 anchor（= 尾部起点下标）。每次切会话/建新会话都重算基线
  * （对当前 total 重新取尾部），保证旧游标不跨会话泄漏。
  */
-export function sessionPagination(messages: AgentMessage[]): SessionPage {
-  const tail = tailRenderMessages(messages, INITIAL_PAGE_SIZE, 0)
+/**
+ * 会话就绪/切换/新建共用的初始分页状态（合并流版）：只取尾部 INITIAL_PAGE_SIZE
+ * 条，并给出本次下发的分页基线 anchor（= 尾部起点下标）。每次重连/切换/重同步
+ * 都重算基线（对当前合并流 total 重新取尾部），保证旧游标不跨链段泄漏。
+ */
+export function streamPagination(stream: RenderMessage[]): SessionPage {
+  const tail = tailRenderStream(stream, INITIAL_PAGE_SIZE, 0)
   return { ...tail, anchor: tail.total - tail.messages.length }
+}
+
+/** 单会话初始分页（保留签名：委托 streamPagination）。 */
+export function sessionPagination(messages: AgentMessage[]): SessionPage {
+  return streamPagination(toRenderMessages(messages))
+}
+
+// ---- 24h 自动切换判定（评审 S2：末条消息 timestamp，非 SessionInfo.modified mtime）----
+/**
+ * 会话是否「空闲超时」——最后一条消息距今 ≥ thresholdMs（默认 24h）。
+ * 空会话（无消息）恒为 false。
+ */
+export function isSessionIdle(
+  messages: readonly AgentMessage[],
+  now: number = Date.now(),
+  thresholdMs: number = SESSION_IDLE_THRESHOLD_MS,
+): boolean {
+  const last = messages[messages.length - 1]
+  if (!last) return false
+  const ts = (last as { timestamp?: number }).timestamp
+  if (typeof ts !== 'number' || !Number.isFinite(ts)) return false
+  return now - ts >= thresholdMs
 }
 
 function userText(content: string | { type: string; text?: string }[]): string {
@@ -430,4 +671,7 @@ export const aiService = {
   releaseSession,
   deleteSession,
   forwardEvents,
+  getOrCreateAutoChild,
+  buildMergedStream,
+  isSessionIdle,
 }

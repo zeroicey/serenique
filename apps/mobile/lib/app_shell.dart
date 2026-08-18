@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'core/network/api_exception.dart';
-import 'features/ai/widgets/session_title.dart';
 import 'features/audit/audit_providers.dart';
 import 'features/event/event_providers.dart';
 import 'features/event/widgets/event_date_nav.dart';
@@ -116,7 +115,7 @@ class AppShell extends ConsumerWidget {
                 ),
               ),
         title: location.startsWith('/ai')
-            ? const AiSessionTitle()
+            ? const Text('宁序')
             : location == '/habit'
             ? const HabitDateNav()
             : location == '/habit/overview'

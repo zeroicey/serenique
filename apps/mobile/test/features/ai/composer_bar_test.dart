@@ -43,6 +43,8 @@ AiState onlineIdle() => const AiState(
   hasMoreMessages: false,
   loadingMore: false,
   totalMessages: 0,
+  compacting: false,
+  resyncTick: 0,
 );
 
 void main() {
@@ -102,6 +104,8 @@ void main() {
         hasMoreMessages: false,
         loadingMore: false,
         totalMessages: 0,
+        compacting: false,
+        resyncTick: 0,
       ),
     );
     final busyContainer = ProviderContainer(

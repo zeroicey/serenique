@@ -19,6 +19,7 @@
 | `2026-08-15-face-verification-auth.md` | 人脸核身 / 生物识别登录增强 | 🪦已否决（2026-08-15：Passkey 平台生物识别已覆盖，无需自建） |
 | `2026-08-16-moment-draft-cache.md` | Moment 新建闪记本地草稿缓存 | ✅已实施 |
 | `2026-08-16-habit-module.md` | 习惯模块 | ✅已实施（API+Web+CLI+AI 四端 + 生产/Cloudflare 部署 2026-08-16） |
+| `2026-08-18-ai-auto-session-management.md` | AI 对话自动会话管理（自动切换/压缩 + /new /compact） | ✅已实施（后端+Web+Flutter 三端 2026-08-18） |
 
 ## 约定
 

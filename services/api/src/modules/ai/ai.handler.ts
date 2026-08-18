@@ -6,12 +6,12 @@ import {
   forwardEvents,
   MAX_PAGE_SIZE,
   MORE_PAGE_SIZE,
-  nextOlderPage,
-  sessionPagination,
+  nextOlderPageFromStream,
+  streamPagination,
 } from './ai.service'
 
 // ---------------------------------------------------------------------------
-// AI WebSocket 协议层 — 每个连接持有「当前会话」，协议消息见 ai.types.ts。
+// AI WebSocket 协议层 — 每个连接持有「当前链尾会话」，协议消息见 ai.types.ts。
 //
 // 关键设计（评审确认）：
 //  - createAiWebSocket 是工厂：upgradeWebSocket 由调用方（index.ts 的
@@ -33,11 +33,12 @@ import {
 //  3. Bun 对 unhandled rejection 默认崩溃进程 —— handleMessage 必须全局
 //     try/catch，任何分支异常转 error 消息，绝不让 rejection 逃逸。
 //
-// 会话生命周期（评审确认）：同会话可被多个连接同时持有（需求 4.2.1），
-// 用跨连接引用计数（sessionRefCount）决定何时真正释放实例 —— 只有最后一
-// 个连接离开才 releaseSession（dispose 会 abort 在途 turn + 断开事件订阅，
-// 提前释放会让另一标签页静默失明）。删除是用户显式操作，例外：无条件
-// releaseSession + 清 refCount。
+// 单一对话流（2026-08-18 需求定稿）：前端无会话列表/切换/删除 UI，用户永远
+// 停留在链尾最新对话。后端在「连接恢复 / prompt」入口按 24h 自动切新链尾
+// （故意惰性跟随：不强制重指向其他连接，避免打断在途 turn；每连接在自己下次
+// 动作时经 getOrCreateAutoChild 复用同一链子会话，不产生分叉）。
+// 压缩 = 分页基线重同步点（评审 B1）：compaction_end 后重算合并流尾页下发。
+// switch_session 停用（决策 #10 / 评审 G2）。
 // ---------------------------------------------------------------------------
 
 /**
@@ -51,9 +52,9 @@ export function isAllowedOrigin(origin: string | undefined, allowed: readonly st
 }
 
 type Conn = {
-  /** 当前会话 id（可能未落盘，见头注释 2）。 */
+  /** 当前链尾会话 id（可能未落盘，见头注释 2）。 */
   sessionId?: string
-  /** 当前会话实例（registry 单实例，prompt 主路径直接使用，不做磁盘重开）。 */
+  /** 当前链尾会话实例（registry 单实例，prompt 主路径直接使用，不做磁盘重开）。 */
   session?: AgentSession
   /** 会话身份（cookie 登录才携带；token 身份为 null）。单用户设计暂不强制，保留供扩展。 */
   userId?: string
@@ -62,9 +63,9 @@ type Conn = {
   /** onOpen 完成前到达的消息暂存（防御性：Bun 保证 open 先于 message，通常为空）。 */
   pending: string[]
   /**
-   * 分页游标：客户端当前持有的**最早** RenderMessage 下标（per-connection）。
-   * 锚定稳定前端边界，而非易变的尾部——fresh 轮次只在尾部追加，旧下标永不移动，
-   * 故按 anchor 往前取批次不会与客户端已有消息重叠。切会话/建新会话重置。
+   * 分页游标：客户端当前持有的**最早** RenderMessage 下标（per-connection，
+   * 作用于链合并流，marker 计入下标）。锚定稳定前端边界——fresh 轮次只在尾部
+   * 追加、旧下标永不移动。切链尾/重同步重算基线。
    */
   anchor: number
 }
@@ -132,12 +133,53 @@ function safeSend(ws: WSContext, json: string) {
   }
 }
 
+/**
+ * 压缩完成后的分页基线重同步（评审 B1）：会话内旧消息被折叠为摘要，合并流 total
+ * 缩小、客户端 anchor 失效 → 重算合并流尾页 + 新 anchor，按链延续语义下发
+ * session_compacted。前端以本负载重建分页基线（更早历史已被摘要替代）。
+ */
+async function resyncAfterCompaction(conn: Conn, ws: WSContext, session: AgentSession) {
+  try {
+    const sessionId = session.sessionManager.getSessionId()
+    if (conn.sessionId !== sessionId) return // 用户已切走：忽略过期会话的重同步
+    const stream = await aiService.buildMergedStream(session)
+    const page = streamPagination(stream)
+    conn.anchor = page.anchor
+    // 压缩摘要文本（评审 B2 后端侧）：compaction_end 后 session.messages 已含
+    // compactionSummary 消息，提取其 summary 供前端把可见窗口更早消息替换为
+    // 「已压缩早期对话」可展开卡片。无摘要时下发空串，前端不插入卡片。
+    const summaryEntry = [...session.messages]
+      .reverse()
+      .find((m) => (m as { role?: string }).role === 'compactionSummary') as
+      | { summary?: string }
+      | undefined
+    safeSend(
+      ws,
+      JSON.stringify({
+        type: 'session_compacted',
+        sessionId,
+        messages: page.messages,
+        totalMessageCount: page.total,
+        hasMore: page.hasMore,
+        anchor: page.anchor,
+        summary: summaryEntry?.summary ?? '',
+      }),
+    )
+  } catch {
+    // 重同步失败（历史段读取异常等）静默：锚点在下次连接/动作时重建
+  }
+}
+
 /** 切换到新会话：退订旧事件流、登记新订阅与实例、更新 conn 指向、引用 +1。 */
 function attachSession(conn: Conn, ws: WSContext, sessionId: string, session: AgentSession) {
   conn.unsubscribe?.()
   conn.sessionId = sessionId
   conn.session = session
-  conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session)
+  conn.unsubscribe = forwardEvents(
+    (json) => safeSend(ws, json),
+    session,
+    () => void resyncAfterCompaction(conn, ws, session),
+  )
   acquireSession(sessionId)
 }
 
@@ -149,11 +191,10 @@ async function resetAfterDelete(conn: Conn, ws: WSContext, deletedId: string) {
   return { sm, session }
 }
 
-/** session_switched 的应答构造（切换/新建/删除当前会话后共用）。只发尾部 N 条，附带分页元信息。 */
-function sessionPayload(sessionId: string, session: AgentSession, conn: Conn) {
-  // 分页基线随会话切换/新建/删除一并重置（对当前会话重新取尾部 + anchor），
-  // 旧游标不跨会话泄漏。
-  const page = sessionPagination(session.messages)
+/** 切换后的应答构造（删除后无链延续语义的完整切换）。只发合并流尾部 N 条 + 分页元信息。 */
+async function sessionPayload(sessionId: string, session: AgentSession, conn: Conn) {
+  const stream = await aiService.buildMergedStream(session)
+  const page = streamPagination(stream)
   conn.anchor = page.anchor
   return JSON.stringify({
     type: 'session_switched',
@@ -162,6 +203,26 @@ function sessionPayload(sessionId: string, session: AgentSession, conn: Conn) {
     messages: page.messages,
     totalMessageCount: page.total,
     hasMore: page.hasMore,
+  })
+}
+
+/** 链尾切换（自动 24h / 手动 /new）的链延续负载：前端保留时间线、追加 marker。 */
+function chainContinuationPayload(
+  sessionId: string,
+  session: AgentSession,
+  marker: string,
+  reason: 'auto_timeout' | 'manual',
+) {
+  return JSON.stringify({
+    type: 'session_switched',
+    sessionId,
+    model: `${session.model?.provider}/${session.model?.id}`,
+    messages: [], // 新链尾尚无消息；本次 prompt 的消息经流式事件到达
+    totalMessageCount: 0,
+    hasMore: false,
+    chainContinuation: true,
+    reason,
+    marker,
   })
 }
 
@@ -182,12 +243,24 @@ export function createAiWebSocket(upgradeWebSocket: typeof import('hono/bun').up
           if (!(await aiService.isAiEnabled())) {
             throw new Error('AI 未配置模型凭据（检查 DEEPSEEK_API_KEY / AI_MODEL）')
           }
-          const { sm, session } = await aiService.openRecentOrCreate()
+          // 恢复最近会话；24h 空闲 → 自动切到新链尾（决策 #3；惰性跟随，见头注释）
+          let { sm, session } = await aiService.openRecentOrCreate()
+          if (aiService.isSessionIdle(session.messages)) {
+            const child = await aiService.getOrCreateAutoChild(sm.getSessionId())
+            sm = child.sm
+            session = child.session
+          }
           conn.sessionId = sm.getSessionId()
           conn.session = session
-          conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session)
+          conn.unsubscribe = forwardEvents(
+            (json) => safeSend(ws, json),
+            session,
+            () => void resyncAfterCompaction(conn, ws, session),
+          )
           acquireSession(conn.sessionId)
-          const page = sessionPagination(session.messages)
+          // 合并流分页：跨会话历史 + 边界 marker 计入下标
+          const stream = await aiService.buildMergedStream(session)
+          const page = streamPagination(stream)
           conn.anchor = page.anchor
           safeSend(
             ws,
@@ -226,7 +299,10 @@ async function handleMessage(ws: WSContext, raw: string) {
   try {
     let msg:
       | { type: 'prompt' | 'steer' | 'followUp'; text?: string }
-      | { type: 'abort' | 'list_sessions' | 'new_session' | 'load_more'; limit?: number }
+      | {
+          type: 'abort' | 'list_sessions' | 'new_session' | 'load_more' | 'compact'
+          limit?: number
+        }
       | { type: 'switch_session' | 'delete_session'; sessionId: string }
     try {
       msg = JSON.parse(raw)
@@ -243,11 +319,35 @@ async function handleMessage(ws: WSContext, raw: string) {
         let session = conn.session
         if (!session) {
           const opened = await aiService.openRecentOrCreate()
-          session = opened.session
+          const restored = opened.session
+          session = restored
           conn.sessionId = opened.sm.getSessionId()
-          conn.session = session
-          conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session)
+          conn.session = restored
+          conn.unsubscribe = forwardEvents(
+            (json) => safeSend(ws, json),
+            restored,
+            () => void resyncAfterCompaction(conn, ws, restored),
+          )
           acquireSession(conn.sessionId)
+        }
+        // 24h 空闲 → 自动切新链尾（仅对新 prompt：steer/followUp 是继续当前
+        // turn，不触发切换）。并发多标签经链尾注册表复用同一子会话，不产生分叉。
+        if (msg.type === 'prompt' && aiService.isSessionIdle(session.messages)) {
+          const tailId = session.sessionManager.getSessionId()
+          const child = await aiService.getOrCreateAutoChild(tailId)
+          releaseConnectionSession(conn)
+          attachSession(conn, ws, child.sm.getSessionId(), child.session)
+          // 链延续语义：前端保留时间线，仅追加「已开启新会话」marker
+          safeSend(
+            ws,
+            chainContinuationPayload(
+              child.sm.getSessionId(),
+              child.session,
+              '已开启新会话（间隔超过 24 小时）',
+              'auto_timeout',
+            ),
+          )
+          session = child.session
         }
         const p =
           msg.type === 'prompt'
@@ -269,34 +369,21 @@ async function handleMessage(ws: WSContext, raw: string) {
         break
       }
       case 'new_session': {
-        const { sm, session } = await aiService.createNewSession()
-        // 放弃旧会话（引用 -1；仅本连接是最后一个持有者时才释放实例）
+        // 手动 /new（前端斜杠命令拦截后转发）：在当前链尾开新段并链过去，
+        // 链延续语义（前端仅追加 marker，不重置时间线）。
+        const { sm, session } = await aiService.createNewSession(conn.sessionId)
         releaseConnectionSession(conn)
         attachSession(conn, ws, sm.getSessionId(), session)
-        safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
+        safeSend(ws, chainContinuationPayload(sm.getSessionId(), session, '已开启新会话', 'manual'))
         const sessions = await aiService.listSessions()
         safeSend(ws, JSON.stringify({ type: 'sessions', sessions }))
         break
       }
-      case 'switch_session': {
-        // 切到当前会话：no-op（必须早于 findSessionPath）。若继续走
-        // openSession → registry 命中同一活实例 → releaseSession 会对
-        // 它 dispose（abort 在途 turn、清空事件监听）→ attachSession 挂上
-        // 已销毁实例：在途 prompt 被误 abort，后续事件静默丢失。
-        if (msg.sessionId === conn.sessionId) return
-        const path = await aiService.findSessionPath(msg.sessionId)
-        if (!path) {
-          return safeSend(
-            ws,
-            JSON.stringify({ type: 'error', message: `会话不存在: ${msg.sessionId}` }),
-          )
-        }
-        const { sm, session } = await aiService.openSession(path)
-        releaseConnectionSession(conn) // 放弃旧会话（引用 -1）
-        attachSession(conn, ws, sm.getSessionId(), session)
-        safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
+      case 'switch_session':
+        // 单一对话流停用（决策 #10 / 评审 G2）：前端无切换入口；停用避免
+        // 「链中间段增长 → 合并流 anchor 失效」风险。
+        safeSend(ws, JSON.stringify({ type: 'error', message: '会话切换已停用（单一对话流）' }))
         break
-      }
       case 'delete_session': {
         // 删除「当前会话」且未落盘（新建未对话，磁盘无文件）：findSessionPath
         // 找不到 → deleteSession 必抛 404，该会话永远删不掉。走「无条件释放
@@ -308,7 +395,7 @@ async function handleMessage(ws: WSContext, raw: string) {
             // 失败（如凭据失效）时 conn 不悬空，下次 prompt 走兜底重开
             const { sm, session } = await resetAfterDelete(conn, ws, msg.sessionId)
             safeSend(ws, JSON.stringify({ type: 'session_deleted', sessionId: msg.sessionId }))
-            safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
+            safeSend(ws, await sessionPayload(sm.getSessionId(), session, conn))
             const sessions = await aiService.listSessions()
             safeSend(ws, JSON.stringify({ type: 'sessions', sessions }))
             break
@@ -321,14 +408,15 @@ async function handleMessage(ws: WSContext, raw: string) {
         safeSend(ws, JSON.stringify({ type: 'session_deleted', sessionId: msg.sessionId }))
         if (conn.sessionId === msg.sessionId) {
           const { sm, session } = await resetAfterDelete(conn, ws, msg.sessionId)
-          safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
+          safeSend(ws, await sessionPayload(sm.getSessionId(), session, conn))
         }
         const sessions = await aiService.listSessions()
         safeSend(ws, JSON.stringify({ type: 'sessions', sessions }))
         break
       }
       case 'load_more': {
-        // 分页加载更早的消息：从客户端最早持有下标（conn.anchor）往前取 limit 条。
+        // 分页加载更早的消息（合并流版）：从客户端最早持有下标（conn.anchor）
+        // 往前取 limit 条，跨会话边界时 marker 自然出现在批次内。
         // limit 缺省 MORE_PAGE_SIZE；钳到 [1, MAX_PAGE_SIZE]——limit<=0 会返回
         // 空批次却 hasMore=true、anchor 不变，web 客户端将无限空转。
         // 会话实例丢失时无历史可加载，返回空批次。
@@ -346,7 +434,8 @@ async function handleMessage(ws: WSContext, raw: string) {
           break
         }
         const limit = Math.min(Math.max(msg.limit ?? MORE_PAGE_SIZE, 1), MAX_PAGE_SIZE)
-        const page = nextOlderPage(session.messages, limit, conn.anchor)
+        const stream = await aiService.buildMergedStream(session)
+        const page = nextOlderPageFromStream(stream, limit, conn.anchor)
         conn.anchor = page.nextAnchor
         safeSend(
           ws,
@@ -357,6 +446,23 @@ async function handleMessage(ws: WSContext, raw: string) {
             hasMore: page.hasMore,
           }),
         )
+        break
+      }
+      case 'compact': {
+        // 手动压缩（前端 /compact 斜杠命令）：session.compact() 触发 SDK 就地
+        // 压缩，经 forwardEvents 的 compaction_start/end 事件回显「已压缩」marker
+        // + 摘要，并在 compaction_end 后触发分页重同步（resyncAfterCompaction）。
+        // 失败（未压缩内容 / 已压缩等）catch 转 error，绝不逃逸——Bun 对
+        // unhandled rejection 默认崩溃进程（评审 S3）。
+        const session = conn.session
+        if (!session) {
+          return safeSend(ws, JSON.stringify({ type: 'error', message: '当前无会话' }))
+        }
+        session
+          .compact()
+          .catch((err) =>
+            safeSend(ws, JSON.stringify({ type: 'error', message: (err as Error).message })),
+          )
         break
       }
       default:
