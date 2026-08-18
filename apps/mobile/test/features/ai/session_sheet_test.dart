@@ -29,39 +29,46 @@ class RecordingAiController extends AiController {
 
 void main() {
   testWidgets('弹层列出会话；切换调用 switchSession', (tester) async {
-    final controller = RecordingAiController(AiState(
-      status: AiConnStatus.online,
-      busy: false,
-      lastError: null,
-      currentSessionId: 's1',
-      model: 'm',
-      sessions: const [
-        SessionItem(id: 's1', name: '今日计划', messageCount: 3, modified: ''),
-        SessionItem(id: 's2', name: '周末安排', messageCount: 1, modified: ''),
-      ],
-      messages: const [],
-      activeTurn: null,
-    ));
-    final container = ProviderContainer(overrides: [
-      aiControllerProvider.overrideWith(() => controller),
-    ]);
+    final controller = RecordingAiController(
+      AiState(
+        status: AiConnStatus.online,
+        busy: false,
+        lastError: null,
+        currentSessionId: 's1',
+        model: 'm',
+        sessions: const [
+          SessionItem(id: 's1', name: '今日计划', messageCount: 3, modified: ''),
+          SessionItem(id: 's2', name: '周末安排', messageCount: 1, modified: ''),
+        ],
+        messages: const [],
+        activeTurn: null,
+        hasMoreMessages: false,
+        loadingMore: false,
+        totalMessages: 0,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [aiControllerProvider.overrideWith(() => controller)],
+    );
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Consumer(
-              builder: (context, ref, _) => ElevatedButton(
-                onPressed: () => showSessionSheet(context, ref),
-                child: const Text('打开'),
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Consumer(
+                builder: (context, ref, _) => ElevatedButton(
+                  onPressed: () => showSessionSheet(context, ref),
+                  child: const Text('打开'),
+                ),
               ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
 
@@ -75,26 +82,28 @@ void main() {
 
   testWidgets('新建会话；删除需确认', (tester) async {
     final controller = RecordingAiController(AiState.initial());
-    final container = ProviderContainer(overrides: [
-      aiControllerProvider.overrideWith(() => controller),
-    ]);
+    final container = ProviderContainer(
+      overrides: [aiControllerProvider.overrideWith(() => controller)],
+    );
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: Consumer(
-              builder: (context, ref, _) => ElevatedButton(
-                onPressed: () => showSessionSheet(context, ref),
-                child: const Text('打开'),
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Consumer(
+                builder: (context, ref, _) => ElevatedButton(
+                  onPressed: () => showSessionSheet(context, ref),
+                  child: const Text('打开'),
+                ),
               ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
     expect(find.text('暂无会话'), findsOneWidget);

@@ -12,7 +12,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core'
 process.env.DATABASE_URL = 'postgresql://serenique:serenique@127.0.0.1:1/serenique'
 process.env.BLOB_ROOT = '/tmp/serenique-ai-service-test'
 
-const { toRenderMessages } = await import('./ai.service')
+const { toRenderMessages, tailRenderMessages, INITIAL_PAGE_SIZE } = await import('./ai.service')
 
 describe('ai.service', () => {
   test('toRenderMessages 关联 toolResult 到 toolCall', () => {
@@ -100,5 +100,89 @@ describe('ai.service', () => {
     expect(out).toHaveLength(1) // toolResult 不产生独立渲染消息
     expect(out[0].toolCalls[0].result).toBe(`${'x'.repeat(2000)}…(截断)`)
     expect(out[0].toolCalls[0].isError).toBe(true)
+  })
+})
+
+describe('tailRenderMessages', () => {
+  // 构造 N 条 RenderMessage（user/assistant 交替）的 AgentMessage[]。
+  function buildMessages(count: number): AgentMessage[] {
+    const out: AgentMessage[] = []
+    for (let i = 0; i < count; i++) {
+      out.push({ role: 'user', content: `user-${i}` } as unknown as AgentMessage)
+      out.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: `assistant-${i}` }],
+      } as unknown as AgentMessage)
+    }
+    return out
+  }
+
+  test('初始加载只取尾部 limit 条', () => {
+    // 25 条 RenderMessage，初始取 20 条 → 返回尾部 20 条，hasMore=true
+    const messages = buildMessages(25)
+    const res = tailRenderMessages(messages, INITIAL_PAGE_SIZE, 0)
+    expect(res.total).toBe(50)
+    expect(res.messages).toHaveLength(20)
+    expect(res.messages[0].text).toBe('user-15') // 第 15 条 user 起始
+    expect(res.messages[19].text).toBe('assistant-24')
+    expect(res.hasMore).toBe(true)
+  })
+
+  test('offset 向前加载更早批次', () => {
+    const messages = buildMessages(25)
+    // 初始已发 20 条，offset=20 再取 30 条 → 剩余 30 条全取完
+    const res = tailRenderMessages(messages, 30, 20)
+    expect(res.total).toBe(50)
+    expect(res.messages).toHaveLength(30)
+    expect(res.messages[0].text).toBe('user-0')
+    expect(res.messages[29].text).toBe('assistant-14')
+    expect(res.hasMore).toBe(false)
+  })
+
+  test('limit > total 时返回全部，hasMore=false', () => {
+    const messages = buildMessages(3) // 6 条 RenderMessage
+    const res = tailRenderMessages(messages, 20, 0)
+    expect(res.total).toBe(6)
+    expect(res.messages).toHaveLength(6)
+    expect(res.hasMore).toBe(false)
+  })
+
+  test('空会话返回空数组', () => {
+    const res = tailRenderMessages([], 20, 0)
+    expect(res.total).toBe(0)
+    expect(res.messages).toHaveLength(0)
+    expect(res.hasMore).toBe(false)
+  })
+
+  test('toolCall/toolResult 关联不被分页截断', () => {
+    // assistant 的 toolCall + 紧跟的 toolResult 在 jsonl 里相邻，转换后关联进
+    // 同一 RenderMessage，分页不会拆散。
+    const messages = [
+      { role: 'user', content: '问题' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: '调用工具' },
+          { type: 'toolCall', id: 't1', name: 'noop', arguments: {} },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 't1',
+        content: [{ type: 'text', text: '结果' }],
+        isError: false,
+      },
+      { role: 'user', content: 'thanks' },
+    ] as unknown as AgentMessage[]
+
+    // limit=1 只取尾部 1 条 RenderMessage（最后的 user），assistant+toolCall
+    // 整体在同一条 RenderMessage 里，不会被截断到只剩 toolCall 没有 result
+    const res = tailRenderMessages(messages, 1, 0)
+    expect(res.messages).toHaveLength(1)
+    expect(res.messages[0].text).toBe('thanks')
+    expect(res.hasMore).toBe(true)
+    // 上一条 assistant 的 toolCall 有 result（关联完整）
+    const res2 = tailRenderMessages(messages, 2, 0)
+    expect(res2.messages[0].toolCalls[0].result).toBe('结果')
   })
 })

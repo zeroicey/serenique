@@ -33,6 +33,9 @@ beforeEach(() => {
     sessions: [],
     activeTurn: null,
     lastError: null,
+    hasMoreMessages: false,
+    loadingMore: false,
+    totalMessages: 0,
   })
 })
 
@@ -46,6 +49,8 @@ describe('ai-store', () => {
       sessionId: 's1',
       model: 'deepseek/deepseek-v4-flash',
       messages: [],
+      totalMessageCount: 0,
+      hasMore: false,
     })
     ws.open() // 实际顺序以实现为准；测试关注最终状态
     expect(useAiStore.getState().status).toBe('online')
@@ -173,5 +178,65 @@ describe('ai-store', () => {
     })
     expect(activeTurn).toBeNull()
     expect(busy).toBe(false)
+  })
+
+  test('session_ready 带 hasMore 时设置分页状态', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    ws.emit({
+      type: 'session_ready',
+      sessionId: 's2',
+      model: 'deepseek/v4',
+      messages: [{ role: 'user', text: '最新', thinking: '', toolCalls: [] }],
+      totalMessageCount: 50,
+      hasMore: true,
+    })
+    const s = useAiStore.getState()
+    expect(s.hasMoreMessages).toBe(true)
+    expect(s.totalMessages).toBe(50)
+    expect(s.messages).toHaveLength(1)
+  })
+
+  test('loadMore 发 load_more 并置 loadingMore；messages_loaded prepend', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    // 初始：已有 1 条尾部消息，hasMore=true
+    useAiStore.setState({
+      hasMoreMessages: true,
+      messages: [{ role: 'user', text: '最新', thinking: '', toolCalls: [] }],
+    })
+    useAiStore.getState().loadMore()
+    expect(JSON.parse(ws.sent[ws.sent.length - 1])).toEqual({ type: 'load_more' })
+    expect(useAiStore.getState().loadingMore).toBe(true)
+    // 防并发：loadingMore 中再调不重复发
+    const sentBefore = ws.sent.length
+    useAiStore.getState().loadMore()
+    expect(ws.sent.length).toBe(sentBefore)
+    // 收到 messages_loaded：prepend 更早的消息
+    ws.emit({
+      type: 'messages_loaded',
+      messages: [{ role: 'assistant', text: '更早', thinking: '', toolCalls: [] }],
+      totalMessageCount: 50,
+      hasMore: false,
+    })
+    const s = useAiStore.getState()
+    expect(s.loadingMore).toBe(false)
+    expect(s.hasMoreMessages).toBe(false)
+    expect(s.totalMessages).toBe(50)
+    expect(s.messages).toHaveLength(2)
+    expect(s.messages[0].text).toBe('更早')
+    expect(s.messages[1].text).toBe('最新')
+  })
+
+  test('hasMore=false 时 loadMore 不发请求', () => {
+    useAiStore.getState().setWsFactory((url) => new FakeSocket(url) as unknown as WebSocket)
+    useAiStore.getState().connect()
+    const ws = FakeSocket.instances[0]
+    useAiStore.setState({ hasMoreMessages: false })
+    const sentBefore = ws.sent.length
+    useAiStore.getState().loadMore()
+    expect(ws.sent.length).toBe(sentBefore)
   })
 })

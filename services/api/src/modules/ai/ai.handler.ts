@@ -1,7 +1,13 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
 import type { WSContext } from 'hono/ws'
 import { getAuthVars } from '@/modules/auth/auth.middleware'
-import { aiService, forwardEvents, toRenderMessages } from './ai.service'
+import {
+  aiService,
+  forwardEvents,
+  INITIAL_PAGE_SIZE,
+  MORE_PAGE_SIZE,
+  tailRenderMessages,
+} from './ai.service'
 
 // ---------------------------------------------------------------------------
 // AI WebSocket 协议层 — 每个连接持有「当前会话」，协议消息见 ai.types.ts。
@@ -54,6 +60,8 @@ type Conn = {
   unsubscribe?: () => void
   /** onOpen 完成前到达的消息暂存（防御性：Bun 保证 open 先于 message，通常为空）。 */
   pending: string[]
+  /** 已下发的 RenderMessage 条数（分页游标，per-connection）。切会话/建新会话重置。 */
+  deliveredCount: number
 }
 
 // 关键：hono bun adapter 的每次事件回调（open/message/close）都会新建一个
@@ -136,13 +144,17 @@ async function resetAfterDelete(conn: Conn, ws: WSContext, deletedId: string) {
   return { sm, session }
 }
 
-/** session_switched 的应答构造（切换/新建/删除当前会话后共用）。 */
-function sessionPayload(sessionId: string, session: AgentSession) {
+/** session_switched 的应答构造（切换/新建/删除当前会话后共用）。只发尾部 N 条，附带分页元信息。 */
+function sessionPayload(sessionId: string, session: AgentSession, conn: Conn) {
+  const tail = tailRenderMessages(session.messages, INITIAL_PAGE_SIZE, 0)
+  conn.deliveredCount = tail.messages.length
   return JSON.stringify({
     type: 'session_switched',
     sessionId,
     model: `${session.model?.provider}/${session.model?.id}`,
-    messages: toRenderMessages(session.messages),
+    messages: tail.messages,
+    totalMessageCount: tail.total,
+    hasMore: tail.hasMore,
   })
 }
 
@@ -153,7 +165,11 @@ export function createAiWebSocket(upgradeWebSocket: typeof import('hono/bun').up
 
     return {
       async onOpen(_evt, ws) {
-        const conn: Conn = { pending: [], ...(auth.userId ? { userId: auth.userId } : {}) }
+        const conn: Conn = {
+          pending: [],
+          deliveredCount: 0,
+          ...(auth.userId ? { userId: auth.userId } : {}),
+        }
         connections.set(ws.raw, conn)
         try {
           if (!(await aiService.isAiEnabled())) {
@@ -164,13 +180,17 @@ export function createAiWebSocket(upgradeWebSocket: typeof import('hono/bun').up
           conn.session = session
           conn.unsubscribe = forwardEvents((json) => safeSend(ws, json), session)
           acquireSession(conn.sessionId)
+          const tail = tailRenderMessages(session.messages, INITIAL_PAGE_SIZE, 0)
+          conn.deliveredCount = tail.messages.length
           safeSend(
             ws,
             JSON.stringify({
               type: 'session_ready',
               sessionId: conn.sessionId,
               model: `${session.model?.provider}/${session.model?.id}`,
-              messages: toRenderMessages(session.messages),
+              messages: tail.messages,
+              totalMessageCount: tail.total,
+              hasMore: tail.hasMore,
             }),
           )
           for (const raw of conn.pending) handleMessage(ws, raw)
@@ -199,7 +219,7 @@ async function handleMessage(ws: WSContext, raw: string) {
   try {
     let msg:
       | { type: 'prompt' | 'steer' | 'followUp'; text?: string }
-      | { type: 'abort' | 'list_sessions' | 'new_session' }
+      | { type: 'abort' | 'list_sessions' | 'new_session' | 'load_more'; limit?: number }
       | { type: 'switch_session' | 'delete_session'; sessionId: string }
     try {
       msg = JSON.parse(raw)
@@ -246,7 +266,7 @@ async function handleMessage(ws: WSContext, raw: string) {
         // 放弃旧会话（引用 -1；仅本连接是最后一个持有者时才释放实例）
         releaseConnectionSession(conn)
         attachSession(conn, ws, sm.getSessionId(), session)
-        safeSend(ws, sessionPayload(sm.getSessionId(), session))
+        safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
         const sessions = await aiService.listSessions()
         safeSend(ws, JSON.stringify({ type: 'sessions', sessions }))
         break
@@ -267,7 +287,7 @@ async function handleMessage(ws: WSContext, raw: string) {
         const { sm, session } = await aiService.openSession(path)
         releaseConnectionSession(conn) // 放弃旧会话（引用 -1）
         attachSession(conn, ws, sm.getSessionId(), session)
-        safeSend(ws, sessionPayload(sm.getSessionId(), session))
+        safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
         break
       }
       case 'delete_session': {
@@ -281,7 +301,7 @@ async function handleMessage(ws: WSContext, raw: string) {
             // 失败（如凭据失效）时 conn 不悬空，下次 prompt 走兜底重开
             const { sm, session } = await resetAfterDelete(conn, ws, msg.sessionId)
             safeSend(ws, JSON.stringify({ type: 'session_deleted', sessionId: msg.sessionId }))
-            safeSend(ws, sessionPayload(sm.getSessionId(), session))
+            safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
             const sessions = await aiService.listSessions()
             safeSend(ws, JSON.stringify({ type: 'sessions', sessions }))
             break
@@ -294,10 +314,40 @@ async function handleMessage(ws: WSContext, raw: string) {
         safeSend(ws, JSON.stringify({ type: 'session_deleted', sessionId: msg.sessionId }))
         if (conn.sessionId === msg.sessionId) {
           const { sm, session } = await resetAfterDelete(conn, ws, msg.sessionId)
-          safeSend(ws, sessionPayload(sm.getSessionId(), session))
+          safeSend(ws, sessionPayload(sm.getSessionId(), session, conn))
         }
         const sessions = await aiService.listSessions()
         safeSend(ws, JSON.stringify({ type: 'sessions', sessions }))
+        break
+      }
+      case 'load_more': {
+        // 分页加载更早的消息：从已下发条数（deliveredCount）往前取 limit 条。
+        // limit 缺省 MORE_PAGE_SIZE。会话实例丢失时无历史可加载，返回空批次。
+        const session = conn.session
+        if (!session) {
+          safeSend(
+            ws,
+            JSON.stringify({
+              type: 'messages_loaded',
+              messages: [],
+              totalMessageCount: 0,
+              hasMore: false,
+            }),
+          )
+          break
+        }
+        const limit = msg.limit ?? MORE_PAGE_SIZE
+        const tail = tailRenderMessages(session.messages, limit, conn.deliveredCount)
+        conn.deliveredCount += tail.messages.length
+        safeSend(
+          ws,
+          JSON.stringify({
+            type: 'messages_loaded',
+            messages: tail.messages,
+            totalMessageCount: tail.total,
+            hasMore: tail.hasMore,
+          }),
+        )
         break
       }
       default:

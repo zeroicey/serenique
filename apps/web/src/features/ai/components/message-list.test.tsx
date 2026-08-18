@@ -61,4 +61,38 @@ describe('MessageList', () => {
     const strong = container.querySelector('[data-streamdown="strong"]')
     expect(strong?.textContent).toBe('加粗')
   })
+
+  test('hasMoreMessages 时渲染顶部哨兵与加载提示', () => {
+    useAiStore.setState({
+      messages: [{ role: 'user', text: '最新', thinking: '', toolCalls: [] }],
+      activeTurn: null,
+      hasMoreMessages: true,
+      loadingMore: false,
+    })
+    render(<MessageList />)
+    expect(screen.getByText('向上滚动加载更多')).toBeTruthy()
+  })
+
+  test('loadingMore 时显示加载中文案', () => {
+    useAiStore.setState({
+      messages: [{ role: 'user', text: '最新', thinking: '', toolCalls: [] }],
+      activeTurn: null,
+      hasMoreMessages: true,
+      loadingMore: true,
+    })
+    render(<MessageList />)
+    expect(screen.getByText('加载更早消息…')).toBeTruthy()
+  })
+
+  test('无更多历史时不渲染哨兵', () => {
+    useAiStore.setState({
+      messages: [{ role: 'user', text: '最新', thinking: '', toolCalls: [] }],
+      activeTurn: null,
+      hasMoreMessages: false,
+      loadingMore: false,
+    })
+    render(<MessageList />)
+    expect(screen.queryByText('向上滚动加载更多')).toBeNull()
+    expect(screen.queryByText('加载更早消息…')).toBeNull()
+  })
 })

@@ -37,14 +37,30 @@ final class ClientSwitchSession extends ClientMessage {
   const ClientSwitchSession(this.sessionId);
   final String sessionId;
   @override
-  Map<String, Object?> toJson() => {'type': 'switch_session', 'sessionId': sessionId};
+  Map<String, Object?> toJson() => {
+    'type': 'switch_session',
+    'sessionId': sessionId,
+  };
 }
 
 final class ClientDeleteSession extends ClientMessage {
   const ClientDeleteSession(this.sessionId);
   final String sessionId;
   @override
-  Map<String, Object?> toJson() => {'type': 'delete_session', 'sessionId': sessionId};
+  Map<String, Object?> toJson() => {
+    'type': 'delete_session',
+    'sessionId': sessionId,
+  };
+}
+
+final class ClientLoadMore extends ClientMessage {
+  const ClientLoadMore({this.limit});
+  final int? limit;
+  @override
+  Map<String, Object?> toJson() => {
+    'type': 'load_more',
+    if (limit != null) 'limit': limit,
+  };
 }
 
 sealed class ServerMessage {
@@ -66,15 +82,25 @@ sealed class ServerMessage {
           json['sessionId'] as String,
           (json['model'] as String?) ?? '',
           (json['messages'] as List? ?? const []).toList(),
+          totalMessageCount: (json['totalMessageCount'] as num?)?.toInt() ?? 0,
+          hasMore: (json['hasMore'] as bool?) ?? false,
         );
       case 'session_switched':
         return SessionSwitchedMessage(
           json['sessionId'] as String,
           (json['model'] as String?) ?? '',
           (json['messages'] as List? ?? const []).toList(),
+          totalMessageCount: (json['totalMessageCount'] as num?)?.toInt() ?? 0,
+          hasMore: (json['hasMore'] as bool?) ?? false,
         );
       case 'session_deleted':
         return SessionDeletedMessage(json['sessionId'] as String);
+      case 'messages_loaded':
+        return MessagesLoadedMessage(
+          (json['messages'] as List? ?? const []).toList(),
+          totalMessageCount: (json['totalMessageCount'] as num?)?.toInt() ?? 0,
+          hasMore: (json['hasMore'] as bool?) ?? false,
+        );
       case 'error':
         return ErrorMessage((json['message'] as String?) ?? '未知错误');
       case 'agent_start':
@@ -127,22 +153,50 @@ final class SessionsMessage extends ServerMessage {
 }
 
 final class SessionReadyMessage extends ServerMessage {
-  const SessionReadyMessage(this.sessionId, this.model, this.messages);
+  const SessionReadyMessage(
+    this.sessionId,
+    this.model,
+    this.messages, {
+    required this.totalMessageCount,
+    required this.hasMore,
+  });
   final String sessionId;
   final String model;
   final List<Object?> messages;
+  final int totalMessageCount;
+  final bool hasMore;
 }
 
 final class SessionSwitchedMessage extends ServerMessage {
-  const SessionSwitchedMessage(this.sessionId, this.model, this.messages);
+  const SessionSwitchedMessage(
+    this.sessionId,
+    this.model,
+    this.messages, {
+    required this.totalMessageCount,
+    required this.hasMore,
+  });
   final String sessionId;
   final String model;
   final List<Object?> messages;
+  final int totalMessageCount;
+  final bool hasMore;
 }
 
 final class SessionDeletedMessage extends ServerMessage {
   const SessionDeletedMessage(this.sessionId);
   final String sessionId;
+}
+
+/// 向上滚动加载更早的历史消息批次（prepend 到 messages 前面）。
+final class MessagesLoadedMessage extends ServerMessage {
+  const MessagesLoadedMessage(
+    this.messages, {
+    required this.totalMessageCount,
+    required this.hasMore,
+  });
+  final List<Object?> messages;
+  final int totalMessageCount;
+  final bool hasMore;
 }
 
 final class ErrorMessage extends ServerMessage {
@@ -184,14 +238,23 @@ final class ToolExecutionStartMessage extends ServerMessage {
 }
 
 final class ToolExecutionUpdateMessage extends ServerMessage {
-  const ToolExecutionUpdateMessage(this.toolCallId, this.toolName, this.partialResult);
+  const ToolExecutionUpdateMessage(
+    this.toolCallId,
+    this.toolName,
+    this.partialResult,
+  );
   final String toolCallId;
   final String toolName;
   final String partialResult;
 }
 
 final class ToolExecutionEndMessage extends ServerMessage {
-  const ToolExecutionEndMessage(this.toolCallId, this.toolName, this.result, this.isError);
+  const ToolExecutionEndMessage(
+    this.toolCallId,
+    this.toolName,
+    this.result,
+    this.isError,
+  );
   final String toolCallId;
   final String toolName;
   final String result;

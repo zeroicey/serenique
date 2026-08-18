@@ -35,7 +35,8 @@ class FakeWsChannel implements WebSocketChannel {
   // 其余成员（pipe/transform/cast 等）测试中不会用到，运行时调用即报错。
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
-      'FakeWsChannel.${invocation.memberName} not used in tests');
+    'FakeWsChannel.${invocation.memberName} not used in tests',
+  );
 
   void emit(String json) => _incoming.add(json);
 
@@ -69,17 +70,19 @@ class _FakeSink implements WebSocketSink {
 /// 每次 connect 新建一个 AiClient + FakeWsChannel（重连场景用）。
 class TestHarness {
   TestHarness() {
-    container = ProviderContainer(overrides: [
-      aiClientFactoryProvider.overrideWithValue(() {
-        final ch = FakeWsChannel();
-        channels.add(ch);
-        return AiClient(
-          baseUrl: 'https://api.example.com',
-          tokenReader: () => null,
-          channelFactory: (uri, headers) => ch,
-        );
-      }),
-    ]);
+    container = ProviderContainer(
+      overrides: [
+        aiClientFactoryProvider.overrideWithValue(() {
+          final ch = FakeWsChannel();
+          channels.add(ch);
+          return AiClient(
+            baseUrl: 'https://api.example.com',
+            tokenReader: () => null,
+            channelFactory: (uri, headers) => ch,
+          );
+        }),
+      ],
+    );
   }
 
   late final ProviderContainer container;
@@ -115,15 +118,17 @@ void main() {
     addTearDown(h.container.dispose);
     await h.connect();
 
-    h.channel.emit(jsonEncode({
-      'type': 'session_ready',
-      'sessionId': 's1',
-      'model': 'opencode-go/deepseek-v4-flash',
-      'messages': [
-        {'role': 'user', 'text': '帮我排计划', 'thinking': '', 'toolCalls': []},
-        {'role': 'assistant', 'text': '好的', 'thinking': '', 'toolCalls': []},
-      ],
-    }));
+    h.channel.emit(
+      jsonEncode({
+        'type': 'session_ready',
+        'sessionId': 's1',
+        'model': 'opencode-go/deepseek-v4-flash',
+        'messages': [
+          {'role': 'user', 'text': '帮我排计划', 'thinking': '', 'toolCalls': []},
+          {'role': 'assistant', 'text': '好的', 'thinking': '', 'toolCalls': []},
+        ],
+      }),
+    );
     await pumpEventQueue();
     expect(h.state.currentSessionId, 's1');
     expect(h.state.model, 'opencode-go/deepseek-v4-flash');
@@ -142,33 +147,43 @@ void main() {
     final streamed = <String>[];
     h.state.activeTurn!.textController.stream.listen(streamed.add);
 
-    h.channel.emit(jsonEncode({
-      'type': 'message_update',
-      'assistantMessageEvent': {'type': 'text_delta', 'delta': '你好'},
-    }));
-    h.channel.emit(jsonEncode({
-      'type': 'message_update',
-      'assistantMessageEvent': {'type': 'text_delta', 'delta': '，世界'},
-    }));
-    h.channel.emit(jsonEncode({
-      'type': 'tool_execution_start',
-      'toolCallId': 't1',
-      'toolName': 'list_tasks',
-      'args': {},
-    }));
-    h.channel.emit(jsonEncode({
-      'type': 'tool_execution_update',
-      'toolCallId': 't1',
-      'toolName': 'list_tasks',
-      'partialResult': '{"items":[]}',
-    }));
-    h.channel.emit(jsonEncode({
-      'type': 'tool_execution_end',
-      'toolCallId': 't1',
-      'toolName': 'list_tasks',
-      'result': '',
-      'isError': false,
-    }));
+    h.channel.emit(
+      jsonEncode({
+        'type': 'message_update',
+        'assistantMessageEvent': {'type': 'text_delta', 'delta': '你好'},
+      }),
+    );
+    h.channel.emit(
+      jsonEncode({
+        'type': 'message_update',
+        'assistantMessageEvent': {'type': 'text_delta', 'delta': '，世界'},
+      }),
+    );
+    h.channel.emit(
+      jsonEncode({
+        'type': 'tool_execution_start',
+        'toolCallId': 't1',
+        'toolName': 'list_tasks',
+        'args': {},
+      }),
+    );
+    h.channel.emit(
+      jsonEncode({
+        'type': 'tool_execution_update',
+        'toolCallId': 't1',
+        'toolName': 'list_tasks',
+        'partialResult': '{"items":[]}',
+      }),
+    );
+    h.channel.emit(
+      jsonEncode({
+        'type': 'tool_execution_end',
+        'toolCallId': 't1',
+        'toolName': 'list_tasks',
+        'result': '',
+        'isError': false,
+      }),
+    );
     h.channel.emit(jsonEncode({'type': 'turn_end'}));
     await pumpEventQueue();
 
@@ -191,10 +206,12 @@ void main() {
     await h.connect();
 
     h.channel.emit(jsonEncode({'type': 'turn_start'}));
-    h.channel.emit(jsonEncode({
-      'type': 'message_update',
-      'assistantMessageEvent': {'type': 'thinking_delta', 'delta': '想一下'},
-    }));
+    h.channel.emit(
+      jsonEncode({
+        'type': 'message_update',
+        'assistantMessageEvent': {'type': 'thinking_delta', 'delta': '想一下'},
+      }),
+    );
     h.channel.emit(jsonEncode({'type': 'turn_end'}));
     await pumpEventQueue();
 
@@ -203,8 +220,7 @@ void main() {
     expect(h.state.messages.single.text, '');
   });
 
-  test('空轮（turn_start → turn_end 无任何 delta/工具事件）：不追加、activeTurn 复位',
-      () async {
+  test('空轮（turn_start → turn_end 无任何 delta/工具事件）：不追加、activeTurn 复位', () async {
     final h = TestHarness();
     addTearDown(h.container.dispose);
     await h.connect();
@@ -226,10 +242,12 @@ void main() {
     await pumpEventQueue();
     expect(h.state.busy, isTrue);
     h.channel.emit(jsonEncode({'type': 'turn_start'}));
-    h.channel.emit(jsonEncode({
-      'type': 'message_update',
-      'assistantMessageEvent': {'type': 'text_delta', 'delta': 'ok'},
-    }));
+    h.channel.emit(
+      jsonEncode({
+        'type': 'message_update',
+        'assistantMessageEvent': {'type': 'text_delta', 'delta': 'ok'},
+      }),
+    );
     h.channel.emit(jsonEncode({'type': 'agent_end'}));
     await pumpEventQueue();
     expect(h.state.busy, isFalse);
@@ -262,8 +280,10 @@ void main() {
     expect(h.state.messages, hasLength(1));
     expect(h.state.messages.single.role, 'user');
     expect(h.state.messages.single.text, '帮我加个任务');
-    expect(jsonDecode(h.channel.sent.single as String),
-        {'type': 'prompt', 'text': '帮我加个任务'});
+    expect(jsonDecode(h.channel.sent.single as String), {
+      'type': 'prompt',
+      'text': '帮我加个任务',
+    });
   });
 
   test('offline 状态 send：不追加 user 消息、不发 prompt（防幽灵消息）', () async {
@@ -291,9 +311,16 @@ void main() {
     h.notifier.refreshSessions();
     h.notifier.abort();
 
-    final types =
-        h.channel.sent.map((m) => jsonDecode(m as String)['type']).toList();
-    expect(types, ['new_session', 'switch_session', 'delete_session', 'list_sessions', 'abort']);
+    final types = h.channel.sent
+        .map((m) => jsonDecode(m as String)['type'])
+        .toList();
+    expect(types, [
+      'new_session',
+      'switch_session',
+      'delete_session',
+      'list_sessions',
+      'abort',
+    ]);
   });
 
   test('断线 → offline；重连新建通道', () async {
@@ -309,5 +336,106 @@ void main() {
     await pumpEventQueue();
     expect(h.channels, hasLength(2));
     expect(h.state.status, AiConnStatus.online);
+  });
+
+  test('session_ready 带 hasMore 时设置分页状态', () async {
+    final h = TestHarness();
+    addTearDown(h.container.dispose);
+    await h.connect();
+
+    h.channel.emit(
+      jsonEncode({
+        'type': 'session_ready',
+        'sessionId': 's1',
+        'model': 'm',
+        'messages': [
+          {'role': 'user', 'text': '最新', 'thinking': '', 'toolCalls': []},
+        ],
+        'totalMessageCount': 50,
+        'hasMore': true,
+      }),
+    );
+    await pumpEventQueue();
+    expect(h.state.hasMoreMessages, isTrue);
+    expect(h.state.totalMessages, 50);
+    expect(h.state.messages, hasLength(1));
+  });
+
+  test('loadMore：发 load_more 并置 loadingMore；防并发不重复发', () async {
+    final h = TestHarness();
+    addTearDown(h.container.dispose);
+    await h.connect();
+
+    h.channel.emit(
+      jsonEncode({
+        'type': 'session_ready',
+        'sessionId': 's1',
+        'model': 'm',
+        'messages': [
+          {'role': 'user', 'text': '最新', 'thinking': '', 'toolCalls': []},
+        ],
+        'totalMessageCount': 50,
+        'hasMore': true,
+      }),
+    );
+    await pumpEventQueue();
+
+    h.notifier.loadMore();
+    expect(jsonDecode(h.channel.sent.last as String), {'type': 'load_more'});
+    expect(h.state.loadingMore, isTrue);
+
+    final sentBefore = h.channel.sent.length;
+    h.notifier.loadMore();
+    expect(h.channel.sent.length, sentBefore);
+  });
+
+  test('hasMore=false 时 loadMore 不发请求', () async {
+    final h = TestHarness();
+    addTearDown(h.container.dispose);
+    await h.connect();
+
+    final sentBefore = h.channel.sent.length;
+    h.notifier.loadMore();
+    expect(h.channel.sent.length, sentBefore);
+  });
+
+  test('messages_loaded：prepend 更早消息到 messages 前面', () async {
+    final h = TestHarness();
+    addTearDown(h.container.dispose);
+    await h.connect();
+
+    h.channel.emit(
+      jsonEncode({
+        'type': 'session_ready',
+        'sessionId': 's1',
+        'model': 'm',
+        'messages': [
+          {'role': 'user', 'text': '最新', 'thinking': '', 'toolCalls': []},
+        ],
+        'totalMessageCount': 2,
+        'hasMore': true,
+      }),
+    );
+    await pumpEventQueue();
+    expect(h.state.messages.single.text, '最新');
+
+    h.notifier.loadMore();
+    h.channel.emit(
+      jsonEncode({
+        'type': 'messages_loaded',
+        'messages': [
+          {'role': 'assistant', 'text': '更早', 'thinking': '', 'toolCalls': []},
+        ],
+        'totalMessageCount': 2,
+        'hasMore': false,
+      }),
+    );
+    await pumpEventQueue();
+
+    expect(h.state.loadingMore, isFalse);
+    expect(h.state.hasMoreMessages, isFalse);
+    expect(h.state.messages, hasLength(2));
+    expect(h.state.messages.first.text, '更早');
+    expect(h.state.messages.last.text, '最新');
   });
 }

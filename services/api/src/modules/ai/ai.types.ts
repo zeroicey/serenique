@@ -10,15 +10,36 @@ export type ClientMessage =
   | { type: 'new_session' }
   | { type: 'switch_session'; sessionId: string }
   | { type: 'delete_session'; sessionId: string }
+  | { type: 'load_more'; limit?: number }
 
 export type ServerMessage =
   | {
       type: 'sessions'
       sessions: Array<{ id: string; name: string; messageCount: number; modified: string }>
     }
-  | { type: 'session_ready'; sessionId: string; model: string; messages: unknown[] }
-  | { type: 'session_switched'; sessionId: string; model: string; messages: unknown[] }
+  | {
+      type: 'session_ready'
+      sessionId: string
+      model: string
+      messages: unknown[]
+      totalMessageCount: number
+      hasMore: boolean
+    }
+  | {
+      type: 'session_switched'
+      sessionId: string
+      model: string
+      messages: unknown[]
+      totalMessageCount: number
+      hasMore: boolean
+    }
   | { type: 'session_deleted'; sessionId: string }
+  | {
+      type: 'messages_loaded'
+      messages: unknown[]
+      totalMessageCount: number
+      hasMore: boolean
+    }
   | { type: 'error'; message: string }
   | { type: 'agent_start' }
   | { type: 'agent_settled' }

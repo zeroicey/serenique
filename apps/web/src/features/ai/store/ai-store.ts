@@ -41,6 +41,12 @@ interface AiState {
   sessions: SessionItem[]
   messages: RenderMessage[]
   activeTurn: TurnState | null
+  /** 是否还有更早的历史消息可加载（向上滚动懒加载）。 */
+  hasMoreMessages: boolean
+  /** 正在加载更早的消息（防并发重复请求）。 */
+  loadingMore: boolean
+  /** 当前会话渲染消息总数（来自后端 totalMessageCount）。 */
+  totalMessages: number
   setWsFactory: (f: WsFactory) => void
   connect: () => Promise<void>
   send: (text: string) => void
@@ -49,6 +55,7 @@ interface AiState {
   switchSession: (id: string) => void
   deleteSession: (id: string) => void
   refreshSessions: () => void
+  loadMore: () => void
 }
 
 let ws: WebSocket | null = null
@@ -93,6 +100,9 @@ export const useAiStore = create<AiState>((set, get) => ({
   sessions: [],
   messages: [],
   activeTurn: null,
+  hasMoreMessages: false,
+  loadingMore: false,
+  totalMessages: 0,
 
   setWsFactory: (f) => {
     wsFactory = f
@@ -128,6 +138,9 @@ export const useAiStore = create<AiState>((set, get) => ({
             busy: false,
             activeTurn: null,
             lastError: null,
+            hasMoreMessages: ev.hasMore,
+            loadingMore: false,
+            totalMessages: ev.totalMessageCount,
           })
           get().refreshSessions()
           break
@@ -140,6 +153,16 @@ export const useAiStore = create<AiState>((set, get) => ({
           break
         case 'error':
           set({ busy: false, lastError: ev.message })
+          break
+        case 'messages_loaded':
+          // 向上滚动加载更早的消息：prepend 到 messages 前面。loadingMore
+          // 置 false；hasMoreMessages / totalMessages 更新为后端返回值。
+          set((s) => ({
+            messages: [...(ev.messages as RenderMessage[]), ...s.messages],
+            loadingMore: false,
+            hasMoreMessages: ev.hasMore,
+            totalMessages: ev.totalMessageCount,
+          }))
           break
         case 'agent_start':
           set({ busy: true })
@@ -235,4 +258,11 @@ export const useAiStore = create<AiState>((set, get) => ({
   switchSession: (id) => sendMsg({ type: 'switch_session', sessionId: id }),
   deleteSession: (id) => sendMsg({ type: 'delete_session', sessionId: id }),
   refreshSessions: () => sendMsg({ type: 'list_sessions' }),
+  loadMore: () => {
+    // 防并发：正在加载或无更多历史时不重复请求
+    const s = get()
+    if (s.loadingMore || !s.hasMoreMessages) return
+    set({ loadingMore: true })
+    sendMsg({ type: 'load_more' })
+  },
 }))

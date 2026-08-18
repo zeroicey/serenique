@@ -30,7 +30,8 @@ class FakeWsChannel implements WebSocketChannel {
   // 其余成员（pipe/transform/cast 等）测试中不会用到，运行时调用即报错。
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
-      'FakeWsChannel.${invocation.memberName} not used in tests');
+    'FakeWsChannel.${invocation.memberName} not used in tests',
+  );
 
   void emit(String json) => _incoming.add(json);
   void closeIncoming() => _incoming.close();
@@ -71,23 +72,25 @@ class _FixedAiController extends AiController {
 
 void main() {
   ProviderContainer makeContainer(List<FakeWsChannel> channels) {
-    return ProviderContainer(overrides: [
-      aiClientFactoryProvider.overrideWithValue(() {
-        final ch = FakeWsChannel();
-        channels.add(ch);
-        return AiClient(
-          baseUrl: 'https://api.example.com',
-          tokenReader: () => null,
-          channelFactory: (uri, headers) => ch,
-        );
-      }),
-    ]);
+    return ProviderContainer(
+      overrides: [
+        aiClientFactoryProvider.overrideWithValue(() {
+          final ch = FakeWsChannel();
+          channels.add(ch);
+          return AiClient(
+            baseUrl: 'https://api.example.com',
+            tokenReader: () => null,
+            channelFactory: (uri, headers) => ch,
+          );
+        }),
+      ],
+    );
   }
 
   Widget host(ProviderContainer container) => UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: AiPage())),
-      );
+    container: container,
+    child: const MaterialApp(home: Scaffold(body: AiPage())),
+  );
 
   testWidgets('挂载自动连接；收到历史消息后渲染', (tester) async {
     final channels = <FakeWsChannel>[];
@@ -99,14 +102,16 @@ void main() {
     expect(channels, hasLength(1));
     expect(container.read(aiControllerProvider).status, AiConnStatus.online);
 
-    channels.single.emit(jsonEncode({
-      'type': 'session_ready',
-      'sessionId': 's1',
-      'model': 'm',
-      'messages': [
-        {'role': 'user', 'text': '早上好', 'thinking': '', 'toolCalls': []},
-      ],
-    }));
+    channels.single.emit(
+      jsonEncode({
+        'type': 'session_ready',
+        'sessionId': 's1',
+        'model': 'm',
+        'messages': [
+          {'role': 'user', 'text': '早上好', 'thinking': '', 'toolCalls': []},
+        ],
+      }),
+    );
     await tester.pump();
     expect(find.text('早上好'), findsOneWidget);
   });
@@ -147,26 +152,34 @@ void main() {
 
   testWidgets('connecting 显示连接中进度条；offline 不显示', (tester) async {
     AiState fixed(AiConnStatus s) => AiState(
-          status: s,
-          busy: false,
-          lastError: null,
-          currentSessionId: null,
-          model: '',
-          sessions: const [],
-          messages: const [],
-          activeTurn: null,
-        );
+      status: s,
+      busy: false,
+      lastError: null,
+      currentSessionId: null,
+      model: '',
+      sessions: const [],
+      messages: const [],
+      activeTurn: null,
+      hasMoreMessages: false,
+      loadingMore: false,
+      totalMessages: 0,
+    );
 
     // connecting：断线重连期间 → 细进度条指示
-    final c1 = ProviderContainer(overrides: [
-      aiControllerProvider
-          .overrideWith(() => _FixedAiController(fixed(AiConnStatus.connecting))),
-    ]);
+    final c1 = ProviderContainer(
+      overrides: [
+        aiControllerProvider.overrideWith(
+          () => _FixedAiController(fixed(AiConnStatus.connecting)),
+        ),
+      ],
+    );
     addTearDown(c1.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: c1,
-      child: const MaterialApp(home: Scaffold(body: AiPage())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c1,
+        child: const MaterialApp(home: Scaffold(body: AiPage())),
+      ),
+    );
     await tester.pump();
     final bar = tester.widget<LinearProgressIndicator>(
       find.byType(LinearProgressIndicator),
@@ -175,15 +188,20 @@ void main() {
     expect(find.text('连接已断开'), findsNothing);
 
     // offline：无进度条（走离线横幅）
-    final c2 = ProviderContainer(overrides: [
-      aiControllerProvider
-          .overrideWith(() => _FixedAiController(fixed(AiConnStatus.offline))),
-    ]);
+    final c2 = ProviderContainer(
+      overrides: [
+        aiControllerProvider.overrideWith(
+          () => _FixedAiController(fixed(AiConnStatus.offline)),
+        ),
+      ],
+    );
     addTearDown(c2.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: c2,
-      child: const MaterialApp(home: Scaffold(body: AiPage())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: c2,
+        child: const MaterialApp(home: Scaffold(body: AiPage())),
+      ),
+    );
     await tester.pump();
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('连接已断开'), findsOneWidget);

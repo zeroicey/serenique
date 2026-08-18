@@ -318,6 +318,46 @@ export function toRenderMessages(messages: AgentMessage[]): RenderMessage[] {
   return out
 }
 
+// ---- 分页（懒加载）----------------------------------------------------
+// 初始只发最新 N 条 RenderMessage，向上滚动加载更早批次。分页在 RenderMessage[]
+// 层面切片（转换完后），不在 AgentMessage[] 层面——避免 toolCall/toolResult 关联
+// 断裂：toolResult 不产生独立 RenderMessage，它被关联进 assistant 的 toolCalls
+// 数组，所以按 RenderMessage 条数从尾部切片天然保持 turn 完整性。
+
+/** 初始加载条数（最新 N 条 RenderMessage）。 */
+export const INITIAL_PAGE_SIZE = 20
+/** 向上滚动每批加载条数。 */
+export const MORE_PAGE_SIZE = 30
+
+export type TailResult = {
+  messages: RenderMessage[]
+  total: number
+  hasMore: boolean
+}
+
+/**
+ * 从尾部取分页的 RenderMessage。
+ *
+ * @param messages  完整 AgentMessage[]（session.messages）
+ * @param limit     取多少条 RenderMessage
+ * @param offset    从尾部往前跳过多少条已下发的 RenderMessage（默认 0）
+ */
+export function tailRenderMessages(
+  messages: AgentMessage[],
+  limit: number = INITIAL_PAGE_SIZE,
+  offset: number = 0,
+): TailResult {
+  const all = toRenderMessages(messages)
+  const total = all.length
+  const end = Math.max(0, total - offset)
+  const start = Math.max(0, end - limit)
+  return {
+    messages: all.slice(start, end),
+    total,
+    hasMore: start > 0,
+  }
+}
+
 function userText(content: string | { type: string; text?: string }[]): string {
   if (typeof content === 'string') return content
   return content.map((c) => c.text ?? '[image]').join('\n')

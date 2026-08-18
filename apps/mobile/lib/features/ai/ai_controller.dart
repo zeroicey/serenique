@@ -19,17 +19,23 @@ class AiState {
     required this.sessions,
     required this.messages,
     required this.activeTurn,
+    required this.hasMoreMessages,
+    required this.loadingMore,
+    required this.totalMessages,
   });
 
   const AiState.initial()
-      : status = AiConnStatus.offline,
-        busy = false,
-        lastError = null,
-        currentSessionId = null,
-        model = '',
-        sessions = const [],
-        messages = const [],
-        activeTurn = null;
+    : status = AiConnStatus.offline,
+      busy = false,
+      lastError = null,
+      currentSessionId = null,
+      model = '',
+      sessions = const [],
+      messages = const [],
+      activeTurn = null,
+      hasMoreMessages = false,
+      loadingMore = false,
+      totalMessages = 0;
 
   final AiConnStatus status;
   final bool busy;
@@ -42,6 +48,15 @@ class AiState {
   final List<RenderMessage> messages;
   final TurnState? activeTurn;
 
+  /// 是否还有更早的历史消息可加载（向上滚动懒加载）。
+  final bool hasMoreMessages;
+
+  /// 正在加载更早的消息（防并发重复请求）。
+  final bool loadingMore;
+
+  /// 当前会话渲染消息总数（来自后端 totalMessageCount）。
+  final int totalMessages;
+
   AiState copyWith({
     AiConnStatus? status,
     bool? busy,
@@ -53,6 +68,9 @@ class AiState {
     List<RenderMessage>? messages,
     TurnState? activeTurn,
     bool clearActiveTurn = false,
+    bool? hasMoreMessages,
+    bool? loadingMore,
+    int? totalMessages,
   }) {
     return AiState(
       status: status ?? this.status,
@@ -63,6 +81,9 @@ class AiState {
       sessions: sessions ?? this.sessions,
       messages: messages ?? this.messages,
       activeTurn: clearActiveTurn ? null : (activeTurn ?? this.activeTurn),
+      hasMoreMessages: hasMoreMessages ?? this.hasMoreMessages,
+      loadingMore: loadingMore ?? this.loadingMore,
+      totalMessages: totalMessages ?? this.totalMessages,
     );
   }
 }
@@ -98,7 +119,11 @@ class AiController extends Notifier<AiState> {
     _statusSub = client.statusStream.listen((s) {
       state = state.copyWith(status: s);
     });
-    state = state.copyWith(status: AiConnStatus.connecting, lastError: null, clearError: true);
+    state = state.copyWith(
+      status: AiConnStatus.connecting,
+      lastError: null,
+      clearError: true,
+    );
     await client.connect();
   }
 
@@ -107,8 +132,20 @@ class AiController extends Notifier<AiState> {
       // 注意：零子模式的 `case SessionReadyMessage():` 在本 SDK 不产生类型提升
       // （会报 "getter isn't defined for ServerMessage"），因此改为字段绑定模式，
       // 共享 case 体内 sessionId/model/messages 为绑定局部变量，语义与原代码一致。
-      case SessionReadyMessage(:final sessionId, :final model, :final messages):
-      case SessionSwitchedMessage(:final sessionId, :final model, :final messages):
+      case SessionReadyMessage(
+        :final sessionId,
+        :final model,
+        :final messages,
+        :final totalMessageCount,
+        :final hasMore,
+      ):
+      case SessionSwitchedMessage(
+        :final sessionId,
+        :final model,
+        :final messages,
+        :final totalMessageCount,
+        :final hasMore,
+      ):
         _clearActiveTurn();
         state = state.copyWith(
           currentSessionId: sessionId,
@@ -120,8 +157,27 @@ class AiController extends Notifier<AiState> {
           busy: false,
           lastError: null,
           clearError: true,
+          hasMoreMessages: hasMore,
+          loadingMore: false,
+          totalMessages: totalMessageCount,
         );
         refreshSessions();
+      case MessagesLoadedMessage(
+        :final messages,
+        :final totalMessageCount,
+        :final hasMore,
+      ):
+        // 向上滚动加载更早的消息：prepend 到 messages 前面。
+        final older = messages
+            .whereType<Map<String, Object?>>()
+            .map(RenderMessage.fromJson)
+            .toList();
+        state = state.copyWith(
+          messages: [...older, ...state.messages],
+          loadingMore: false,
+          hasMoreMessages: hasMore,
+          totalMessages: totalMessageCount,
+        );
       case SessionsMessage():
         state = state.copyWith(sessions: ev.sessions);
       case SessionDeletedMessage():
@@ -178,7 +234,8 @@ class AiController extends Notifier<AiState> {
           id: card.id,
           name: card.name,
           args: card.args,
-          result: (card.result.isNotEmpty ? '${card.result}\n' : '') + ev.result,
+          result:
+              (card.result.isNotEmpty ? '${card.result}\n' : '') + ev.result,
           isError: ev.isError,
           running: false,
         );
@@ -198,16 +255,19 @@ class AiController extends Notifier<AiState> {
       text: turn.text,
       thinking: turn.thinking,
       toolCalls: turn.toolCards.values
-          .map((c) => RenderToolCall(
-                id: c.id,
-                name: c.name,
-                args: c.args,
-                result: c.result,
-                isError: c.isError,
-              ))
+          .map(
+            (c) => RenderToolCall(
+              id: c.id,
+              name: c.name,
+              args: c.args,
+              result: c.result,
+              isError: c.isError,
+            ),
+          )
           .toList(),
     );
-    final appended = m.text.isNotEmpty || m.thinking.isNotEmpty || m.toolCalls.isNotEmpty;
+    final appended =
+        m.text.isNotEmpty || m.thinking.isNotEmpty || m.toolCalls.isNotEmpty;
     turn.close();
     state = state.copyWith(
       messages: appended ? [...state.messages, m] : state.messages,
@@ -243,4 +303,11 @@ class AiController extends Notifier<AiState> {
   void switchSession(String id) => _client?.send(ClientSwitchSession(id));
   void deleteSession(String id) => _client?.send(ClientDeleteSession(id));
   void refreshSessions() => _client?.send(const ClientListSessions());
+
+  /// 向上滚动懒加载更早的消息。防并发：正在加载或无更多历史时不重复请求。
+  void loadMore() {
+    if (state.loadingMore || !state.hasMoreMessages) return;
+    state = state.copyWith(loadingMore: true);
+    _client?.send(const ClientLoadMore());
+  }
 }

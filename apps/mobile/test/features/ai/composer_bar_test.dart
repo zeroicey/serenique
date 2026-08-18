@@ -32,48 +32,58 @@ AiState idle() => const AiState.initial();
 
 /// 在线空闲状态：发送按钮可用（offline/connecting 时按钮禁用）。
 AiState onlineIdle() => const AiState(
-      status: AiConnStatus.online,
-      busy: false,
-      lastError: null,
-      currentSessionId: null,
-      model: '',
-      sessions: [],
-      messages: [],
-      activeTurn: null,
-    );
+  status: AiConnStatus.online,
+  busy: false,
+  lastError: null,
+  currentSessionId: null,
+  model: '',
+  sessions: [],
+  messages: [],
+  activeTurn: null,
+  hasMoreMessages: false,
+  loadingMore: false,
+  totalMessages: 0,
+);
 
 void main() {
   testWidgets('输入并点发送：send 收到 trim 后的文本且输入框清空', (tester) async {
     final controller = RecordingAiController(onlineIdle());
-    final container = ProviderContainer(overrides: [
-      aiControllerProvider.overrideWith(() => controller),
-    ]);
+    final container = ProviderContainer(
+      overrides: [aiControllerProvider.overrideWith(() => controller)],
+    );
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ComposerBar())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ComposerBar())),
+      ),
+    );
 
     await tester.enterText(find.byType(TextField), '  帮我加任务  ');
     await tester.tap(find.byIcon(Icons.send));
     await tester.pump();
 
     expect(controller.sentTexts, ['帮我加任务']);
-    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, isEmpty);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      isEmpty,
+    );
   });
 
   testWidgets('空输入不发送；busy 时输入框禁用 + 停止按钮', (tester) async {
     final controller = RecordingAiController(idle());
-    final container = ProviderContainer(overrides: [
-      aiControllerProvider.overrideWith(() => controller),
-    ]);
+    final container = ProviderContainer(
+      overrides: [aiControllerProvider.overrideWith(() => controller)],
+    );
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ComposerBar())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ComposerBar())),
+      ),
+    );
     await tester.tap(find.byIcon(Icons.send));
     await tester.pump();
     expect(controller.sentTexts, isEmpty);
@@ -89,16 +99,21 @@ void main() {
         sessions: const [],
         messages: const [],
         activeTurn: null,
+        hasMoreMessages: false,
+        loadingMore: false,
+        totalMessages: 0,
       ),
     );
-    final busyContainer = ProviderContainer(overrides: [
-      aiControllerProvider.overrideWith(() => busyController),
-    ]);
+    final busyContainer = ProviderContainer(
+      overrides: [aiControllerProvider.overrideWith(() => busyController)],
+    );
     addTearDown(busyContainer.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: busyContainer,
-      child: const MaterialApp(home: Scaffold(body: ComposerBar())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: busyContainer,
+        child: const MaterialApp(home: Scaffold(body: ComposerBar())),
+      ),
+    );
 
     expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
     expect(find.byIcon(Icons.stop), findsOneWidget);
@@ -109,15 +124,17 @@ void main() {
 
   testWidgets('offline 状态发送按钮禁用（onPressed == null）', (tester) async {
     final controller = RecordingAiController(idle()); // idle = offline
-    final container = ProviderContainer(overrides: [
-      aiControllerProvider.overrideWith(() => controller),
-    ]);
+    final container = ProviderContainer(
+      overrides: [aiControllerProvider.overrideWith(() => controller)],
+    );
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ComposerBar())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ComposerBar())),
+      ),
+    );
 
     final sendButton = tester.widget<IconButton>(
       find.ancestor(
