@@ -1,16 +1,20 @@
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { HabitEntry } from '@/features/habit/api'
 import { dailyByHabit, sortHabits } from '@/features/habit/lib'
 import { useHabitDaily, useHabits } from '@/features/habit/queries'
-import { useHabitUIStore } from '@/stores/habit-ui'
 import { HabitRow } from './habit-row'
 
+interface HabitListProps {
+  viewedDate: string
+  openCreate: () => void
+  onEdit: (habit: HabitEntry) => void
+}
+
 // 今天页习惯列表：习惯选项（sortOrder 序）+ 当天每日状态 join 渲染。
-// 空态给新建引导；加载态骨架。
-export function HabitList() {
-  const viewedDate = useHabitUIStore((s) => s.viewedDate)
-  const openCreate = useHabitUIStore((s) => s.openCreate)
+// 空态给新建引导；加载态骨架。viewedDate/openCreate/onEdit 由页面 useState 注入。
+export function HabitList({ viewedDate, openCreate, onEdit }: HabitListProps) {
   const { data: habits, isLoading: habitsLoading } = useHabits()
   const { data: dailyList, isLoading: dailyLoading } = useHabitDaily(viewedDate)
 
@@ -43,7 +47,13 @@ export function HabitList() {
   return (
     <div className="flex flex-col divide-y divide-border rounded-lg border bg-card">
       {[...habits].sort(sortHabits).map((habit) => (
-        <HabitRow key={habit.id} habit={habit} daily={dailyMap.get(habit.id)} date={viewedDate} />
+        <HabitRow
+          key={habit.id}
+          habit={habit}
+          daily={dailyMap.get(habit.id)}
+          date={viewedDate}
+          onEdit={onEdit}
+        />
       ))}
     </div>
   )

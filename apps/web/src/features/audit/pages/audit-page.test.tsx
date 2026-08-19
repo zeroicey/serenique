@@ -9,6 +9,8 @@ import AuditPage from './audit-page'
 // mock 掉 audit 数据 hook，页面只测渲染与交互。
 vi.mock('../queries', () => ({
   useAuditLogs: vi.fn(),
+  useAuditUnreadCount: () => ({ data: { unreadCount: 0 } }),
+  useMarkAuditRead: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
 const mockedUseAuditLogs = vi.mocked(useAuditLogs)

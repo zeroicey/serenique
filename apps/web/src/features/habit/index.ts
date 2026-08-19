@@ -1,4 +1,4 @@
-// 习惯 feature。对外暴露 api 函数、类型、hooks、lib、schemas 与导航组件（页面由路由懒加载）。
+// 习惯 feature。对外暴露 api 函数、类型、hooks、lib 与 schemas（页面由路由懒加载）。
 
 export type {
   CreateHabitInput,
@@ -22,7 +22,6 @@ export {
   setHabitDaily,
   updateHabit,
 } from './api'
-export { HabitNav } from './components/habit-nav'
 export {
   dailyByHabit,
   monthDayLabel,

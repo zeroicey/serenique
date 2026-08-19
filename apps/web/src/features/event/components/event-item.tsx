@@ -19,18 +19,17 @@ import {
 import type { EventEntry } from '@/features/event/api'
 import { eventTimeLabel } from '@/features/event/lib'
 import { useDeleteEvent } from '@/features/event/queries'
-import { useEventUIStore } from '@/stores/event-ui'
 
 const NOTE_TRUNCATE = 150
 
 interface EventItemProps {
   event: EventEntry
+  onEdit: (event: EventEntry) => void
 }
 
 // 单条日历卡片：时间（全天徽标 / 时段 HH:mm – HH:mm）+ 标题 + 地点 + 备注截断 + 编辑/删除。
-export function EventItem({ event }: EventItemProps) {
+export function EventItem({ event, onEdit }: EventItemProps) {
   const { mutate: deleteEvent } = useDeleteEvent()
-  const { openEdit } = useEventUIStore()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [noteExpanded, setNoteExpanded] = useState(false)
 
@@ -60,7 +59,7 @@ export function EventItem({ event }: EventItemProps) {
                 <MoreHorizontal size={18} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem className="cursor-pointer" onClick={() => openEdit(event)}>
+                <DropdownMenuItem className="cursor-pointer" onClick={() => onEdit(event)}>
                   <SquarePen className="mr-2 h-4 w-4" />
                   编辑
                 </DropdownMenuItem>

@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { MapPin, Tag as TagIcon, X } from 'lucide-react'
+import { ChevronLeft, MapPin, Tag as TagIcon, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router'
@@ -81,8 +81,24 @@ export default function MomentCreatePage() {
   }
 
   return (
-    <div className="flex h-full w-full justify-center overflow-auto">
-      <form className="flex h-full w-full max-w-[350px] flex-col" onSubmit={onSubmit}>
+    <div className="flex h-full w-full flex-col justify-center overflow-auto">
+      <div className="flex justify-center">
+        <div className="flex w-full max-w-[350px] items-center px-1 pt-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-muted-foreground hover:bg-transparent hover:text-foreground"
+            onClick={() => navigate('/moment')}
+          >
+            <ChevronLeft />
+            闪记
+          </Button>
+        </div>
+      </div>
+      <form
+        className="flex min-h-0 w-full max-w-[350px] flex-1 flex-col justify-center self-center"
+        onSubmit={onSubmit}
+      >
         <div className="flex-1 space-y-1 overflow-auto">
           <textarea
             {...register('text')}

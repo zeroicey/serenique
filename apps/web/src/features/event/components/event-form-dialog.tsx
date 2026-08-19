@@ -14,15 +14,23 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import type { EventEntry } from '@/features/event/api'
 import { toLocalInputValue, toLocalISO } from '@/features/event/lib'
 import { useCreateEvent, useUpdateEvent } from '@/features/event/queries'
 import { type EventFormValues, eventFormSchema } from '@/features/event/schemas'
-import { useEventUIStore } from '@/stores/event-ui'
 
-// 新建 / 编辑日历合一弹窗。状态驱动自 event-ui store（顶栏「新建日历」与页面编辑入口共用）。
+interface EventFormDialogProps {
+  open: boolean
+  editing: EventEntry | null
+  /** 新建时的默认日期（取当前查看日期）。 */
+  viewedDate: string
+  onClose: () => void
+}
+
+// 新建 / 编辑日历合一弹窗。状态由所属页面 useState 注入（原 event-ui store 已删除，
+// 2026-08-20 顶部导航栏移除后不再需要跨顶栏/页面共享）。
 // 全天事件只填日期：勾选后隐藏起止时间，用一个 date 输入同时驱动 startAt/endAt（00:00 – 23:59）。
-export function EventFormDialog() {
-  const { createOpen, editingEvent, viewedDate, close } = useEventUIStore()
+export function EventFormDialog({ open, editing, viewedDate, onClose }: EventFormDialogProps) {
   const { mutate: createEvent, isPending: isCreating } = useCreateEvent()
   const { mutate: updateEvent, isPending: isUpdating } = useUpdateEvent()
   const isPendingAction = isCreating || isUpdating
@@ -44,15 +52,15 @@ export function EventFormDialog() {
 
   // 打开时重置表单：新建默认取当前查看日期 09:00–10:00；编辑回填。
   useEffect(() => {
-    if (!createOpen) return
-    if (editingEvent) {
+    if (!open) return
+    if (editing) {
       reset({
-        title: editingEvent.title,
-        startAt: toLocalInputValue(editingEvent.startAt),
-        endAt: toLocalInputValue(editingEvent.endAt),
-        isAllDay: editingEvent.isAllDay,
-        location: editingEvent.location ?? '',
-        note: editingEvent.note ?? '',
+        title: editing.title,
+        startAt: toLocalInputValue(editing.startAt),
+        endAt: toLocalInputValue(editing.endAt),
+        isAllDay: editing.isAllDay,
+        location: editing.location ?? '',
+        note: editing.note ?? '',
       })
     } else {
       reset({
@@ -64,7 +72,7 @@ export function EventFormDialog() {
         note: '',
       })
     }
-  }, [createOpen, editingEvent, viewedDate, reset])
+  }, [open, editing, viewedDate, reset])
 
   const handleAllDayDateChange = (value: string) => {
     if (!value) return
@@ -75,10 +83,10 @@ export function EventFormDialog() {
   const onSubmit = handleSubmit((values) => {
     const startAt = toLocalISO(values.startAt)
     const endAt = toLocalISO(values.endAt)
-    if (editingEvent) {
+    if (editing) {
       updateEvent(
         {
-          id: editingEvent.id,
+          id: editing.id,
           title: values.title,
           startAt,
           endAt,
@@ -87,7 +95,7 @@ export function EventFormDialog() {
           location: values.location || '',
           note: values.note || '',
         },
-        { onSuccess: () => close() },
+        { onSuccess: () => onClose() },
       )
     } else {
       createEvent(
@@ -99,19 +107,17 @@ export function EventFormDialog() {
           location: values.location || undefined,
           note: values.note || undefined,
         },
-        { onSuccess: () => close() },
+        { onSuccess: () => onClose() },
       )
     }
   })
 
   return (
-    <Dialog open={createOpen} onOpenChange={(open) => !open && close()}>
+    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editingEvent ? '编辑日历' : '新建日历'}</DialogTitle>
-          <DialogDescription>
-            {editingEvent ? '修改日历信息。' : '添加一个日历事件。'}
-          </DialogDescription>
+          <DialogTitle>{editing ? '编辑日历' : '新建日历'}</DialogTitle>
+          <DialogDescription>{editing ? '修改日历信息。' : '添加一个日历事件。'}</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
           <div className="space-y-1.5">
@@ -194,7 +200,7 @@ export function EventFormDialog() {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={close}>
+            <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
             <Button type="submit" disabled={isPendingAction}>

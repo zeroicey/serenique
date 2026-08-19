@@ -4,22 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEntry } from '@/features/event/api'
 import { EventFormDialog } from './event-form-dialog'
 
-// mutation 的 mutate(input, options) 需要触发 onSuccess，组件里 close() 才会被调用。
+// mutation 的 mutate(input, options) 需要触发 onSuccess，组件里 onClose() 才会被调用。
 const mocks = vi.hoisted(() => ({
   create: vi.fn((_input: unknown, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.()),
   update: vi.fn((_input: unknown, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.()),
   close: vi.fn(),
-}))
-
-let store: {
-  createOpen: boolean
-  editingEvent: EventEntry | null
-  viewedDate: string
-  close: ReturnType<typeof vi.fn>
-}
-
-vi.mock('@/stores/event-ui', () => ({
-  useEventUIStore: () => store,
 }))
 
 vi.mock('@/features/event/queries', () => ({
@@ -41,15 +30,25 @@ function makeEvent(): EventEntry {
   }
 }
 
+interface RenderDialogOptions {
+  editing?: EventEntry | null
+  viewedDate?: string
+}
+
+function renderDialog({ editing = null, viewedDate = '2026-08-06' }: RenderDialogOptions = {}) {
+  return render(
+    <EventFormDialog open editing={editing} viewedDate={viewedDate} onClose={mocks.close} />,
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
-  store = { createOpen: true, editingEvent: null, viewedDate: '2026-08-06', close: mocks.close }
 })
 
 describe('EventFormDialog', () => {
   it('新建态默认取查看日期 09:00–10:00，提交调 createEvent', async () => {
     const user = userEvent.setup()
-    render(<EventFormDialog />)
+    renderDialog()
     expect(screen.getByLabelText('开始')).toHaveValue('2026-08-06T09:00')
     expect(screen.getByLabelText('结束')).toHaveValue('2026-08-06T10:00')
     await user.type(screen.getByLabelText('标题'), '晨会')
@@ -68,8 +67,7 @@ describe('EventFormDialog', () => {
 
   it('编辑态回填标题与本地时间，提交调 updateEvent', async () => {
     const user = userEvent.setup()
-    store.editingEvent = makeEvent()
-    render(<EventFormDialog />)
+    renderDialog({ editing: makeEvent() })
     expect(screen.getByLabelText('标题')).toHaveValue('产品评审')
     expect(screen.getByLabelText('开始')).toHaveValue('2026-08-06T14:00')
     expect(screen.getByLabelText('结束')).toHaveValue('2026-08-06T15:00')
@@ -89,7 +87,7 @@ describe('EventFormDialog', () => {
 
   it('勾选全天后显示日期输入，提交用 00:00–23:59', async () => {
     const user = userEvent.setup()
-    render(<EventFormDialog />)
+    renderDialog()
     await user.click(screen.getByLabelText('全天'))
     const dateInput = screen.getByLabelText('日期')
     fireEvent.change(dateInput, { target: { value: '2026-08-06' } })
@@ -108,7 +106,7 @@ describe('EventFormDialog', () => {
 
   it('结束时间早于开始时间时不提交并显示错误', async () => {
     const user = userEvent.setup()
-    render(<EventFormDialog />)
+    renderDialog()
     await user.type(screen.getByLabelText('标题'), '晨会')
     fireEvent.change(screen.getByLabelText('开始'), { target: { value: '2026-08-06T10:00' } })
     fireEvent.change(screen.getByLabelText('结束'), { target: { value: '2026-08-06T09:00' } })

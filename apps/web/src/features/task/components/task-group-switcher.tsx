@@ -10,18 +10,22 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { TaskGroupEntry } from '@/features/task/api'
 import { useDeleteTaskGroup, useTaskGroups } from '@/features/task/queries'
-import { useTaskStore } from '@/features/task/store/task-store'
 import { TaskConfirmDialog } from './task-confirm-dialog'
 import { TaskGroupDialog } from './task-group-dialog'
 
-// 任务组切换：全局顶栏右侧浮动下拉，外观/交互对齐 AI 会话切换器 SessionSwitcher。
+interface TaskGroupSwitcherProps {
+  /** 当前选中的任务组 id；null = 未显式选择（回退到第一个任务组）。页面持有该状态。 */
+  selectedGroupId: string | null
+  onSelectGroup: (id: string) => void
+}
+
+// 任务组切换：置顶于任务页内部的下拉（原全局顶栏 headerRight 已随顶部导航栏一并移除，
+// 2026-08-20 下沉到页面内）。外观/交互对齐 AI 会话切换器 SessionSwitcher。
 // 触发按钮显示当前任务组名（未选中时回退第一个；无任务组显示占位）。面板含新建入口 +
 // 任务组列表（当前项高亮），每项 hover 显示重命名 / 删除（删除走二次确认）。
-// 选中态只存 task-store（id），任务组数据走 TanStack Query（useTaskGroups）。
-export function TaskGroupSwitcher() {
+// 选中态由页面 useState 持有（原 task-store 已删除），任务组数据走 TanStack Query。
+export function TaskGroupSwitcher({ selectedGroupId, onSelectGroup }: TaskGroupSwitcherProps) {
   const { data: groups } = useTaskGroups()
-  const selectedGroupId = useTaskStore((s) => s.selectedGroupId)
-  const setSelectedGroupId = useTaskStore((s) => s.setSelectedGroupId)
   const { mutate: deleteTaskGroup } = useDeleteTaskGroup()
   const [open, setOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -57,7 +61,7 @@ export function TaskGroupSwitcher() {
               <DropdownMenuItem
                 className={`flex-1 pr-9 ${group.id === selectedGroup?.id ? 'bg-primary/10' : ''}`}
                 onClick={() => {
-                  if (group.id !== selectedGroup?.id) setSelectedGroupId(group.id)
+                  if (group.id !== selectedGroup?.id) onSelectGroup(group.id)
                   setOpen(false)
                 }}
               >

@@ -12,7 +12,6 @@ export {
   listEvents,
   updateEvent,
 } from './api'
-export { EventNav } from './components/event-nav'
 export {
   dayWindow,
   eventTimeLabel,

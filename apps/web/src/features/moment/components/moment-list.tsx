@@ -1,6 +1,6 @@
-import { Loader2, Search, Tag, X } from 'lucide-react'
+import { Loader2, Plus, Search, Tag, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -100,9 +100,10 @@ function TagFilter({ tags, selectedTagId, onSelect }: TagFilterProps) {
   )
 }
 
-// 闪记列表：居中列、顶部搜索框（300ms 防抖）+ 标签筛选（URL ?tag= 驱动，单选）、
+// 闪记列表：居中列、顶部搜索行（300ms 防抖 + 标签筛选 + 新建入口）、
 // 滚动自动加载、加载/空/错误态。
 export function MomentList() {
+  const navigate = useNavigate()
   const [keyword, setKeyword] = useState('')
   const debouncedKeyword = useDebouncedValue(keyword, 300)
   const searchKeyword = debouncedKeyword.trim()
@@ -178,6 +179,10 @@ export function MomentList() {
             isFetching={isFetching}
           />
         </div>
+        <Button variant="outline" onClick={() => navigate('/moment/create')}>
+          <Plus />
+          新建
+        </Button>
       </div>
       {selectedTag && (
         <div className="mt-2 flex items-center gap-2">
@@ -223,9 +228,7 @@ export function MomentList() {
             <>
               <p className="text-4xl">🌱</p>
               <h3 className="text-lg font-medium">还没有闪记</h3>
-              <p className="max-w-sm text-muted-foreground">
-                点击右上角「新建闪记」，记录此刻的心情。
-              </p>
+              <p className="max-w-sm text-muted-foreground">点击上方「新建」，记录此刻的心情。</p>
             </>
           )}
         </div>

@@ -18,12 +18,6 @@ vi.mock('@/features/habit/queries', () => ({
   useDeleteHabit: () => ({ mutate: mocks.deleteHabit }),
 }))
 
-vi.mock('@/stores/habit-ui', () => ({
-  useHabitUIStore: () => ({
-    openEdit: mocks.openEdit,
-  }),
-}))
-
 beforeEach(() => vi.clearAllMocks())
 
 function makeHabit(overrides: Partial<HabitEntry> = {}): HabitEntry {
@@ -52,7 +46,9 @@ function makeDaily(overrides: Partial<HabitDailyEntry> = {}): HabitDailyEntry {
 describe('HabitRow · 做没做型', () => {
   it('未记录时点「做了」→ setDaily(status done)', async () => {
     const user = userEvent.setup()
-    render(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" />)
+    render(
+      <HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" onEdit={mocks.openEdit} />,
+    )
     await user.click(screen.getByRole('button', { name: /做了/ }))
     expect(mocks.setDaily).toHaveBeenCalledWith({
       habitId: 'h1',
@@ -64,14 +60,28 @@ describe('HabitRow · 做没做型', () => {
 
   it('已做状态再点「做了」→ clearDaily（取消记录）', async () => {
     const user = userEvent.setup()
-    render(<HabitRow habit={makeHabit()} daily={makeDaily({ status: 'done' })} date="2026-08-16" />)
+    render(
+      <HabitRow
+        habit={makeHabit()}
+        daily={makeDaily({ status: 'done' })}
+        date="2026-08-16"
+        onEdit={mocks.openEdit}
+      />,
+    )
     await user.click(screen.getByRole('button', { name: /做了/ }))
     expect(mocks.clearDaily).toHaveBeenCalledWith({ habitId: 'h1', date: '2026-08-16' })
   })
 
   it('已做状态点「没做」→ setDaily(status not_done)', async () => {
     const user = userEvent.setup()
-    render(<HabitRow habit={makeHabit()} daily={makeDaily({ status: 'done' })} date="2026-08-16" />)
+    render(
+      <HabitRow
+        habit={makeHabit()}
+        daily={makeDaily({ status: 'done' })}
+        date="2026-08-16"
+        onEdit={mocks.openEdit}
+      />,
+    )
     await user.click(screen.getByRole('button', { name: /没做/ }))
     expect(mocks.setDaily).toHaveBeenCalledWith({
       habitId: 'h1',
@@ -83,7 +93,7 @@ describe('HabitRow · 做没做型', () => {
   it('切换日期后重置乐观状态，再点发往新日期（防 Med-1 回归）', async () => {
     const user = userEvent.setup()
     const { rerender } = render(
-      <HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" />,
+      <HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" onEdit={mocks.openEdit} />,
     )
     // 08-16 点「做了」→ 本地乐观态 done + setDaily
     await user.click(screen.getByRole('button', { name: /做了/ }))
@@ -93,7 +103,9 @@ describe('HabitRow · 做没做型', () => {
       status: 'done',
     })
     // 切到 08-17（未记录）：乐观态必须重置，否则会显示昨日的「已做」且再点触发 clearDaily
-    rerender(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-17" />)
+    rerender(
+      <HabitRow habit={makeHabit()} daily={undefined} date="2026-08-17" onEdit={mocks.openEdit} />,
+    )
     mocks.setDaily.mockClear()
     mocks.clearDaily.mockClear()
     await user.click(screen.getByRole('button', { name: /做了/ }))
@@ -115,6 +127,7 @@ describe('HabitRow · 计数型', () => {
         habit={makeHabit({ countable: true })}
         daily={makeDaily({ status: null, count: 0 })}
         date="2026-08-16"
+        onEdit={mocks.openEdit}
       />,
     )
     await user.click(screen.getByRole('button', { name: '增加次数' }))
@@ -138,6 +151,7 @@ describe('HabitRow · 计数型', () => {
         habit={makeHabit({ countable: true })}
         daily={makeDaily({ status: null, count: 0 })}
         date="2026-08-16"
+        onEdit={mocks.openEdit}
       />,
     )
     expect(screen.getByRole('button', { name: '减少次数' })).toBeDisabled()
@@ -147,6 +161,7 @@ describe('HabitRow · 计数型', () => {
         habit={makeHabit({ countable: true })}
         daily={makeDaily({ status: null, count: 1 })}
         date="2026-08-16"
+        onEdit={mocks.openEdit}
       />,
     )
     await user.click(screen.getByRole('button', { name: '减少次数' }))
@@ -160,6 +175,7 @@ describe('HabitRow · 计数型', () => {
         habit={makeHabit({ countable: true })}
         daily={makeDaily({ status: null, count: 3 })}
         date="2026-08-16"
+        onEdit={mocks.openEdit}
       />,
     )
     await user.click(screen.getByRole('button', { name: '减少次数' }))
@@ -178,13 +194,16 @@ describe('HabitRow · 简介', () => {
         habit={makeHabit({ description: '每天晨跑 5 公里' })}
         daily={undefined}
         date="2026-08-16"
+        onEdit={mocks.openEdit}
       />,
     )
     expect(screen.getByText('每天晨跑 5 公里')).toBeInTheDocument()
   })
 
   it('无 description 时不渲染简介', () => {
-    render(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" />)
+    render(
+      <HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" onEdit={mocks.openEdit} />,
+    )
     expect(screen.queryByTestId('habit-description')).not.toBeInTheDocument()
   })
 })
@@ -192,7 +211,9 @@ describe('HabitRow · 简介', () => {
 describe('HabitRow · 管理菜单', () => {
   it('编辑打开编辑弹窗（store openEdit）', async () => {
     const user = userEvent.setup()
-    render(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" />)
+    render(
+      <HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" onEdit={mocks.openEdit} />,
+    )
     await user.click(screen.getByRole('button', { name: '习惯操作' }))
     await user.click(await screen.findByText('编辑习惯'))
     expect(mocks.openEdit).toHaveBeenCalled()
@@ -200,7 +221,9 @@ describe('HabitRow · 管理菜单', () => {
 
   it('删除需确认，确认后调 deleteHabit', async () => {
     const user = userEvent.setup()
-    render(<HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" />)
+    render(
+      <HabitRow habit={makeHabit()} daily={undefined} date="2026-08-16" onEdit={mocks.openEdit} />,
+    )
     await user.click(screen.getByRole('button', { name: '习惯操作' }))
     await user.click(await screen.findByText('删除习惯'))
     expect(screen.getByText(/不可恢复/)).toBeInTheDocument()

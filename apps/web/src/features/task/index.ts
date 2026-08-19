@@ -18,7 +18,6 @@ export {
   updateTaskGroup,
 } from './api'
 export { TaskGroupSwitcher } from './components/task-group-switcher'
-export { TaskNav } from './components/task-nav'
 export { sortTasks, taskStatusLabel } from './lib'
 export {
   useCreateTask,

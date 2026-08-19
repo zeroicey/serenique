@@ -14,15 +14,22 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import type { HabitEntry } from '@/features/habit/api'
 import { useCreateHabit, useUpdateHabit } from '@/features/habit/queries'
 import { type HabitFormValues, habitFormSchema } from '@/features/habit/schemas'
 import { cn } from '@/lib/utils'
-import { useHabitUIStore } from '@/stores/habit-ui'
+
+interface HabitFormDialogProps {
+  open: boolean
+  editing: HabitEntry | null
+  onClose: () => void
+}
 
 // 新建 / 编辑习惯选项弹窗：名称 + 类型（好事/坏事）+ 可计数开关 + 排序号 + 简介（可选）。
 // countable 切换只影响后续写入，历史每日状态不迁移（服务端契约，弹窗内说明）。
-export function HabitFormDialog() {
-  const { createOpen, editingHabit, close } = useHabitUIStore()
+// 状态由所属页面 useState 注入（原 habit-ui store 已删除，2026-08-20 顶部导航栏移除后
+// 不再需要跨顶栏/页面共享）。
+export function HabitFormDialog({ open, editing, onClose }: HabitFormDialogProps) {
   const { mutate: createHabit, isPending: isCreating } = useCreateHabit()
   const { mutate: updateHabit, isPending: isUpdating } = useUpdateHabit()
   const isPendingAction = isCreating || isUpdating
@@ -43,27 +50,27 @@ export function HabitFormDialog() {
 
   // 打开时重置表单：编辑回填，新建默认好事 + 排序 0。
   useEffect(() => {
-    if (!createOpen) return
-    if (editingHabit) {
+    if (!open) return
+    if (editing) {
       reset({
-        name: editingHabit.name,
-        kind: editingHabit.kind,
-        countable: editingHabit.countable,
-        sortOrder: String(editingHabit.sortOrder),
-        description: editingHabit.description ?? '',
+        name: editing.name,
+        kind: editing.kind,
+        countable: editing.countable,
+        sortOrder: String(editing.sortOrder),
+        description: editing.description ?? '',
       })
     } else {
       reset({ name: '', kind: 'good', countable: false, sortOrder: '', description: '' })
     }
-  }, [createOpen, editingHabit, reset])
+  }, [open, editing, reset])
 
   const onSubmit = handleSubmit((values) => {
     const sortOrder = values.sortOrder === '' ? undefined : Number(values.sortOrder)
     const description = values.description?.trim()
-    if (editingHabit) {
+    if (editing) {
       updateHabit(
         {
-          id: editingHabit.id,
+          id: editing.id,
           name: values.name,
           kind: values.kind,
           countable: values.countable,
@@ -71,7 +78,7 @@ export function HabitFormDialog() {
           // 编辑时总是带 description：空串 → null 清除（服务端契约）。
           description: description || null,
         },
-        { onSuccess: () => close() },
+        { onSuccess: () => onClose() },
       )
     } else {
       // 新建契约（POST /api/habits）name/kind/countable + 可选 description；sortOrder 默认 0。
@@ -82,18 +89,18 @@ export function HabitFormDialog() {
           countable: values.countable,
           ...(description ? { description } : {}),
         },
-        { onSuccess: () => close() },
+        { onSuccess: () => onClose() },
       )
     }
   })
 
   return (
-    <Dialog open={createOpen} onOpenChange={(open) => !open && close()}>
+    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editingHabit ? '编辑习惯' : '新建习惯'}</DialogTitle>
+          <DialogTitle>{editing ? '编辑习惯' : '新建习惯'}</DialogTitle>
           <DialogDescription>
-            {editingHabit ? '修改习惯选项。' : '添加一个想记录的事项。'}
+            {editing ? '修改习惯选项。' : '添加一个想记录的事项。'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3">
@@ -181,12 +188,12 @@ export function HabitFormDialog() {
             )}
           </div>
 
-          {editingHabit && (
+          {editing && (
             <p className="text-xs text-muted-foreground">切换「可计数」不影响已记录的历史数据。</p>
           )}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={close}>
+            <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
             <Button type="submit" disabled={isPendingAction}>

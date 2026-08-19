@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { TaskGroupEntry } from '@/features/task/api'
 import { deleteTaskGroup, listTaskGroups } from '@/features/task/api'
-import { useTaskStore } from '@/features/task/store/task-store'
 import { TaskGroupSwitcher } from './task-group-switcher'
 
 vi.mock('@/features/task/api', () => ({
@@ -35,13 +34,19 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
 
+let selectedGroupId: string | null = null
+const onSelectGroup = vi.fn()
+
 function renderSwitcher() {
-  return render(<TaskGroupSwitcher />, { wrapper })
+  return render(
+    <TaskGroupSwitcher selectedGroupId={selectedGroupId} onSelectGroup={onSelectGroup} />,
+    { wrapper },
+  )
 }
 
 afterEach(() => {
   vi.clearAllMocks()
-  useTaskStore.setState({ selectedGroupId: null })
+  selectedGroupId = null
 })
 
 describe('TaskGroupSwitcher', () => {
@@ -56,7 +61,7 @@ describe('TaskGroupSwitcher', () => {
       items: [makeGroup('a', '工作'), makeGroup('b', '个人')],
       total: 2,
     })
-    useTaskStore.setState({ selectedGroupId: 'b' })
+    selectedGroupId = 'b'
     renderSwitcher()
     expect(await screen.findByText('个人')).toBeTruthy()
   })
@@ -87,7 +92,7 @@ describe('TaskGroupSwitcher', () => {
     renderSwitcher()
     fireEvent.click(await screen.findByText('工作')) // 打开菜单
     fireEvent.click(screen.getByText('个人'))
-    expect(useTaskStore.getState().selectedGroupId).toBe('b')
+    expect(onSelectGroup).toHaveBeenCalledWith('b')
   })
 
   test('新建入口打开创建对话框', async () => {

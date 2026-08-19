@@ -1,4 +1,4 @@
-import { Loader2, RefreshCw } from 'lucide-react'
+import { CheckCheck, Loader2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { ApiError } from '@/api/errors'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import type { AuditLevel } from '../api'
 import { AuditLogList } from '../components/audit-log-list'
-import { useAuditLogs } from '../queries'
+import { useAuditLogs, useAuditUnreadCount, useMarkAuditRead } from '../queries'
 
 const PAGE_SIZE = 20
 
@@ -30,6 +30,11 @@ export default function AuditPage() {
     level,
     unreadOnly,
   })
+
+  // 顶部导航栏已移除（2026-08-20）：原 AuditNav 的「全部置已读」下沉到本页筛选行。
+  const { data: unread } = useAuditUnreadCount()
+  const markRead = useMarkAuditRead()
+  const unreadCount = unread?.unreadCount ?? 0
 
   const changeFilter = (apply: () => void) => {
     apply()
@@ -98,6 +103,16 @@ export default function AuditPage() {
               {opt.label}
             </Button>
           ))}
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto shrink-0 whitespace-nowrap"
+            onClick={() => markRead.mutate(undefined)}
+            disabled={unreadCount === 0 || markRead.isPending}
+          >
+            <CheckCheck />
+            全部置已读
+          </Button>
         </div>
 
         <AuditLogList logs={logs} />
