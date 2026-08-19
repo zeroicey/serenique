@@ -61,7 +61,7 @@ export function MomentQuickCreate() {
         aria-label="快速新建闪记"
         className="w-full resize-none rounded-t-xl bg-transparent p-3 focus:outline-none"
       />
-      <div className="flex items-center gap-1 border-t px-2 py-1">
+      <div className="flex items-center gap-1 px-2 py-1">
         <div className="flex flex-1 items-center gap-0.5">
           {placeholderIcons.map(({ icon: Icon, label }) => (
             <button

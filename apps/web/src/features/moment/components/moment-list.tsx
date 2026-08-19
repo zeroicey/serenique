@@ -101,8 +101,9 @@ function TagFilter({ tags, selectedTagId, onSelect }: TagFilterProps) {
   )
 }
 
-// 闪记列表：居中列、顶部置顶区（搜索行 + 标签筛选 + 内嵌快速新建）、
-// 滚动自动加载、加载/空/错误态。置顶区整块 sticky，下方列表正常滚动。
+// 闪记列表：外层固定置顶区（搜索行 + 标签筛选 + 内嵌快速新建）不参与滚动，
+// 下方 flex-1 min-h-0 overflow-y-auto 独立滚动容器承载列表（局部滚动，替代 sticky）。
+// 滚动自动加载、加载/空/错误态。
 export function MomentList() {
   const [keyword, setKeyword] = useState('')
   const debouncedKeyword = useDebouncedValue(keyword, 300)
@@ -124,6 +125,7 @@ export function MomentList() {
     fetchNextPage,
   } = useMoments(PAGE_SIZE, searchKeyword, tagId)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const listScrollRef = useRef<HTMLDivElement>(null)
 
   const setTag = (id: string) => setSearchParams(id ? { tag: id } : {})
 
@@ -138,7 +140,9 @@ export function MomentList() {
           void fetchNextPage()
         }
       },
-      { rootMargin: '200px' },
+      // root 绑定列表自身滚动容器（局部滚动，默认 viewport 不适用）；
+      // listScrollRef 为 useRef，首渲染即稳定，无需进依赖数组。
+      { root: listScrollRef.current, rootMargin: '200px' },
     )
     observer.observe(el)
     return () => observer.disconnect()
@@ -168,7 +172,7 @@ export function MomentList() {
   const searching = searchKeyword.length > 0
 
   const searchBox = (
-    <div className="sticky top-0 z-10 w-full border-b bg-background">
+    <div className="w-full shrink-0">
       <div className="mx-auto w-full max-w-[600px] px-3 pt-4 pb-3">
         <div className="flex items-center gap-2">
           <TagFilter tags={tags ?? []} selectedTagId={tagId} onSelect={setTag} />
@@ -206,9 +210,9 @@ export function MomentList() {
 
   if (isEmpty) {
     return (
-      <div className="flex h-full w-full flex-col items-center">
+      <div className="flex h-full w-full flex-col">
         {searchBox}
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto text-center">
           {searching ? (
             <>
               <p className="text-4xl">🔍</p>
@@ -238,21 +242,25 @@ export function MomentList() {
   }
 
   return (
-    <div className="flex w-full flex-col items-center">
+    <div className="flex h-full w-full flex-col">
       {searchBox}
-      {moments.map((moment) => (
-        <div key={moment.id} className="flex w-full max-w-[600px] flex-col items-center">
-          <MomentItem moment={moment} />
-          <div className="my-3 w-full border-b" />
-        </div>
-      ))}
-      {/* 滚动哨兵：必须保持非零尺寸 + shrink-0 —— 外层 flex 列被 h-full 链撑成定高，
-          内容溢出时 flex-shrink 会把空哨兵压成 0×0（min-height:auto→0），零面积元素
-          永远不会触发 IntersectionObserver（规格如此），导致滚动加载失效。 */}
-      <div ref={sentinelRef} className="h-4 w-4 shrink-0" />
-      {isFetchingNextPage && (
-        <Loader2 className="my-4 h-6 w-6 animate-spin text-muted-foreground" />
-      )}
+      <div
+        ref={listScrollRef}
+        className="flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto"
+      >
+        {moments.map((moment) => (
+          <div key={moment.id} className="flex w-full max-w-[600px] flex-col items-center py-3">
+            <MomentItem moment={moment} />
+          </div>
+        ))}
+        {/* 滚动哨兵：必须保持非零尺寸 + shrink-0 —— 列表滚动容器内 flex 列溢出时
+            flex-shrink 会把空哨兵压成 0×0（min-height:auto→0），零面积元素
+            永远不会触发 IntersectionObserver（规格如此），导致滚动加载失效。 */}
+        <div ref={sentinelRef} className="h-4 w-4 shrink-0" />
+        {isFetchingNextPage && (
+          <Loader2 className="my-4 h-6 w-6 animate-spin text-muted-foreground" />
+        )}
+      </div>
     </div>
   )
 }
