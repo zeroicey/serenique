@@ -1,6 +1,6 @@
-import { Loader2, Plus, Search, Tag, X } from 'lucide-react'
+import { Loader2, Search, Tag, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import type { TagEntry } from '@/features/tag/api'
 import { useTags } from '@/features/tag/queries'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { MomentItem } from './moment-item'
+import { MomentQuickCreate } from './moment-quick-create'
 
 const PAGE_SIZE = 10
 
@@ -100,10 +101,9 @@ function TagFilter({ tags, selectedTagId, onSelect }: TagFilterProps) {
   )
 }
 
-// 闪记列表：居中列、顶部搜索行（300ms 防抖 + 标签筛选 + 新建入口）、
-// 滚动自动加载、加载/空/错误态。
+// 闪记列表：居中列、顶部置顶区（搜索行 + 标签筛选 + 内嵌快速新建）、
+// 滚动自动加载、加载/空/错误态。置顶区整块 sticky，下方列表正常滚动。
 export function MomentList() {
-  const navigate = useNavigate()
   const [keyword, setKeyword] = useState('')
   const debouncedKeyword = useDebouncedValue(keyword, 300)
   const searchKeyword = debouncedKeyword.trim()
@@ -168,38 +168,39 @@ export function MomentList() {
   const searching = searchKeyword.length > 0
 
   const searchBox = (
-    <div className="w-full max-w-[600px] px-3 pt-4 pb-4">
-      <div className="flex items-center gap-2">
-        <TagFilter tags={tags ?? []} selectedTagId={tagId} onSelect={setTag} />
-        <div className="flex-1">
-          <MomentSearchInput
-            keyword={keyword}
-            onKeywordChange={setKeyword}
-            searching={searching}
-            isFetching={isFetching}
-          />
+    <div className="sticky top-0 z-10 w-full border-b bg-background">
+      <div className="mx-auto w-full max-w-[600px] px-3 pt-4 pb-3">
+        <div className="flex items-center gap-2">
+          <TagFilter tags={tags ?? []} selectedTagId={tagId} onSelect={setTag} />
+          <div className="flex-1">
+            <MomentSearchInput
+              keyword={keyword}
+              onKeywordChange={setKeyword}
+              searching={searching}
+              isFetching={isFetching}
+            />
+          </div>
         </div>
-        <Button variant="outline" onClick={() => navigate('/moment/create')}>
-          <Plus />
-          新建
-        </Button>
+        {selectedTag && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs">
+              #{selectedTag.name}
+              <button
+                type="button"
+                aria-label="清除标签筛选"
+                className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => setTag('')}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+            <span className="text-xs text-muted-foreground">仅显示该标签下的闪记</span>
+          </div>
+        )}
+        <div className="mt-3">
+          <MomentQuickCreate />
+        </div>
       </div>
-      {selectedTag && (
-        <div className="mt-2 flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs">
-            #{selectedTag.name}
-            <button
-              type="button"
-              aria-label="清除标签筛选"
-              className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground"
-              onClick={() => setTag('')}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-          <span className="text-xs text-muted-foreground">仅显示该标签下的闪记</span>
-        </div>
-      )}
     </div>
   )
 
@@ -228,7 +229,7 @@ export function MomentList() {
             <>
               <p className="text-4xl">🌱</p>
               <h3 className="text-lg font-medium">还没有闪记</h3>
-              <p className="max-w-sm text-muted-foreground">点击上方「新建」，记录此刻的心情。</p>
+              <p className="max-w-sm text-muted-foreground">在上方输入框记录此刻的心情。</p>
             </>
           )}
         </div>

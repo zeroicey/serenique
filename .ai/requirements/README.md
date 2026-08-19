@@ -20,6 +20,8 @@
 | `2026-08-16-moment-draft-cache.md` | Moment 新建闪记本地草稿缓存 | ✅已实施 |
 | `2026-08-16-habit-module.md` | 习惯模块 | ✅已实施（API+Web+CLI+AI 四端 + 生产/Cloudflare 部署 2026-08-16） |
 | `2026-08-18-ai-auto-session-management.md` | AI 对话自动会话管理（自动切换/压缩 + /new /compact） | ✅已实施（后端+Web+Flutter 三端 2026-08-18） |
+| `2026-08-20-object-storage-r2.md` | 文件存储迁移到 Cloudflare R2 对象存储 | 🔶设计中（可行性已调研；实施待排期） |
+| `2026-08-20-moment-inline-create.md` | Moment 列表页内嵌快速新建 | 🔶设计中 |
 
 ## 约定
 
