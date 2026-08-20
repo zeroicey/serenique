@@ -111,9 +111,7 @@ describe('blob domain — access signatures', () => {
     const secret = 'test-r2-signing-secret-0123456789abcdef'
     const path = 'image/2026/08/abc-123.jpg'
     const expires = 1755667200
-    const expected = createHmac('sha256', secret)
-      .update(`v1:${path}:${expires}`)
-      .digest('hex')
+    const expected = createHmac('sha256', secret).update(`v1:${path}:${expires}`).digest('hex')
     expect(signR2Access(secret, path, expires)).toBe(expected)
     expect(signR2Access(secret, path, expires)).toMatch(/^[0-9a-f]{64}$/)
     // 不同 path / expires 必须产出不同签名

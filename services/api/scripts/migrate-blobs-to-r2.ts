@@ -22,11 +22,7 @@
 import { readdir } from 'node:fs/promises'
 import { join, relative, extname } from 'node:path'
 import { parseArgs } from 'node:util'
-import {
-  ListObjectsV2Command,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3'
+import { ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { blobs } from '@/modules/blob/blob.schema'
@@ -106,7 +102,9 @@ async function loadDbMimeMap(): Promise<Map<string, string>> {
   try {
     const sql = postgres(url, { max: 1 })
     const db = drizzle(sql)
-    const rows = await db.select({ storagePath: blobs.storagePath, mimeType: blobs.mimeType }).from(blobs)
+    const rows = await db
+      .select({ storagePath: blobs.storagePath, mimeType: blobs.mimeType })
+      .from(blobs)
     await sql.end()
     return new Map(rows.map((r) => [r.storagePath, r.mimeType]))
   } catch (err) {
@@ -164,11 +162,12 @@ for (const abs of localFiles) {
       uploaded.push(storagePath)
       continue
     }
+    // 注意：Body 用 Buffer（Bun.file 流式对象会让 SDK 的请求体 hash 校验失败）
     await client.send(
       new PutObjectCommand({
         Bucket: BUCKET,
         Key: storagePath,
-        Body: file,
+        Body: new Uint8Array(await file.arrayBuffer()),
         ContentType: mimeType,
       }),
     )

@@ -121,7 +121,9 @@ export default {
     headers.set('Cache-Control', object.httpMetadata?.cacheControl || 'private, max-age=300')
     headers.set('ETag', object.httpEtag)
     headers.set('Accept-Ranges', 'bytes')
-    if (object.range) {
+    // 注意：R2 的 object.range 即使未请求 range 也总存在（offset 0 / length=size 表示完整对象），
+    // 因此必须同时满足「请求带 Range 头」才按 206 响应，否则全量请求会误标 Partial Content。
+    if (rangeHeader && object.range) {
       const { offset, length } = object.range
       headers.set('Content-Range', `bytes ${offset}-${offset + length - 1}/${object.size}`)
       headers.set('Content-Length', String(length))

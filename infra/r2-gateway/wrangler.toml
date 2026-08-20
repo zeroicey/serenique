@@ -1,6 +1,9 @@
 name = "serenique-r2-gateway"
 main = "gateway.js"
 compatibility_date = "2026-08-20"
+# 私有网关：不开放 workers.dev 子域，只走自定义域名 s3.0icey.icu。
+workers_dev = false
+preview_urls = false
 
 # 私有 bucket 绑定：只有 Worker（签名校验）能读；bucket 本身永不公开。
 [[r2_buckets]]
@@ -8,6 +11,6 @@ binding = "BUCKET"
 bucket_name = "serenique"
 
 # 签名密钥（R2_ACCESS_SIGNING_SECRET）是 secret，不能放 vars。
-# 在 dashboard → Workers → serenique-r2-gateway → Settings → Variables，或：
-#   npx wrangler secret put R2_ACCESS_SIGNING_SECRET --name serenique-r2-gateway
+# 部署后执行：
+#   echo '<secret>' | wrangler secret put R2_ACCESS_SIGNING_SECRET --name serenique-r2-gateway
 # 值必须与 services/api 生产 env 的 R2_ACCESS_SIGNING_SECRET 完全一致。

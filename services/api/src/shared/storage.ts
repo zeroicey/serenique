@@ -9,6 +9,8 @@ import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, extname as nodeExtname, relative } from 'node:path'
+import { NodeHttpHandler } from '@smithy/node-http-handler'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import { logger } from '@/shared/logger'
 
 // ---------------------------------------------------------------------------
@@ -44,7 +46,8 @@ function r2Backend(): { client: S3Client; bucket: string } {
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
   const bucket = process.env.R2_BUCKET
   const accountId = process.env.R2_ACCOUNT_ID
-  const endpoint = process.env.R2_ENDPOINT ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : '')
+  const endpoint =
+    process.env.R2_ENDPOINT ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : '')
 
   if (!accessKeyId || !secretAccessKey || !bucket || !endpoint) {
     throw new Error(
@@ -56,9 +59,29 @@ function r2Backend(): { client: S3Client; bucket: string } {
     region: 'auto',
     endpoint,
     credentials: { accessKeyId, secretAccessKey },
+    // @aws-sdk 的 NodeHttpHandler 不读取 HTTP_PROXY/HTTPS_PROXY 环境变量；生产容器
+    // 出站强制走 mihomo 代理（host.docker.internal:7890），必须显式配 agent，否则
+    // 直连 R2 会被 fake-ip DNS 劫持而超时。有代理 env 才配（本地开发直连）。
+    requestHandler: buildR2Handler(),
   })
   r2Bucket = bucket
   return { client: r2Client, bucket: r2Bucket }
+}
+
+/** @smithy NodeHttpHandler；有 HTTPS_PROXY/ALL_PROXY 时套 HttpsProxyAgent。 */
+function buildR2Handler() {
+  const proxyUrl =
+    process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.ALL_PROXY ?? process.env.all_proxy
+  if (proxyUrl) {
+    const agent = new HttpsProxyAgent(proxyUrl)
+    return new NodeHttpHandler({
+      httpsAgent: agent,
+      httpAgent: agent,
+      connectionTimeout: 15_000,
+      requestTimeout: 60_000,
+    })
+  }
+  return new NodeHttpHandler({ connectionTimeout: 15_000, requestTimeout: 60_000 })
 }
 
 // ---------------------------------------------------------------------------
@@ -279,7 +302,10 @@ export async function openFileFromStorage(
     const bytes = await res.Body.transformToByteArray()
     // 拷贝出独立 ArrayBuffer（TS 5.9 的 BlobPart 要求 ArrayBufferBacked，不能直接放
     // Uint8Array<ArrayBufferLike>，且避免共享 buffer 尾部字节被带进 Blob）。
-    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+    const ab = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    ) as ArrayBuffer
     const body = new Blob([ab], { type: res.ContentType ?? '' })
     return { body, size: res.ContentLength ?? bytes.length }
   }
