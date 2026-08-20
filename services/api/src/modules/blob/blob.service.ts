@@ -179,8 +179,9 @@ export const blobService = {
     const expires = Math.floor(Date.now() / 1000) + input.expiresInSeconds
 
     // ---- R2 直链（迁移后主路径）：签名走 Worker 网关校验，前端绕过 API 代理 ──
-    // 仅当两个 R2 配置同时就绪才启用；缺任一 → 回退旧 API 代理链接（dev / 滚动期）。
-    if (env.R2_ACCESS_SIGNING_SECRET && env.R2_PUBLIC_HOST) {
+    // 仅在「后端确实是 r2」+ R2 配置齐全时才启用；local 后端/开发一律回退 API 代理
+    // （否则回滚期间新增的本地 blob 会错发 R2 直链 404）。
+    if (env.STORAGE_BACKEND === 'r2' && env.R2_ACCESS_SIGNING_SECRET && env.R2_PUBLIC_HOST) {
       const host = env.R2_PUBLIC_HOST.replace(/\/+$/, '')
       const signature = signR2Access(env.R2_ACCESS_SIGNING_SECRET, row.storagePath, expires)
       const path = `${host}/${row.storagePath}?e=${expires}&s=${signature}`
