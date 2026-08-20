@@ -11,6 +11,7 @@ import {
   requireSigningSecret,
   signaturesEqual,
   signBlobAccess,
+  signR2Access,
 } from '@/modules/blob/blob.domain'
 import { toBlobAttachmentEntry, toPublicBlobEntry } from '@/modules/blob/blob.mappers'
 import { blobAttachments, blobs } from '@/modules/blob/blob.schema'
@@ -70,7 +71,7 @@ export const blobService = {
     const mimeType = normalizeUploadedMimeType(file, buf)
     const path = buildStoragePath(mimeType, id, file.name)
 
-    await saveFile(env.BLOB_ROOT, path, buf)
+    await saveFile(env.BLOB_ROOT, path, buf, { mimeType })
 
     // --- extract image dimensions ---
     let width: number | null = null
@@ -175,8 +176,25 @@ export const blobService = {
     const [row] = await db.select().from(blobs).where(eq(blobs.id, blobId))
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
 
-    const secret = requireSigningSecret(env.BLOB_SIGNING_SECRET)
     const expires = Math.floor(Date.now() / 1000) + input.expiresInSeconds
+
+    // ---- R2 直链（迁移后主路径）：签名走 Worker 网关校验，前端绕过 API 代理 ──
+    // 仅当两个 R2 配置同时就绪才启用；缺任一 → 回退旧 API 代理链接（dev / 滚动期）。
+    if (env.R2_ACCESS_SIGNING_SECRET && env.R2_PUBLIC_HOST) {
+      const host = env.R2_PUBLIC_HOST.replace(/\/+$/, '')
+      const signature = signR2Access(env.R2_ACCESS_SIGNING_SECRET, row.storagePath, expires)
+      const path = `${host}/${row.storagePath}?e=${expires}&s=${signature}`
+      return {
+        url: path,
+        path,
+        expires,
+        expiresAt: new Date(expires * 1000).toISOString(),
+        signature,
+      }
+    }
+
+    // ---- 旧 API 代理链接（无 R2 配置时的既有行为，保持不变）----
+    const secret = requireSigningSecret(env.BLOB_SIGNING_SECRET)
     const signature = signBlobAccess(secret, blobId, expires)
     const params = new URLSearchParams({
       expires: expires.toString(),

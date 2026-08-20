@@ -57,6 +57,15 @@ export function signBlobAccess(secret: string, blobId: string, expires: number):
   return createHmac('sha256', secret).update(`${blobId}.${expires}`).digest('base64url')
 }
 
+/**
+ * R2 直链签名（hex 输出）。签名域必须与 Worker 网关
+ * (infra/r2-gateway/gateway.js 的 validSignature) 完全一致：
+ * HMAC-SHA256(secret, `v1:${storagePath}:${expires}`)，改任一处必须同步改另一处。
+ */
+export function signR2Access(secret: string, storagePath: string, expires: number): string {
+  return createHmac('sha256', secret).update(`v1:${storagePath}:${expires}`).digest('hex')
+}
+
 /** Constant-time signature comparison. */
 export function signaturesEqual(actual: string, expected: string): boolean {
   const actualBuf = Buffer.from(actual)

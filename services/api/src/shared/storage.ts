@@ -1,10 +1,71 @@
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3'
 import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join, extname as nodeExtname, relative } from 'node:path'
 import { logger } from '@/shared/logger'
 
-export const BLOB_OBJECTS_DIR = 'objects'
+// ---------------------------------------------------------------------------
+// 存储后端选择（local | r2，见 .ai/requirements/2026-08-20-object-storage-r2.md）
+//
+// - local（默认）：现有 BLOB_ROOT 磁盘实现，行为与迁移前完全一致。
+// - r2：Cloudflare R2 对象存储，S3 协议（@aws-sdk/client-s3），key = storagePath。
+//   切换仅需 STORAGE_BACKEND=r2 + R2_* 凭据；本地后端保留作回滚/迁移兜底。
+//   导出函数签名不变（root 参数在 r2 模式下被忽略）——上层业务零改动。
+// ---------------------------------------------------------------------------
+
+let cachedBackend: 'local' | 'r2' | null = null
+
+function storageBackend(): 'local' | 'r2' {
+  if (cachedBackend === null) {
+    cachedBackend = process.env.STORAGE_BACKEND === 'r2' ? 'r2' : 'local'
+    if (cachedBackend === 'r2') logger.info('存储后端：Cloudflare R2')
+  }
+  return cachedBackend
+}
+
+// ---------------------------------------------------------------------------
+// R2 backend — lazy S3 client（local 模式不实例化，不需要 R2 凭据）
+// ---------------------------------------------------------------------------
+
+let r2Client: S3Client | null = null
+let r2Bucket = ''
+
+function r2Backend(): { client: S3Client; bucket: string } {
+  if (r2Client) return { client: r2Client, bucket: r2Bucket }
+
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
+  const bucket = process.env.R2_BUCKET
+  const accountId = process.env.R2_ACCOUNT_ID
+  const endpoint = process.env.R2_ENDPOINT ?? (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : '')
+
+  if (!accessKeyId || !secretAccessKey || !bucket || !endpoint) {
+    throw new Error(
+      'STORAGE_BACKEND=r2 需要配置 R2_ACCOUNT_ID、R2_ACCESS_KEY_ID、R2_SECRET_ACCESS_KEY、R2_BUCKET',
+    )
+  }
+
+  r2Client = new S3Client({
+    region: 'auto',
+    endpoint,
+    credentials: { accessKeyId, secretAccessKey },
+  })
+  r2Bucket = bucket
+  return { client: r2Client, bucket: r2Bucket }
+}
+
+// ---------------------------------------------------------------------------
+// paths (local backend only)
+// ---------------------------------------------------------------------------
+
+const BLOB_OBJECTS_DIR = 'objects'
 
 function objectsRoot(root: string): string {
   return join(root, BLOB_OBJECTS_DIR)
@@ -116,7 +177,7 @@ export function sha256(buf: Buffer): string {
 }
 
 // ---------------------------------------------------------------------------
-// Storage path generation
+// Storage path generation (backend-agnostic)
 // ---------------------------------------------------------------------------
 
 /**
@@ -133,7 +194,7 @@ export function buildStoragePath(mimeType: string, id: string, originalName: str
 }
 
 // ---------------------------------------------------------------------------
-// Blob root directory initialization & validation
+// Blob root directory initialization & validation (local backend only)
 // ---------------------------------------------------------------------------
 
 /**
@@ -141,8 +202,11 @@ export function buildStoragePath(mimeType: string, id: string, originalName: str
  * - If it doesn't exist, create it.
  * - Ensure the managed objects directory exists.
  * - Leave unrelated top-level files alone (for example macOS .DS_Store).
+ * - R2 后端无本地目录概念，直接跳过。
  */
 export async function initBlobRoot(root: string): Promise<void> {
+  if (storageBackend() === 'r2') return
+
   try {
     await mkdir(root, { recursive: true })
     await mkdir(objectsRoot(root), { recursive: true })
@@ -154,26 +218,72 @@ export async function initBlobRoot(root: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// File system helpers
+// File system helpers (local) / R2 object ops — unified exports keep the
+// upstream call sites (`blob.service.ts`) backend-agnostic.
 // ---------------------------------------------------------------------------
 
-/** Write a buffer to disk, creating parent directories as needed. */
-export async function saveFile(root: string, filePath: string, buf: Buffer): Promise<void> {
+export interface SaveFileOptions {
+  /** R2 对象的 Content-Type（仅 r2 后端生效；local 端不需要）。 */
+  mimeType?: string
+}
+
+/** Write a buffer to disk (or R2 object), creating parent directories as needed. */
+export async function saveFile(
+  root: string,
+  filePath: string,
+  buf: Buffer,
+  opts?: SaveFileOptions,
+): Promise<void> {
+  if (storageBackend() === 'r2') {
+    const { client, bucket } = r2Backend()
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: filePath,
+        Body: buf,
+        ...(opts?.mimeType ? { ContentType: opts.mimeType } : {}),
+      }),
+    )
+    return
+  }
   const absPath = managedPath(root, filePath)
   await mkdir(dirname(absPath), { recursive: true })
   await writeFile(absPath, buf)
 }
 
-/** Read a file from the blob store. */
+/** Read a file from the blob store (synchronous read; internal/exports only). */
 export async function readFileFromStorage(root: string, filePath: string): Promise<Buffer> {
+  if (storageBackend() === 'r2') {
+    const { client, bucket } = r2Backend()
+    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: filePath }))
+    if (!res.Body) throw new Error(`文件不存在: ${filePath}`)
+    return Buffer.from(await res.Body.transformToByteArray())
+  }
   return readFile(await existingPath(root, filePath))
 }
 
-/** Open a file as a Blob without reading it fully into memory. */
+/** Open a file as a Blob without reading it fully into memory (local) or
+ *  transitively into a Blob (r2: S3 stream must be buffered once). */
 export async function openFileFromStorage(
   root: string,
   filePath: string,
 ): Promise<{ body: Blob; size: number }> {
+  if (storageBackend() === 'r2') {
+    const { client, bucket } = r2Backend()
+    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: filePath }))
+    if (!res.Body) {
+      const err = new Error(`文件不存在: ${filePath}`) as NodeJS.ErrnoException
+      err.code = 'ENOENT'
+      throw err
+    }
+    const bytes = await res.Body.transformToByteArray()
+    // 拷贝出独立 ArrayBuffer（TS 5.9 的 BlobPart 要求 ArrayBufferBacked，不能直接放
+    // Uint8Array<ArrayBufferLike>，且避免共享 buffer 尾部字节被带进 Blob）。
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+    const body = new Blob([ab], { type: res.ContentType ?? '' })
+    return { body, size: res.ContentLength ?? bytes.length }
+  }
+
   let body = Bun.file(managedPath(root, filePath))
   if (!(await body.exists())) {
     body = Bun.file(legacyPath(root, filePath))
@@ -188,6 +298,17 @@ export async function openFileFromStorage(
 
 /** Delete a file from the blob store. Does not throw if file is missing. */
 export async function deleteFileFromStorage(root: string, filePath: string): Promise<void> {
+  if (storageBackend() === 'r2') {
+    const { client, bucket } = r2Backend()
+    try {
+      await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: filePath }))
+    } catch (err) {
+      const e = err as { name?: string }
+      if (e.name !== 'NoSuchKey') throw err
+    }
+    return
+  }
+
   try {
     await unlink(managedPath(root, filePath))
   } catch (err) {
@@ -205,6 +326,22 @@ export async function deleteFileFromStorage(root: string, filePath: string): Pro
 
 /** List every regular file under the blob store as a relative storage path. */
 export async function listStoragePaths(root: string): Promise<string[]> {
+  if (storageBackend() === 'r2') {
+    const { client, bucket } = r2Backend()
+    const keys: string[] = []
+    let token: string | undefined
+    do {
+      const res = await client.send(
+        new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: token }),
+      )
+      for (const obj of res.Contents ?? []) {
+        if (obj.Key) keys.push(obj.Key)
+      }
+      token = res.IsTruncated ? res.NextContinuationToken : undefined
+    } while (token)
+    return keys.sort()
+  }
+
   const paths: string[] = []
   const base = objectsRoot(root)
 

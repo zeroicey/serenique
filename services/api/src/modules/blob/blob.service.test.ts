@@ -100,6 +100,27 @@ describe('blob domain — access signatures', () => {
     expect(signaturesEqual(sig, 'short')).toBe(false)
   })
 
+  test('signR2Access hex output matches the worker gateway signing domain (fixed vector)', async () => {
+    setTestEnv()
+    const { signR2Access } = await import('./blob.domain')
+    // 固定向量：与 infra/r2-gateway/gateway.js 的 validSignature 同域
+    // （HMAC-SHA256(secret, `v1:${storagePath}:${expires}`) → hex）。
+    // 用 node:crypto 独立复算并锁定期望值：任一侧改动签名域都会在此失败。
+    // 注意：此处是测试专用伪 secret，绝不放入真实生产 secret。
+    const { createHmac } = await import('node:crypto')
+    const secret = 'test-r2-signing-secret-0123456789abcdef'
+    const path = 'image/2026/08/abc-123.jpg'
+    const expires = 1755667200
+    const expected = createHmac('sha256', secret)
+      .update(`v1:${path}:${expires}`)
+      .digest('hex')
+    expect(signR2Access(secret, path, expires)).toBe(expected)
+    expect(signR2Access(secret, path, expires)).toMatch(/^[0-9a-f]{64}$/)
+    // 不同 path / expires 必须产出不同签名
+    expect(signR2Access(secret, `${path}x`, expires)).not.toBe(expected)
+    expect(signR2Access(secret, path, expires + 1)).not.toBe(expected)
+  })
+
   test('requireSigningSecret throws INTERNAL when missing', async () => {
     setTestEnv()
     const { requireSigningSecret } = await import('./blob.domain')

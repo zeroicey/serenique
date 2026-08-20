@@ -67,6 +67,22 @@ const envSchema = z.object({
   // fail-closed 校验（位置选点是可选项）。schema 只做类型校验与文档化；
   // location service 直接读 process.env.AMAP_KEY（运行期可注入/变更，便于单测）。
   AMAP_KEY: z.string().min(1).optional(),
+  // ---- 文件存储后端（见 .ai/requirements/2026-08-20-object-storage-r2.md）----
+  // 存储后端：local（默认，现有 BLOB_ROOT 磁盘实现）| r2（Cloudflare R2，S3 协议）。
+  // 切换仅改此 env，本地后端保留作回滚/迁移期兜底。用 optional + storage.ts 回退
+  // （同 SESSION_TTL 注释）：避免给测试文件的 createApp(env) 字面量带来必填字段。
+  STORAGE_BACKEND: z.enum(['local', 'r2']).optional(),
+  // R2 凭据（STORAGE_BACKEND=r2 时必需；local 模式可缺省）。
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  R2_BUCKET: z.string().min(1).optional(),
+  // 自定义 S3 endpoint（缺省为 https://<account-id>.r2.cloudflarestorage.com）。
+  R2_ENDPOINT: z.url().optional(),
+  // 签名直链 secret（≥32 字符）与 public host：与 serenique-r2-gateway Worker
+  // 同名 secret binding 同值（s3.0icey.icu）。见 infra/r2-gateway/gateway.js。
+  R2_ACCESS_SIGNING_SECRET: z.string().min(32).optional(),
+  R2_PUBLIC_HOST: z.string().min(1).optional(),
 })
 
 export type Env = z.infer<typeof envSchema>
