@@ -71,7 +71,10 @@ function r2Backend(): { client: S3Client; bucket: string } {
 /** @smithy NodeHttpHandler；有 HTTPS_PROXY/ALL_PROXY 时套 HttpsProxyAgent。 */
 function buildR2Handler() {
   const proxyUrl =
-    process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.ALL_PROXY ?? process.env.all_proxy
+    process.env.HTTPS_PROXY ??
+    process.env.https_proxy ??
+    process.env.ALL_PROXY ??
+    process.env.all_proxy
   if (proxyUrl) {
     const agent = new HttpsProxyAgent(proxyUrl)
     return new NodeHttpHandler({
