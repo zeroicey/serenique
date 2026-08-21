@@ -1,4 +1,4 @@
-# 素材库模块（Web 端）
+# 素材库模块（Web + 移动端）
 
 - 日期：2026-08-21
 - 状态：✅已实施（2026-08-21：Web 素材库页 + 后端 refCount + 测试全绿；边界项如上传入口/取用池/多类型预览留待后续）
@@ -55,7 +55,31 @@
 - 不做视频/音频/PDF 预览（后续可加，`getFile` Range 流式已具备基础）
 - 不做文件名/内容搜索（`list` 无 keyword 参数；如需要后端加）
 - 不做缩略图服务（个人工具直接拉原图）
-- 不涉及移动端（若要做，Flutter 端已有 `blob_access.dart` 直链语义可复用）
+- ~~不涉及移动端~~ → **已扩展到 Flutter（2026-08-21 用户确认）**，见 §6
+
+## 5. Flutter 端（2026-08-21 追加）
+
+用户确认：Web 版完成后，Flutter 端也做素材库页。后端契约不变（refCount 加法字段、mimeType regex 只约束 Flutter 不用的列表过滤参数——Flutter 的 fromJson 手写解析容忍未知字段，已排查零受影响）。
+
+### 复用的现成基础设施（apps/mobile）
+
+- `BlobAccessService` / `blobAccessUrlProvider`（features/moment/blob_access.dart）：签名直链 + URL 稳定缓存（D-033 不变式）——**建议把 blob_access.dart 上移到 features/blob/ 做跨 feature 共享，moment 改 import**（与 Web 端 `features/blob/access.ts` 被 moment 引用的结构对齐）
+- `ApiClient.getData`（GET + unwrap + humanizeError 统一中文错误）
+- `showMediaPreview`（moment 全屏预览遮罩）——素材库自建轻量图版 overlay（只接收 url+name 列表），**不强改 moment 组件**
+- 侧栏 `/files` 入口（photo_library 图标）与 `moduleTitle` 已映射「素材库」；router.dart 现指向 PlaceholderPage
+
+### 实现规划（features/blob/）
+
+- `blob_models.dart`：`BlobEntry`（id/originalName/mimeType/size/width/height/duration/createdAt/refCount）、`BlobAttachment`（id/blobId/ownerType/ownerId/role/displayName/sortOrder/createdAt）——手写 fromJson，未知字段容忍
+- `blob_api.dart`：`list({page,pageSize,mimeType})` → `{items,total}`；`listAttachments(id)`；`delete(id)`（409 引用保护中文 message 透传）
+- `blob_providers.dart`：列表 provider（ScrollController 触底加载下一页，filter 切换重置）、附件懒查 provider（删除弹窗打开时 `ref.read`）、删除 action provider
+- `blob_page.dart` + widgets：顶部 ChoiceChip 横滚筛选（全部/图片/视频/音频）；GridView 3 列：图片 → CachedNetworkImage 签名直链 + 「在用」徽标（refCount>0）+ 点击全屏预览；非图片 → 图标 + 文件名卡片；长按/角标 → 删除底部弹窗（showModalBottomSheet：懒查引用 → 有引用列引用方中文名（闪记/日记/…）×数量 + 禁删；无引用确认删除，409 兜底 toast）
+- router.dart：`/files` 从 PlaceholderPage 切到真页
+
+### 验收
+
+- `flutter analyze` 无 error；`flutter test` 新增用例全过（模型 fromJson、api 层 mock、shell 路由含 /files）
+- 真机/模拟器冒烟：列表加载、图片预览、被引用文件删除提示、无引用删除成功
 
 ## 5. 风险与注意
 

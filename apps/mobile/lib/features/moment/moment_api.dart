@@ -4,7 +4,7 @@ import 'package:crypto/crypto.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
-import 'blob_access.dart';
+import '../blob/blob_access.dart';
 import 'moment_models.dart';
 
 /// r2 直传凭据（POST /api/blobs/upload-url 响应）。

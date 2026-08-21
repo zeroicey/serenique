@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
-import 'blob_access.dart';
+import '../blob/blob_access.dart';
 import 'moment_api.dart';
 import 'moment_models.dart';
 import '../tag/tag_providers.dart';

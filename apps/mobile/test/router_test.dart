@@ -10,6 +10,9 @@ import 'package:serenique_mobile/features/ai/ai_providers.dart';
 import 'package:serenique_mobile/features/audit/audit_models.dart';
 import 'package:serenique_mobile/features/audit/audit_page.dart';
 import 'package:serenique_mobile/features/audit/audit_providers.dart';
+import 'package:serenique_mobile/features/blob/blob_models.dart';
+import 'package:serenique_mobile/features/blob/blob_page.dart';
+import 'package:serenique_mobile/features/blob/blob_providers.dart';
 import 'package:serenique_mobile/features/auth/auth_providers.dart';
 import 'package:serenique_mobile/features/auth/login_page.dart';
 import 'package:serenique_mobile/features/event/event_page.dart';
@@ -45,6 +48,16 @@ class _AiFakeWsChannel implements WebSocketChannel {
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
       '_AiFakeWsChannel.${invocation.memberName} not used in tests');
+}
+
+/// 素材库列表的测试替身：无网络 IO，build 直接返回固定数据。
+class FakeBlobListNotifier extends BlobListNotifier {
+  FakeBlobListNotifier(this.page);
+
+  final BlobPage page;
+
+  @override
+  Future<BlobPage> build() async => page;
 }
 
 class _Sink implements WebSocketSink {
@@ -231,5 +244,35 @@ void main() {
     expect(find.text('这天没有日程'), findsOneWidget);
     // AppBar 标题区 = 日期导航（默认今天，eventSelectedDayProvider 无 IO）
     expect(find.text(dateLabel(todayKey())), findsOneWidget);
+  });
+
+  testWidgets('已登录：/files 渲染真实素材库页（非占位）', (tester) async {
+    final container = ProviderContainer(overrides: [
+      tokenStorageProvider.overrideWithValue(FakeTokenStorage('secret')),
+      momentListProvider.overrideWith(() => FakeMomentListNotifier(const <Moment>[])),
+      countsProvider.overrideWith((ref) async => 0),
+      auditUnreadCountProvider.overrideWith((ref) async => 0),
+      taskTodoCountProvider.overrideWith((ref) async => 0),
+      eventTodayCountProvider.overrideWith((ref) async => 0),
+      blobListProvider.overrideWith(
+        () => FakeBlobListNotifier(
+          const BlobPage(items: [], total: 0),
+        ),
+      ),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const App()));
+    await tester.pumpAndSettle();
+
+    container.read(appRouterProvider).go('/files');
+    await tester.pumpAndSettle();
+
+    // 空态文案证明是真实素材页（占位页只显示「功能开发中」）
+    expect(find.byType(BlobLibraryPage), findsOneWidget);
+    expect(find.textContaining('暂无文件'), findsOneWidget);
+    // 类型筛选 chips（全部/图片/视频/音频）
+    expect(find.text('图片'), findsOneWidget);
+    expect(find.text('视频'), findsOneWidget);
+    expect(find.text('音频'), findsOneWidget);
   });
 }

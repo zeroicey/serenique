@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:serenique_mobile/features/moment/blob_access.dart';
+import 'package:serenique_mobile/features/blob/blob_access.dart';
 
 void main() {
   test('未过期缓存命中：第二次 resolve 不再调 fetchLink', () async {

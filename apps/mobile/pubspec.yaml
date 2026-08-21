@@ -65,6 +65,9 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
   mocktail_image_network: ^1.3.0
+  # CachedNetworkImage 的 DiskCacheManager 在 widget 测试中需要 FFI 数据库工厂
+  # （sqflite_common_ffi），见 test/flutter_test_config.dart。
+  sqflite_common_ffi: ^2.3.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

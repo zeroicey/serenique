@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'app_shell.dart';
@@ -7,6 +6,7 @@ import 'features/auth/login_page.dart';
 import 'features/auth/splash_page.dart';
 import 'features/ai/ai_page.dart';
 import 'features/audit/audit_page.dart';
+import 'features/blob/blob_page.dart';
 import 'features/event/event_page.dart';
 import 'features/event/widgets/event_edit_page.dart';
 import 'features/habit/habit_overview_page.dart';
@@ -15,7 +15,6 @@ import 'features/habit/widgets/habit_edit_page.dart';
 import 'features/moment/moment_create_page.dart';
 import 'features/moment/moment_detail_page.dart';
 import 'features/moment/moment_list_page.dart';
-import 'features/placeholder/placeholder_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/tag/tag_page.dart';
 import 'features/task/task_group_detail_page.dart';
@@ -62,10 +61,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/files',
-            builder: (context, state) => const PlaceholderPage(
-              title: '素材库',
-              icon: Icons.photo_library_outlined,
-            ),
+            builder: (context, state) => const BlobLibraryPage(),
           ),
           GoRoute(
             path: '/audit',
