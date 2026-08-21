@@ -16,9 +16,15 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
   const [expanded, setExpanded] = useState(false)
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
 
-  // 拉取所有附件的签名访问链接（凭证在 query，跨站 <img> 不受第三方 Cookie 拦截）。
+  // 原图签名链接（灯箱全屏预览用）。
   const blobIds = attachments.map((a) => a.blob.id)
   const { data: accessUrls } = useBlobAccessUrls(blobIds)
+
+  // 图片缩略图链接（网格瓦片用，避免网格直接拉原图导致滚动卡顿）；视频/音频无缩略图。
+  const imageBlobIds = attachments
+    .filter((a) => a.blob.mimeType.startsWith('image/'))
+    .map((a) => a.blob.id)
+  const { data: thumbUrls } = useBlobAccessUrls(imageBlobIds, 'thumb')
 
   const sorted = [...attachments].sort((a, b) => a.sortOrder - b.sortOrder)
   const needsExpand = sorted.length > PREVIEW_COUNT + 1
@@ -42,7 +48,10 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
             className="aspect-square cursor-pointer overflow-hidden rounded-lg bg-muted"
             onClick={() => setPreviewIndex(i)}
           >
-            <AttachmentTile attachment={a} src={accessUrls?.[a.blob.id] ?? a.blob.fileUrl} />
+            <AttachmentTile
+              attachment={a}
+              src={thumbUrls?.[a.blob.id] ?? accessUrls?.[a.blob.id] ?? a.blob.fileUrl}
+            />
           </div>
         ))}
         {needsExpand && !expanded && (

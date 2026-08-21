@@ -173,7 +173,8 @@ export function MomentList() {
 
   const searchBox = (
     <div className="w-full shrink-0">
-      <div className="mx-auto w-full max-w-[600px] px-3 pt-4 pb-3">
+      {/* 无水平内边距：与下方列表内容对齐（列表项也是 max-w-[600px] 居中无内边距） */}
+      <div className="mx-auto w-full max-w-[600px] pt-4 pb-3">
         <div className="flex items-center gap-2">
           <TagFilter tags={tags ?? []} selectedTagId={tagId} onSelect={setTag} />
           <div className="flex-1">
@@ -212,7 +213,7 @@ export function MomentList() {
     return (
       <div className="flex h-full w-full flex-col">
         {searchBox}
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto text-center">
+        <div className="scrollbar-hide flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-y-auto text-center">
           {searching ? (
             <>
               <p className="text-4xl">🔍</p>
@@ -246,7 +247,7 @@ export function MomentList() {
       {searchBox}
       <div
         ref={listScrollRef}
-        className="flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto"
+        className="scrollbar-hide flex min-h-0 w-full flex-1 flex-col items-center overflow-y-auto"
       >
         {moments.map((moment) => (
           <div key={moment.id} className="flex w-full max-w-[600px] flex-col items-center py-3">

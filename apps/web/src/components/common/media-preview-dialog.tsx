@@ -1,7 +1,25 @@
-import { ChevronLeft, ChevronRight, FileText } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { AudioLines, FileText } from 'lucide-react'
+import { useMemo } from 'react'
+import Lightbox, { type Slide } from 'yet-another-react-lightbox'
+import Counter from 'yet-another-react-lightbox/plugins/counter'
+import Video from 'yet-another-react-lightbox/plugins/video'
+import Zoom from 'yet-another-react-lightbox/plugins/zoom'
+import 'yet-another-react-lightbox/styles.css'
+import 'yet-another-react-lightbox/plugins/counter.css'
 import type { MediaFile } from '@/types/media'
+
+// 声明自定义 slide 类型（音频/其他文件）：随包 module augmentation 进 Slide 联合类型。
+declare module 'yet-another-react-lightbox' {
+  interface SlideTypes {
+    sereniqueFile: SereniqueFileSlide
+  }
+  interface SereniqueFileSlide {
+    type: 'sereniqueFile'
+    url: string
+    name: string
+    fileType: string
+  }
+}
 
 interface MediaPreviewDialogProps {
   open: boolean
@@ -11,7 +29,10 @@ interface MediaPreviewDialogProps {
   onNavigate: (index: number) => void
 }
 
-// 通用媒体全屏预览：图片/视频/音频/其他，支持前后切换。无业务逻辑，供各 feature 复用。
+// 通用媒体全屏预览（灯箱）：图片 / 视频 / 音频 / 其他文件，支持前后切换。
+// 基于成熟组件库 yet-another-react-lightbox（React 19 兼容，天然全屏无外框、
+// 支持缩放/触屏滑动），图片与视频原生渲染，音频/其他文件走自定义 slide。
+// 无业务逻辑，供各 feature 复用。
 export function MediaPreviewDialog({
   open,
   mediaFiles,
@@ -19,55 +40,61 @@ export function MediaPreviewDialog({
   onClose,
   onNavigate,
 }: MediaPreviewDialogProps) {
-  const file = mediaFiles[currentIndex]
-  const hasPrev = currentIndex > 0
-  const hasNext = currentIndex < mediaFiles.length - 1
+  const slides = useMemo<Slide[]>(
+    () =>
+      mediaFiles.map((f) => {
+        if (f.type.startsWith('video/')) {
+          return {
+            type: 'video',
+            sources: [{ src: f.url, type: f.type }],
+            // 不自动播放：jsdom 下 HTMLMediaElement.play() 是同步 stub（无 Promise），
+            // 库会直接 .catch 崩溃；真实浏览器中带声音自动播放也会被拦，交给用户点播放。
+            autoPlay: false,
+            controls: true,
+            playsInline: true,
+          }
+        }
+        if (f.type.startsWith('image/')) {
+          return { type: 'image', src: f.url, alt: f.name }
+        }
+        return { type: 'sereniqueFile', url: f.url, name: f.name, fileType: f.type }
+      }),
+    [mediaFiles],
+  )
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl border-none bg-black/90">
-        <div className="flex min-h-[50vh] w-full items-center justify-center">
-          {file?.type.startsWith('image/') ? (
-            <img
-              src={file.url}
-              alt={file.name}
-              className="max-h-[70vh] max-w-full object-contain"
-            />
-          ) : file?.type.startsWith('video/') ? (
-            <video src={file.url} controls autoPlay className="max-h-[70vh] max-w-full" />
-          ) : file?.type.startsWith('audio/') ? (
-            <audio src={file.url} controls autoPlay className="w-full max-w-md" />
-          ) : (
-            <div className="flex flex-col items-center gap-2 text-white">
-              <FileText className="h-12 w-12" />
-              <span className="text-sm">{file?.name ?? ''}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="上一张"
-            disabled={!hasPrev}
-            onClick={() => onNavigate(currentIndex - 1)}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {mediaFiles.length > 0 ? `${currentIndex + 1} / ${mediaFiles.length}` : ''}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="下一张"
-            disabled={!hasNext}
-            onClick={() => onNavigate(currentIndex + 1)}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <Lightbox
+      open={open}
+      slides={slides}
+      index={Math.max(0, Math.min(currentIndex, slides.length - 1))}
+      close={onClose}
+      plugins={[Counter, Video, Zoom]}
+      // 视图切换（滚轮/滑动/点箭头）时同步父级索引，重开时停留在原位置。
+      // finite: 不循环——首张时上一张禁用、末张时下一张禁用（循环会让边界按钮恒可点）。
+      carousel={{ finite: true }}
+      on={{ view: ({ index }) => onNavigate(index) }}
+      labels={{ Previous: '上一张', Next: '下一张', Close: '关闭' }}
+      counter={{ separator: ' / ' }}
+      render={{
+        // 自定义 slide：音频 / 其他文件（图片与视频由库原生渲染，此处返回 undefined）。
+        slide: ({ slide }) => {
+          if (slide.type === 'sereniqueFile') {
+            return slide.fileType.startsWith('audio/') ? (
+              <div className="flex flex-col items-center gap-4">
+                <AudioLines className="h-14 w-14 text-white" />
+                <audio src={slide.url} controls autoPlay className="w-full max-w-md" />
+                <span className="max-w-full truncate text-sm text-white">{slide.name}</span>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <FileText className="h-14 w-14 text-white" />
+                <span className="max-w-full truncate text-sm text-white">{slide.name}</span>
+              </div>
+            )
+          }
+          return undefined
+        },
+      }}
+    />
   )
 }

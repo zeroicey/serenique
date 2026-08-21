@@ -38,4 +38,28 @@ describe('createBlobAccessLink', () => {
   it('resolveApiPath builds an absolute URL from a relative path', () => {
     expect(resolveApiPath('/api/blobs/b1/file')).toBe('https://api.example.com/api/blobs/b1/file')
   })
+
+  it('thumb 链接请求携带 kind=thumb 并复用独立缓存', async () => {
+    mockedPost.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          message: 'ok',
+          data: {
+            path: '/api/blobs/b1/file?thumbnail=1&expires=9999999999&signature=sig',
+            expires: 9999999999,
+            signature: 'sig',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    const url = await createBlobAccessLink('b1', 'thumb')
+    expect(mockedPost).toHaveBeenCalledWith('/api/blobs/b1/access-link', {
+      json: { expiresInSeconds: 3600, kind: 'thumb' },
+    })
+    expect(url).toBe(
+      'https://api.example.com/api/blobs/b1/file?thumbnail=1&expires=9999999999&signature=sig',
+    )
+  })
 })

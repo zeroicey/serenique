@@ -40,22 +40,38 @@ export default function BlobLibraryPage() {
 
   const items = useMemo(() => data?.pages.flatMap((p) => p.items) ?? [], [data])
 
-  // 仅图片需要签名直链（视频/音频只展示元数据卡片）。
+  // 图片/视频/音频都可预览（视频无缩略图，点击后进灯箱播放原视频）：全部申请签名直链。
+  const previewItems = useMemo(
+    () =>
+      items.filter(
+        (b) =>
+          b.mimeType.startsWith('image/') ||
+          b.mimeType.startsWith('video/') ||
+          b.mimeType.startsWith('audio/'),
+      ),
+    [items],
+  )
+  // 原图直链（灯箱用）
+  const { data: accessUrls } = useBlobAccessUrls(previewItems.map((b) => b.id))
+  // 缩略图直链（网格瓦片用，仅图片；解决大图加载卡顿）
   const imageItems = useMemo(() => items.filter((b) => b.mimeType.startsWith('image/')), [items])
-  const { data: accessUrls } = useBlobAccessUrls(imageItems.map((b) => b.id))
+  const { data: thumbUrls } = useBlobAccessUrls(
+    imageItems.map((b) => b.id),
+    'thumb',
+  )
 
   const mediaFiles: MediaFile[] = useMemo(
     () =>
-      imageItems.map((b) => ({
+      previewItems.map((b) => ({
         id: b.id,
         name: b.originalName,
         type: b.mimeType,
         url: accessUrls?.[b.id] ?? '',
       })),
-    [imageItems, accessUrls],
+    [previewItems, accessUrls],
   )
 
-  const previewTargetIndex = (blob: BlobEntry) => imageItems.findIndex((b) => b.id === blob.id)
+  const previewTargetIndex = (blob: BlobEntry) => previewItems.findIndex((b) => b.id === blob.id)
 
   return (
     <div className="flex h-full w-full justify-center">
@@ -97,10 +113,18 @@ export default function BlobLibraryPage() {
                 <BlobTile
                   key={blob.id}
                   blob={blob}
-                  src={accessUrls?.[blob.id]}
+                  src={
+                    blob.mimeType.startsWith('image/')
+                      ? thumbUrls?.[blob.id]
+                      : accessUrls?.[blob.id]
+                  }
                   onClick={() => {
                     // 签名直链未就绪时不打开灯箱（避免空 <img src> 抖动）
-                    if (!accessUrls?.[blob.id]) return
+                    if (!previewItems.some((b) => b.id === blob.id)) return
+                    const url =
+                      accessUrls?.[blob.id] ||
+                      (blob.mimeType.startsWith('image/') ? thumbUrls?.[blob.id] : undefined)
+                    if (!url) return
                     const idx = previewTargetIndex(blob)
                     if (idx >= 0) setPreviewIndex(idx)
                   }}

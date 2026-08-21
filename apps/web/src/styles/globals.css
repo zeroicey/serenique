@@ -128,3 +128,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* 隐藏滚动条但保留滚动能力（闪记列表局部滚动容器，避免底部滚动条突兀）。
+   Firefox 用 scrollbar-width，其余用 -webkit-scrollbar 伪元素。 */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE/Edge 旧版 */
+    scrollbar-width: none; /* Firefox */
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Edge */
+  }
+}

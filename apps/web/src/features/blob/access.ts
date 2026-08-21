@@ -13,7 +13,10 @@ interface BlobAccessLinkEntry {
   signature: string
 }
 
-// 签名直链的会话级缓存：同一 blob 在有效期内复用同一 URL（避免分页/重渲染时
+/** 链接类型：original=原文件（灯箱/大图），thumb=缩略图（网格瓦片）。 */
+export type BlobLinkKind = 'original' | 'thumb'
+
+// 签名直链的会话级缓存：同一 blob+kind 在有效期内复用同一 URL（避免分页/重渲染时
 // 重新申请产生新 expires → <img> src 变化 → 图片反复重载转圈）。
 // 与移动端 BlobAccessService（blob_access.dart）同语义。有效期最后 60s 视为
 // 过期提前刷新，防止用到一半过期白屏。
@@ -28,17 +31,21 @@ function resolveLinkPath(link: BlobAccessLinkEntry): string {
 }
 
 /** 申请（或命中缓存返回）签名直链。有效期内多次调用返回同一 URL。 */
-export async function createBlobAccessLink(blobId: string): Promise<string> {
+export async function createBlobAccessLink(
+  blobId: string,
+  kind: BlobLinkKind = 'original',
+): Promise<string> {
+  const cacheKey = `${kind}:${blobId}`
   const now = Date.now()
-  const hit = linkCache.get(blobId)
+  const hit = linkCache.get(cacheKey)
   if (hit && hit.expiresAt - 60_000 > now) return hit.url
 
-  const res = await api.post(apiUrl(`blobs/${blobId}/access-link`), {
-    json: { expiresInSeconds: 3600 },
-  })
+  const json: { expiresInSeconds: number; kind?: 'thumb' } = { expiresInSeconds: 3600 }
+  if (kind === 'thumb') json.kind = 'thumb'
+  const res = await api.post(apiUrl(`blobs/${blobId}/access-link`), { json })
   const link = await unwrap<BlobAccessLinkEntry>(res)
   const url = resolveLinkPath(link)
-  linkCache.set(blobId, { url, expiresAt: link.expires * 1000 })
+  linkCache.set(cacheKey, { url, expiresAt: link.expires * 1000 })
   return url
 }
 
@@ -47,17 +54,20 @@ export function clearBlobAccessLinkCache(): void {
   linkCache.clear()
 }
 
-export function useBlobAccessUrls(blobIds: string[]): UseQueryResult<Record<string, string>> {
+export function useBlobAccessUrls(
+  blobIds: string[],
+  kind: BlobLinkKind = 'original',
+): UseQueryResult<Record<string, string>> {
   return useQuery({
-    queryKey: ['blob-access-urls', blobIds],
+    queryKey: ['blob-access-urls', kind, blobIds],
     queryFn: async () => {
       const entries = await Promise.all(
         blobIds.map(async (id) => {
           try {
-            return await createBlobAccessLink(id)
+            return await createBlobAccessLink(id, kind)
           } catch {
             // dev 未配签名密钥：回退无签名直链（此时 dev 一般无 auth 或同源代理）
-            return resolveApiPath(`/api/blobs/${id}/file`)
+            return resolveApiPath(`/api/blobs/${id}/file${kind === 'thumb' ? '?thumbnail=1' : ''}`)
           }
         }),
       )
