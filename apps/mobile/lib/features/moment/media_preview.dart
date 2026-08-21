@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'moment_models.dart';
@@ -188,12 +189,12 @@ class _MediaPageState extends ConsumerState<_MediaPage>
                 minScale: 1,
                 maxScale: 4,
                 child: SizedBox.expand(
-                  child: Image.network(
-                    u,
+                  child: CachedNetworkImage(
+                    imageUrl: u,
                     fit: BoxFit.contain,
-                    loadingBuilder: (_, child, progress) =>
-                        progress == null ? child : const Center(child: CircularProgressIndicator()),
-                    errorBuilder: (_, _, _) => Center(
+                    placeholder: (_, _) =>
+                        const Center(child: CircularProgressIndicator()),
+                    errorWidget: (_, _, _) => Center(
                       child: Icon(Icons.broken_image,
                           size: 64, color: Colors.white54),
                     ),

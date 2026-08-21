@@ -13,12 +13,38 @@ interface BlobAccessLinkEntry {
   signature: string
 }
 
+// 签名直链的会话级缓存：同一 blob 在有效期内复用同一 URL（避免分页/重渲染时
+// 重新申请产生新 expires → <img> src 变化 → 图片反复重载转圈）。
+// 与移动端 BlobAccessService（blob_access.dart）同语义。有效期最后 60s 视为
+// 过期提前刷新，防止用到一半过期白屏。
+interface CachedLink {
+  url: string
+  expiresAt: number
+}
+const linkCache = new Map<string, CachedLink>()
+
+function resolveLinkPath(link: BlobAccessLinkEntry): string {
+  return link.path.startsWith('http') ? link.path : resolveApiPath(link.path)
+}
+
+/** 申请（或命中缓存返回）签名直链。有效期内多次调用返回同一 URL。 */
 export async function createBlobAccessLink(blobId: string): Promise<string> {
+  const now = Date.now()
+  const hit = linkCache.get(blobId)
+  if (hit && hit.expiresAt - 60_000 > now) return hit.url
+
   const res = await api.post(apiUrl(`blobs/${blobId}/access-link`), {
     json: { expiresInSeconds: 3600 },
   })
   const link = await unwrap<BlobAccessLinkEntry>(res)
-  return link.path.startsWith('http') ? link.path : resolveApiPath(link.path)
+  const url = resolveLinkPath(link)
+  linkCache.set(blobId, { url, expiresAt: link.expires * 1000 })
+  return url
+}
+
+/** 清空签名链接缓存（会话退出/登出时调用，可选）。 */
+export function clearBlobAccessLinkCache(): void {
+  linkCache.clear()
 }
 
 export function useBlobAccessUrls(blobIds: string[]): UseQueryResult<Record<string, string>> {

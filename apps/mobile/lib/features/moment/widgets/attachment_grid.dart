@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../moment_models.dart';
@@ -115,12 +116,12 @@ class _AttachmentTile extends ConsumerWidget {
               child: Icon(Icons.broken_image, color: scheme.onSurfaceVariant),
             ),
             data: (u) => switch (blob) {
-              _ when blob.isImage => Image.network(
-                  u,
+              _ when blob.isImage => CachedNetworkImage(
+                  imageUrl: u,
                   fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) =>
-                      progress == null ? child : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  errorBuilder: (_, _, _) => ColoredBox(
+                  placeholder: (_, _) => const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                  errorWidget: (_, _, _) => ColoredBox(
                     color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
                     child: Icon(Icons.broken_image, color: scheme.onSurfaceVariant),
                   ),

@@ -234,8 +234,9 @@ final blobAccessServiceProvider = Provider<BlobAccessService>((ref) {
 
 /// 每个 blobId 的签名链接（autoDispose：瓦片离开屏幕时释放；
 /// 命中 service 内存缓存则不发请求）。
-final blobAccessUrlProvider = FutureProvider.autoDispose.family<String, String>(
-  (ref, blobId) {
-    return ref.watch(blobAccessServiceProvider).resolve(blobId);
-  },
-);
+/// 签名直链 Future（按 blobId）。keepAlive（非 autoDispose）：滚动列表项销毁后
+/// Future 结果仍缓存，回看时不重新 resolve（配合 BlobAccessService 的 URL 缓存，
+/// URL 稳定 → ImageCache/CachedNetworkImage 命中 → 不再转圈重载）。
+final blobAccessUrlProvider = FutureProvider.family<String, String>((ref, blobId) {
+  return ref.watch(blobAccessServiceProvider).resolve(blobId);
+});
