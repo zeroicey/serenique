@@ -19,6 +19,8 @@ export interface BlobEntry {
   height: number | null
   duration: number | null
   createdAt: string
+  /** 被业务附件引用的数量；>0 时不可物理删除（删除时后端返回 409）。 */
+  refCount: number
 }
 
 interface UploadUrlEntry {
@@ -29,6 +31,44 @@ interface UploadUrlEntry {
   expires: number
   expiresAt: string
   mode: 'direct-r2'
+}
+
+export interface BlobAttachmentEntry {
+  id: string
+  blobId: string
+  ownerType: string
+  ownerId: string
+  role: string
+  displayName: string | null
+  sortOrder: number
+  createdAt: string
+}
+
+/** 分页列表（mimeType 为前缀过滤，如 "image/"）。 */
+export async function listBlobs(input: {
+  page: number
+  pageSize: number
+  mimeType?: string
+}): Promise<{ items: BlobEntry[]; total: number }> {
+  const searchParams: Record<string, string> = {
+    page: String(input.page),
+    pageSize: String(input.pageSize),
+  }
+  if (input.mimeType) searchParams.mimeType = input.mimeType
+  const res = await api.get(apiUrl('blobs'), { searchParams })
+  return unwrap<{ items: BlobEntry[]; total: number }>(res)
+}
+
+/** 删除物理 blob（被引用时后端 409 拒绝）。 */
+export async function deleteBlob(id: string): Promise<void> {
+  const res = await api.delete(apiUrl(`blobs/${id}`))
+  await unwrap(res)
+}
+
+/** 查一个 blob 的所有业务引用（删除前判断引用方）。 */
+export async function listBlobAttachments(id: string): Promise<BlobAttachmentEntry[]> {
+  const res = await api.get(apiUrl(`blobs/${id}/attachments`))
+  return unwrap<BlobAttachmentEntry[]>(res)
 }
 
 async function sha256Hex(buf: ArrayBuffer): Promise<string> {

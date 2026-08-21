@@ -246,4 +246,30 @@ describe.skipIf(!RUN_DB_TESTS)('blob service DB integration', () => {
     expect(page.items).toHaveLength(1)
     expect(page.total).toBeGreaterThanOrEqual(1)
   })
+
+  test('list/get report refCount and delete refuses referenced blobs', async () => {
+    const img = await upload('ref.png', 'image/png', PNG_BYTES)
+    const lone = await upload('lone.png', 'image/png', Buffer.from(`lone-${RUN_TOKEN}`))
+
+    await blobService.createAttachment(img.id, { ownerType: 'diary', ownerId: 'd1' })
+    await blobService.createAttachment(img.id, { ownerType: 'event', ownerId: 'e1' })
+
+    // list 聚合引用计数
+    const listed = await blobService.list({ page: 1, pageSize: 100 })
+    const byId = new Map(listed.items.map((b) => [b.id, b.refCount]))
+    expect(byId.get(img.id)).toBe(2)
+    expect(byId.get(lone.id)).toBe(0)
+
+    // get 单查计数一致
+    expect((await blobService.get(img.id)).refCount).toBe(2)
+
+    // 被引用 blob 删除被拒（409）
+    await expect(blobService.delete(img.id)).rejects.toMatchObject({
+      code: 'CONFLICT',
+      status: 409,
+    })
+
+    // 未被引用 blob 可删除
+    await expect(blobService.delete(lone.id)).resolves.toBeUndefined()
+  })
 })

@@ -6,7 +6,7 @@ import type { BlobAttachmentEntry, BlobEntry } from '@/modules/blob/blob.types'
 // storagePath is intentionally never exposed to clients.
 // ---------------------------------------------------------------------------
 
-export function toPublicBlobEntry(row: typeof blobs.$inferSelect): BlobEntry {
+export function toPublicBlobEntry(row: typeof blobs.$inferSelect, refCount = 0): BlobEntry {
   return {
     id: row.id,
     originalName: row.originalName,
@@ -18,6 +18,7 @@ export function toPublicBlobEntry(row: typeof blobs.$inferSelect): BlobEntry {
     height: row.height,
     duration: row.duration,
     createdAt: row.createdAt.toISOString(),
+    refCount,
   }
 }
 

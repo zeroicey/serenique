@@ -1,4 +1,4 @@
-import { eq, like, sql } from 'drizzle-orm'
+import { eq, inArray, like, sql } from 'drizzle-orm'
 import { db } from '@/db/connection'
 import { env } from '@/env'
 import { fireAuditRecord } from '@/modules/audit/audit.service'
@@ -49,6 +49,15 @@ import {
 // ---------------------------------------------------------------------------
 
 type BlobRow = typeof blobs.$inferSelect
+
+/** 单个 blob 的业务引用数量（被 blob_attachments 引用的 blob 不可物理删除）。 */
+async function countBlobRefs(blobId: string): Promise<number> {
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(blobAttachments)
+    .where(eq(blobAttachments.blobId, blobId))
+  return count
+}
 
 export const blobService = {
   /**
@@ -154,14 +163,36 @@ export const blobService = {
       db.select({ count: sql<number>`count(*)::int` }).from(blobs).where(where),
     ])
 
-    return { items: items.map(toPublicBlobEntry), total: count }
+    // 引用计数：被业务附件引用的 blob 不可物理删除，素材库据此标记「在用」。
+    let refCounts = new Map<string, number>()
+    if (items.length > 0) {
+      const refRows = await db
+        .select({
+          blobId: blobAttachments.blobId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(blobAttachments)
+        .where(
+          inArray(
+            blobAttachments.blobId,
+            items.map((row) => row.id),
+          ),
+        )
+        .groupBy(blobAttachments.blobId)
+      refCounts = new Map(refRows.map((row) => [row.blobId, row.count]))
+    }
+
+    return {
+      items: items.map((row) => toPublicBlobEntry(row, refCounts.get(row.id) ?? 0)),
+      total: count,
+    }
   },
 
-  /** Get a single blob's metadata. */
+  /** 单个 blob 的业务引用数量。 */
   async get(id: string): Promise<BlobEntry> {
     const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
-    return toPublicBlobEntry(row)
+    return toPublicBlobEntry(row, await countBlobRefs(id))
   },
 
   /** Open the file body + metadata needed for streaming. */

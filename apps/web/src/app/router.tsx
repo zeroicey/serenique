@@ -39,14 +39,17 @@ const router = createBrowserRouter([
           { path: 'task', element: lazyPage(() => import('@/features/task/pages/task-page')) },
           { path: 'event', element: lazyPage(() => import('@/features/event/pages/event-page')) },
           { path: 'audit', element: lazyPage(() => import('@/features/audit/pages/audit-page')) },
-          // 宁序（AI 助手）已接入真实页面；习惯 / 素材库仍为占位模块（开发中）。
+          // 宁序（AI 助手）与素材库已接入真实页面；习惯仍为占位模块（开发中）。
           { path: 'ai', element: lazyPage(() => import('@/features/ai/pages/ai-page')) },
           { path: 'habit', element: lazyPage(() => import('@/features/habit/pages/habit-page')) },
           {
             path: 'habit/overview',
             element: lazyPage(() => import('@/features/habit/pages/habit-overview-page')),
           },
-          { path: 'files', element: lazyPage(() => import('@/app/pages/placeholder-module-page')) },
+          {
+            path: 'files',
+            element: lazyPage(() => import('@/features/blob/pages/blob-library-page')),
+          },
           {
             path: 'settings',
             element: lazyPage(() => import('@/features/settings/pages/settings-page')),

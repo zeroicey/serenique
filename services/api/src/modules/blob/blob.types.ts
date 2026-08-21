@@ -8,7 +8,10 @@ export const ListBlobSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
   /** Filter by MIME type prefix, e.g. "image/" shows all image subtypes. */
-  mimeType: z.string().optional(),
+  mimeType: z
+    .string()
+    .regex(/^[a-z]+\/$/, 'mimeType 需为类型前缀，如 image/')
+    .optional(),
 })
 
 export const CreateBlobAttachmentSchema = z.object({
@@ -89,6 +92,8 @@ export type BlobEntry = {
   height: number | null
   duration: number | null
   createdAt: string
+  /** 被业务附件（blob_attachments）引用的数量；>0 时不可物理删除。 */
+  refCount: number
 }
 
 export type BlobAttachmentEntry = {

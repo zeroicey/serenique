@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
-import { uploadBlob } from './api'
+import { deleteBlob, listBlobAttachments, listBlobs, uploadBlob } from './api'
 
 vi.mock('@/api/client', () => ({
-  api: { post: vi.fn() },
+  api: { post: vi.fn(), get: vi.fn(), delete: vi.fn() },
   apiUrl: (path: string) => `/api/${path.replace(/^\/+/, '')}`,
 }))
 
 const mockedPost = vi.mocked(api.post)
+const mockedGet = vi.mocked(api.get)
+const mockedDelete = vi.mocked(api.delete)
 
 const entry = {
   id: 'b1',
@@ -20,6 +22,7 @@ const entry = {
   height: null as null,
   duration: null as null,
   createdAt: '2026-08-05T00:00:00.000Z',
+  refCount: 0,
 }
 const wrap = (data: unknown, status = 200) =>
   new Response(JSON.stringify({ success: true, message: 'ok', data }), {
@@ -90,5 +93,75 @@ describe('uploadBlob', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Forbidden', { status: 403 })))
 
     await expect(uploadBlob(file)).rejects.toThrow('直传失败')
+  })
+})
+
+describe('listBlobs', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('拼接 mimeType 前缀过滤并解包分页结果', async () => {
+    mockedGet.mockResolvedValueOnce(wrap({ items: [entry], total: 1 }))
+
+    const result = await listBlobs({ page: 2, pageSize: 48, mimeType: 'image/' })
+
+    expect(mockedGet).toHaveBeenCalledWith('/api/blobs', {
+      searchParams: { page: '2', pageSize: '48', mimeType: 'image/' },
+    })
+    expect(result.items[0].id).toBe('b1')
+    expect(result.total).toBe(1)
+  })
+
+  it('不传 mimeType 时省略该参数', async () => {
+    mockedGet.mockResolvedValueOnce(wrap({ items: [], total: 0 }))
+
+    await listBlobs({ page: 1, pageSize: 20 })
+
+    expect(mockedGet).toHaveBeenCalledWith('/api/blobs', {
+      searchParams: { page: '1', pageSize: '20' },
+    })
+  })
+})
+
+describe('deleteBlob', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('DELETE /blobs/:id 解包成功', async () => {
+    mockedDelete.mockResolvedValueOnce(wrap(null))
+
+    await expect(deleteBlob('b1')).resolves.toBeUndefined()
+
+    expect(mockedDelete).toHaveBeenCalledWith('/api/blobs/b1')
+  })
+})
+
+describe('listBlobAttachments', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('GET /blobs/:id/attachments 返回引用列表', async () => {
+    mockedGet.mockResolvedValueOnce(
+      wrap([
+        {
+          id: 'a1',
+          blobId: 'b1',
+          ownerType: 'moment',
+          ownerId: 'm1',
+          role: 'attachment',
+          displayName: null,
+          sortOrder: 0,
+          createdAt: '2026-08-05T00:00:00.000Z',
+        },
+      ]),
+    )
+
+    const refs = await listBlobAttachments('b1')
+
+    expect(mockedGet).toHaveBeenCalledWith('/api/blobs/b1/attachments')
+    expect(refs[0].ownerType).toBe('moment')
   })
 })

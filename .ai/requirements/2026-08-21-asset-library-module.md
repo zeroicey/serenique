@@ -1,7 +1,7 @@
 # 素材库模块（Web 端）
 
 - 日期：2026-08-21
-- 状态：📝需求讨论中（已定方向，未实施）
+- 状态：✅已实施（2026-08-21：Web 素材库页 + 后端 refCount + 测试全绿；边界项如上传入口/取用池/多类型预览留待后续）
 - 范围：`apps/web`（页面 + 接入层）、`services/api`（blob 模块小增强）
 - 相关：`.ai/requirements/2026-08-20-object-storage-r2.md`、`.ai/decisions/2026-08-04-blob-storage-module.md`
 
@@ -34,7 +34,7 @@
 
 ### 后端（小改动，无 DB 迁移）
 
-1. `GET /blobs` 列表项增加 `refCount: number`（join `blob_attachments` 计数），前端网格可显示「在用」标记。
+1. `GET /blobs` 列表项增加 `refCount: number`（join `blob_attachments` 计数，`get` 单查同源）——已实施，前端网格显示「在用」徽标。
 2. `DELETE /blobs/:id` 的 409 阻止逻辑**已存在**，无需改动；前端删除前调 `GET /blobs/:id/attachments` 预查引用方，有则展示提示并禁用删除。
 
 ### 前端（主工作量）
@@ -42,7 +42,7 @@
 - `features/blob/api.ts` 补 `listBlobs({ page, pageSize, mimeType })` 封装；`BlobEntry` 类型补 `refCount`。
 - `features/blob/queries.ts` 补 `useBlobList`（queryKey 含页码/筛选）、`useDeleteBlob`（成功后 invalidate）、`useBlobAttachments(blobId)`（删除弹窗打开时懒查）。
 - `features/blob/pages/` 新建素材库页，替换 `/files` 占位路由：
-  - 顶部类型筛选 Tab（全部/图片/视频/音频/其他，`list` 的 mimeType 前缀过滤已支持）
+  - 顶部类型筛选 Tab（全部/图片/视频/音频——**无「其他」**：后端 `list` 只支持 mimeType 前缀过滤，不支持排除；非音视频归入「全部」显示为元数据卡）
   - 网格卡片：图片 → 签名直链 `<img loading="lazy">`（复用 `useBlobAccessUrls` 会话级缓存）+ 点击全屏灯箱；非图片 → 图标 + 原文件名 + 大小 + MIME（+ 时长/尺寸元数据）
   - 删除流程：点击删除 → 查该 blob 引用 → 有引用：弹窗列出引用方（ownerType 中文名 + 数量）禁删；无引用：确认后 DELETE + toast + invalidate
   - 分页：无限滚动或「加载更多」（pageSize ~48，网格布局）
