@@ -1,8 +1,30 @@
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
+
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import 'blob_access.dart';
 import 'moment_models.dart';
+
+/// r2 直传凭据（POST /api/blobs/upload-url 响应）。
+class UploadUrl {
+  UploadUrl({
+    required this.blobId,
+    required this.storagePath,
+    required this.url,
+  });
+
+  final String blobId;
+  final String storagePath;
+  final String url;
+
+  factory UploadUrl.fromJson(Map<String, dynamic> json) => UploadUrl(
+    blobId: json['blobId'] as String,
+    storagePath: json['storagePath'] as String,
+    url: json['url'] as String,
+  );
+}
 
 /// moment 的 HTTP 封装：只负责「请求 + 把 data 解成模型」。
 class MomentApi {
@@ -67,17 +89,52 @@ class MomentApi {
     return Moment.fromJson(data as Map<String, dynamic>);
   }
 
+  /// 上传二进制：r2 后端走两步直传（签发 PUT 凭据 → 直连 s3.0icey.icu PUT → confirm）；
+  /// local 后端（dev/回滚）upload-url 返回 400 → 回退 multipart。
   Future<MomentBlob> uploadBlob(
     Uint8List bytes, {
     required String filename,
     required String mimeType,
   }) async {
-    final data = await _client.postMultipart(
-      '/api/blobs/upload',
-      bytes: bytes,
-      filename: filename,
-      mimeType: mimeType,
-    );
+    // 1) 签发直传凭据（仅 r2 后端可用）
+    UploadUrl cred;
+    try {
+      final data = await _client.postData('/api/blobs/upload-url', body: {
+        'filename': filename,
+        'mimeType': mimeType,
+        'size': bytes.length,
+      });
+      cred = UploadUrl.fromJson(data as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (e.statusCode == 400) {
+        // local 后端：回退 multipart 上传
+        final data = await _client.postMultipart(
+          '/api/blobs/upload',
+          bytes: bytes,
+          filename: filename,
+          mimeType: mimeType,
+        );
+        return MomentBlob.fromJson(data as Map<String, dynamic>);
+      }
+      rethrow;
+    }
+
+    // 2) 直传 PUT（Worker 校验写 R2）
+    final status = await _client.putBinary(cred.url, bytes, mimeType);
+    if (status < 200 || status >= 300) {
+      throw ApiException('UPLOAD_FAILED', '文件直传失败（$status），请重试', statusCode: status);
+    }
+
+    // 3) SHA-256 + confirm（去重 + 落库）
+    final checksum = sha256.convert(bytes).toString();
+    final data = await _client.postData('/api/blobs/confirm', body: {
+      'blobId': cred.blobId,
+      'storagePath': cred.storagePath,
+      'originalName': filename,
+      'mimeType': mimeType,
+      'size': bytes.length,
+      'checksum': checksum,
+    });
     return MomentBlob.fromJson(data as Map<String, dynamic>);
   }
 

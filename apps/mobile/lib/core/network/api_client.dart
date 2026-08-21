@@ -23,20 +23,25 @@ class ApiClient {
     this.onUnauthorized,
     Dio? dio,
   })
-      // ignore: prefer_initializing_formals
-      : _tokenReader = tokenReader {
-    _dio = dio ??
-        Dio(BaseOptions(
-          baseUrl: baseUrl,
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-        ));
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
-        applyAuthHeader(options, _tokenReader);
-        handler.next(options);
-      },
-    ));
+    // ignore: prefer_initializing_formals
+    : _tokenReader = tokenReader {
+    _dio =
+        dio ??
+        Dio(
+          BaseOptions(
+            baseUrl: baseUrl,
+            connectTimeout: const Duration(seconds: 10),
+            receiveTimeout: const Duration(seconds: 10),
+          ),
+        );
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          applyAuthHeader(options, _tokenReader);
+          handler.next(options);
+        },
+      ),
+    );
   }
 
   final String baseUrl;
@@ -69,18 +74,23 @@ class ApiClient {
     required String mimeType,
   }) {
     final form = FormData.fromMap({
-      'file': MultipartFile.fromBytes(bytes,
-          filename: filename, contentType: DioMediaType.parse(mimeType)),
-    });
-    return _guard(_dio.post(
-      path,
-      data: form,
-      options: Options(
-        connectTimeout: const Duration(seconds: 60),
-        receiveTimeout: const Duration(seconds: 300),
-        sendTimeout: const Duration(seconds: 300),
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: DioMediaType.parse(mimeType),
       ),
-    ));
+    });
+    return _guard(
+      _dio.post(
+        path,
+        data: form,
+        options: Options(
+          connectTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 300),
+          sendTimeout: const Duration(seconds: 300),
+        ),
+      ),
+    );
   }
 
   Future<dynamic> _guard(Future<Response<dynamic>> future) async {
@@ -94,6 +104,33 @@ class ApiClient {
         await onUnauthorized?.call();
       }
       throw ApiException.fromDioException(e);
+    }
+  }
+
+  /// r2 直传：PUT 二进制到绝对 URL（s3.0icey.icu 网关）。
+  /// 用独立 Dio（无 interceptor）——避免把 Bearer token 发给网关域，且响应是纯状态码不是envelope。
+  /// 返回 HTTP 状态码（成功 200；403/413 等直接返回，不抛）。
+  Future<int> putBinary(
+    String absoluteUrl,
+    Uint8List bytes,
+    String contentType,
+  ) async {
+    final raw = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 60),
+        sendTimeout: const Duration(seconds: 300),
+        receiveTimeout: const Duration(seconds: 300),
+      ),
+    );
+    try {
+      final res = await raw.put(
+        absoluteUrl,
+        data: bytes,
+        options: Options(headers: {'Content-Type': contentType}),
+      );
+      return res.statusCode ?? 0;
+    } on DioException catch (e) {
+      return e.response?.statusCode ?? 0;
     }
   }
 }

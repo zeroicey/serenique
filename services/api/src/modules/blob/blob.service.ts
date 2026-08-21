@@ -282,7 +282,7 @@ export const blobService = {
       throw new AppError(ErrorCode.VALIDATION, 'storagePath 与 blobId 不匹配', 400)
     }
 
-    // 去重
+    // 去重（按 checksum）
     const [existing] = await db.select().from(blobs).where(eq(blobs.checksum, input.checksum))
     if (existing) {
       logger.info(
@@ -290,6 +290,13 @@ export const blobService = {
         '直传检测到重复文件，返回已有记录',
       )
       return toPublicBlobEntry(existing)
+    }
+
+    // 幂等：同 blobId 重复 confirm（如网络重试）→ 返回既有行，避免主键冲突 500
+    const [byId] = await db.select().from(blobs).where(eq(blobs.id, input.blobId))
+    if (byId) {
+      logger.info({ blobId: input.blobId }, '直传确认重复提交，返回既有记录')
+      return toPublicBlobEntry(byId)
     }
 
     // 落库（直传无法离线取图宽高，暂记 null）
