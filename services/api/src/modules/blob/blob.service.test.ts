@@ -119,6 +119,25 @@ describe('blob domain — access signatures', () => {
     expect(signR2Access(secret, path, expires + 1)).not.toBe(expected)
   })
 
+  test('signR2Put hex output matches the worker PUT signing domain (fixed vector)', async () => {
+    setTestEnv()
+    const { signR2Put } = await import('./blob.domain')
+    // 与 infra/r2-gateway/gateway.js PUT 分支同域：HMAC(secret, `up:${path}:${expires}:${size}`)→hex。
+    const { createHmac } = await import('node:crypto')
+    const secret = 'test-r2-signing-secret-0123456789abcdef'
+    const path = 'image/2026/08/abc-123.jpg'
+    const expires = 1755667200
+    const size = 4096
+    const expected = createHmac('sha256', secret)
+      .update(`up:${path}:${expires}:${size}`)
+      .digest('hex')
+    expect(signR2Put(secret, path, expires, size)).toBe(expected)
+    expect(signR2Put(secret, path, expires, size)).toMatch(/^[0-9a-f]{64}$/)
+    // size 参与签名：不同 size / path / expires 必须不同
+    expect(signR2Put(secret, path, expires, size + 1)).not.toBe(expected)
+    expect(signR2Put(secret, `${path}x`, expires, size)).not.toBe(expected)
+  })
+
   test('requireSigningSecret throws INTERNAL when missing', async () => {
     setTestEnv()
     const { requireSigningSecret } = await import('./blob.domain')

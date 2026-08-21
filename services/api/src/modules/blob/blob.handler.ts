@@ -1,8 +1,10 @@
 import type { Context } from 'hono'
 import { blobService } from '@/modules/blob/blob.service'
 import {
+  ConfirmUploadSchema,
   CreateBlobAccessLinkSchema,
   CreateBlobAttachmentSchema,
+  CreateUploadUrlSchema,
   ListBlobSchema,
 } from '@/modules/blob/blob.types'
 import { handleError, uuidParam } from '@/shared/handler'
@@ -149,6 +151,28 @@ export const blobHandler = {
         status: 200,
         headers: fileHeaders(mimeType, filename, disposition, size),
       })
+    } catch (e) {
+      return handleError(e, c, 'blob')
+    }
+  },
+
+  /** POST /api/blobs/upload-url — r2 直传：签发 PUT 直传 URL */
+  async createUploadUrl(c: Context) {
+    try {
+      const body = CreateUploadUrlSchema.parse(await c.req.json())
+      const result = await blobService.createUploadUrl(body)
+      return Res.ok('直传凭据已签发', result).build(c)
+    } catch (e) {
+      return handleError(e, c, 'blob')
+    }
+  },
+
+  /** POST /api/blobs/confirm — 直传完成确认（去重 + 落库） */
+  async confirmUpload(c: Context) {
+    try {
+      const body = ConfirmUploadSchema.parse(await c.req.json())
+      const result = await blobService.confirmUpload(body)
+      return Res.ok('上传成功', result).build(c)
     } catch (e) {
       return handleError(e, c, 'blob')
     }

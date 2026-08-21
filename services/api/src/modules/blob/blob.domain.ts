@@ -66,6 +66,21 @@ export function signR2Access(secret: string, storagePath: string, expires: numbe
   return createHmac('sha256', secret).update(`v1:${storagePath}:${expires}`).digest('hex')
 }
 
+/**
+ * R2 直传（PUT）签名（hex）。签名域必须与 Worker 网关
+ * (infra/r2-gateway/gateway.js 的 PUT 分支) 完全一致：
+ * HMAC-SHA256(secret, `up:${storagePath}:${expires}:${size}`)，改任一处必须同步。
+ * size 参与签名以在 Worker 侧防篡改（Content-Length 必须匹配）。
+ */
+export function signR2Put(
+  secret: string,
+  storagePath: string,
+  expires: number,
+  size: number,
+): string {
+  return createHmac('sha256', secret).update(`up:${storagePath}:${expires}:${size}`).digest('hex')
+}
+
 /** Constant-time signature comparison. */
 export function signaturesEqual(actual: string, expected: string): boolean {
   const actualBuf = Buffer.from(actual)

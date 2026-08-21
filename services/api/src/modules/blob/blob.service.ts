@@ -12,6 +12,7 @@ import {
   signaturesEqual,
   signBlobAccess,
   signR2Access,
+  signR2Put,
 } from '@/modules/blob/blob.domain'
 import { toBlobAttachmentEntry, toPublicBlobEntry } from '@/modules/blob/blob.mappers'
 import { blobAttachments, blobs } from '@/modules/blob/blob.schema'
@@ -21,9 +22,12 @@ import type {
   BlobCleanupResult,
   BlobEntry,
   BlobFile,
+  ConfirmUploadInput,
   CreateBlobAccessLinkInput,
   CreateBlobAttachmentInput,
+  CreateUploadUrlInput,
   ListBlobInput,
+  UploadUrlEntry,
 } from '@/modules/blob/blob.types'
 import { AppError, ErrorCode } from '@/shared/errors'
 import { logger } from '@/shared/logger'
@@ -232,6 +236,107 @@ export const blobService = {
     if (!signaturesEqual(input.signature, expected)) {
       throw new AppError(ErrorCode.FORBIDDEN, '临时访问签名无效', 403)
     }
+  },
+
+  /**
+   * r2 直传：预分配 blobId/storagePath 并签发 PUT 直传 URL（仅 r2 后端）。
+   * 客户端拿 url 直接 PUT（Worker 校验后写 R2），完成后调 confirmUpload。
+   * 纯签名生成，不触 DB、不触网络。
+   */
+  async createUploadUrl(input: CreateUploadUrlInput): Promise<UploadUrlEntry> {
+    if (env.STORAGE_BACKEND !== 'r2') {
+      throw new AppError(ErrorCode.VALIDATION, '直传上传仅在 r2 存储后端可用', 400)
+    }
+    if (!env.R2_ACCESS_SIGNING_SECRET || !env.R2_PUBLIC_HOST) {
+      throw new AppError(ErrorCode.INTERNAL, '未配置 R2 直传凭据', 500)
+    }
+
+    assertBlobSize(input.size, env.BLOB_MAX_SIZE)
+
+    const blobId = crypto.randomUUID()
+    const mimeType = input.mimeType ?? 'application/octet-stream'
+    const storagePath = buildStoragePath(mimeType, blobId, input.filename)
+    const expires = Math.floor(Date.now() / 1000) + 60 * 60
+    const signature = signR2Put(env.R2_ACCESS_SIGNING_SECRET, storagePath, expires, input.size)
+    const host = env.R2_PUBLIC_HOST.replace(/\/+$/, '')
+    const url = `${host}/${storagePath}?e=${expires}&s=${signature}`
+
+    return {
+      blobId,
+      storagePath,
+      method: 'PUT',
+      url,
+      expires,
+      expiresAt: new Date(expires * 1000).toISOString(),
+      mode: 'direct-r2',
+    }
+  },
+
+  /**
+   * 直传完成确认：按 checksum 去重，未重复则落 blobs 行（元数据由客户端上报）。
+   * 不读取文件体（尺寸/checksum 由 createUploadUrl 时的大小限制 + confirm 上报约束）。
+   */
+  async confirmUpload(input: ConfirmUploadInput): Promise<BlobEntry> {
+    // 防填错/越权：storagePath 必须包含预分配的 blobId。
+    if (!input.storagePath.includes(input.blobId)) {
+      throw new AppError(ErrorCode.VALIDATION, 'storagePath 与 blobId 不匹配', 400)
+    }
+
+    // 去重
+    const [existing] = await db.select().from(blobs).where(eq(blobs.checksum, input.checksum))
+    if (existing) {
+      logger.info(
+        { checksum: input.checksum, existingId: existing.id },
+        '直传检测到重复文件，返回已有记录',
+      )
+      return toPublicBlobEntry(existing)
+    }
+
+    // 落库（直传无法离线取图宽高，暂记 null）
+    let row: BlobRow
+    try {
+      ;[row] = await db
+        .insert(blobs)
+        .values({
+          id: input.blobId,
+          originalName: input.originalName,
+          storagePath: input.storagePath,
+          mimeType: input.mimeType,
+          size: input.size,
+          checksum: input.checksum,
+          width: null,
+          height: null,
+        })
+        .returning()
+    } catch (err) {
+      if (isChecksumUniqueConflict(err)) {
+        const [existingAfterConflict] = await db
+          .select()
+          .from(blobs)
+          .where(eq(blobs.checksum, input.checksum))
+        if (existingAfterConflict) {
+          logger.info(
+            { checksum: input.checksum, existingId: existingAfterConflict.id },
+            '直传确认时检测到 checksum 竞态冲突，返回已有记录',
+          )
+          return toPublicBlobEntry(existingAfterConflict)
+        }
+      }
+      throw err
+    }
+
+    fireAuditRecord({
+      event: 'blob.upload',
+      message: '文件上传成功（直传）',
+      level: 'info',
+      detail: {
+        id: row.id,
+        fileName: input.originalName,
+        mimeType: input.mimeType,
+        size: input.size,
+      },
+    })
+    return toPublicBlobEntry(row)
   },
 
   /** Create a business-level attachment reference for an existing blob. */
