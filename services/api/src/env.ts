@@ -42,11 +42,16 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   // ---- AI 助手（宁序，见 .ai/requirements/2026-08-09-ai-agent-module.md）----
   // 会话 jsonl 目录。生产缺省 /data/sessions（容器卷）；dev/test 用项目内目录，
-  // 避免 Mac 上 /data 不存在。模型凭据（OPENCODE_API_KEY）由 pi-ai 直接读
-  // process.env，不进本 schema。
+  // 避免 Mac 上 /data 不存在。
   AI_SESSION_DIR: z.string().optional(),
-  // 模型选择 "provider/modelId"，缺省 deepseek/deepseek-v4-flash。
+  // 模型选择 "provider/modelId"，缺省走 newapi 自定义 OpenAI 兼容端点。
+  // 凭据/端点解析见 ai.service.ts：优先复用 ~/.pi/agent/models.json 的 newapi
+  // 提供者（开发机零配置）；不存在时（如生产容器）从以下两变量生成最小配置。
   AI_MODEL: z.string().optional(),
+  // OpenAI 兼容端点 baseUrl（缺省本机 NewAPI 网关 http://127.0.0.1:3000/v1）。
+  AI_BASE_URL: z.url().optional(),
+  // OpenAI 兼容端点 API Key（生成生产 models.json 时必需；开发机缺省读用户级配置）。
+  AI_API_KEY: z.string().min(16).optional(),
   // ---- 安全中间件（hono 内置 + hono-rate-limiter，见 middleware/*.ts）----
   // 速率限制：固定 60s 窗口内每 IP 最大请求数（默认 100，单用户场景很宽松）。
   // /health 自动豁免（Docker HEALTHCHECK 与线上监控每 30s 探活一次）；
@@ -91,4 +96,5 @@ export const env = envSchema.parse(process.env)
 
 export const aiSessionDir =
   env.AI_SESSION_DIR ?? (env.NODE_ENV === 'production' ? '/data/sessions' : './.data/sessions')
-export const aiModel = env.AI_MODEL ?? 'opencode-go/deepseek-v4-flash'
+// 缺省走 newapi 提供者（OpenAI 兼容自定义端点，见 ai.service.ts 的解析逻辑）。
+export const aiModel = env.AI_MODEL ?? 'newapi/deepseek-v4-flash'

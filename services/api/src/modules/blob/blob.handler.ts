@@ -111,7 +111,7 @@ export const blobHandler = {
     }
   },
 
-  /** GET /api/blobs/:id/file — download / inline preview */
+  /** GET /api/blobs/:id/file — download / inline preview（?thumbnail=1 时返回缩略图） */
   async getFile(c: Context) {
     try {
       const id = uuidParam(c, 'id')
@@ -121,7 +121,11 @@ export const blobHandler = {
         blobService.verifyAccessSignature(id, { expires, signature })
       }
 
-      const { body, mimeType, filename, size } = await blobService.getFile(id)
+      // 缩略图：签名与 blobId 绑定（与原文一致），thumbnail=1 只是取数方式不同。
+      const isThumb = c.req.query('thumbnail') === '1'
+      const { body, mimeType, filename, size } = isThumb
+        ? await blobService.getThumbnail(id)
+        : await blobService.getFile(id)
       const disposition = c.req.query('download') === '1' ? 'attachment' : 'inline'
       const rangeHeader = c.req.header('range')
       const range = parseBlobRange(rangeHeader, size)
@@ -186,6 +190,7 @@ export const blobHandler = {
       const requestUrl = new URL(c.req.url)
       const result = await blobService.createAccessLink(uuidParam(c, 'id'), {
         ...body,
+        kind: body.kind ?? 'original',
         baseUrl: requestUrl.origin,
       })
       return Res.ok('生成成功', result).build(c)

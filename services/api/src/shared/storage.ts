@@ -203,6 +203,51 @@ export function sha256(buf: Buffer): string {
 }
 
 // ---------------------------------------------------------------------------
+// Thumbnails（素材库网格缩略图，见需求「素材库图片加载优化」）
+//
+// 缩略图 = 原图同目录派生 key：`${storagePath}.thumb.webp`（不进 DB，删除/清理
+// 靠派生规则联动）。格式 WebP q75、最长边 512px（2x 屏幕下网格瓦片足够清晰，
+// 原图不动——灯箱/大图预览始终走原文件）。生成用 sharp（native，Bun 可用）。
+// 懒生成：访问缩略图时才生成并持久化（存量图片也自动回填，无需迁移脚本）。
+// ---------------------------------------------------------------------------
+
+const THUMBNAIL_SUFFIX = '.thumb.webp'
+/** 缩略图最长边（px）。 */
+export const THUMBNAIL_MAX_EDGE = 512
+
+/** 派生缩略图存储 key。原图 key 唯一 → 缩略图 key 唯一，无需额外索引。 */
+export function thumbnailStoragePath(storagePath: string): string {
+  return `${storagePath}${THUMBNAIL_SUFFIX}`
+}
+
+/** 缩略图 key → 原图 key（非法 key 返回 undefined，防误删）。 */
+export function stripThumbnailSuffix(thumbPath: string): string | undefined {
+  return thumbPath.endsWith(THUMBNAIL_SUFFIX)
+    ? thumbPath.slice(0, -THUMBNAIL_SUFFIX.length)
+    : undefined
+}
+
+export function isThumbnailPath(path: string): boolean {
+  return path.endsWith(THUMBNAIL_SUFFIX)
+}
+
+/**
+ * 生成缩略图（最长边 ≤ THUMBNAIL_MAX_EDGE，WebP）。
+ * 解码失败/非图片 → 返回 null（调用方降级为原图/跳过，不抛错破坏主流程）。
+ */
+export async function generateThumbnail(buf: Buffer): Promise<Buffer | null> {
+  try {
+    const { default: sharp } = await import('sharp')
+    return await sharp(buf)
+      .resize({ width: THUMBNAIL_MAX_EDGE, withoutEnlargement: true })
+      .webp({ quality: 75 })
+      .toBuffer()
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Storage path generation (backend-agnostic)
 // ---------------------------------------------------------------------------
 

@@ -30,6 +30,8 @@ export const CreateBlobAccessLinkSchema = z.object({
     .min(1)
     .max(7 * 24 * 60 * 60)
     .default(15 * 60),
+  /** 链接指向原文件（默认）还是缩略图（图片网格用，见 shared/storage.ts）。 */
+  kind: z.enum(['original', 'thumb']).optional(),
 })
 
 /** 直传上传请求（r2 后端）：预分配 storagePath + 签发 PUT 直传 URL。 */

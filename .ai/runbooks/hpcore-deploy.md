@@ -28,8 +28,8 @@ docker tag zeroicey/serenique-api@sha256:<digest> zeroicey/serenique-api:latest
 docker compose up -d --force-recreate api
 ```
 
-4. `docker compose up -d` 输出「Container Running」而非「Recreated」= 容器没换镜像，必须 `--force-recreate`。
-5. 业务侧验证：真实请求验证行为（如 PUT 超长文本应过校验返回 404 而非 500）。
+1. `docker compose up -d` 输出「Container Running」而非「Recreated」= 容器没换镜像，必须 `--force-recreate`。
+2. 业务侧验证：真实请求验证行为（如 PUT 超长文本应过校验返回 404 而非 500）。
 
 ## 坑：大镜像 pull 中断 / 并发进程竞争（2026-08-13 实测）
 
@@ -48,7 +48,7 @@ docker compose up -d --force-recreate api
 生产 .env 的认证相关键（**首次配置后不可随意改**，除 SETUP_TOKEN）：
 
 | 键 | 生成方式 | 语义 / 坑 |
-|----|----------|-----------|
+| ---- | ---------- | ----------- |
 | `SESSION_SECRET` | `openssl rand -hex 32` | cookie 签名密钥。**改了 = 所有会话立即失效**（旧 cookie 验签失败），密钥轮换即全员下线 |
 | `SETUP_TOKEN` | `openssl rand -hex 24` | 首个凭证门禁（**passkey_credentials 计数=0** 时 `/setup` 创建凭证必须携带，常量时间比对）。**首个凭证创建完成后可从 .env 移除**，之后加设备走登录态「添加设备」 |
 | `WEBAUTHN_RP_ID` | `serenique.0icey.icu`（固定） | **RP ID = 前端域名（serenique.0icey.icu），不是 API 域名**。⚠️ 换前端域名 = 全部 passkey 永久失效（iCloud/Google 按 RP ID 存凭证） |
@@ -83,11 +83,15 @@ docker compose run --rm api bun scripts/bootstrap-user.ts \
 - 用户可见面只有「通行密钥登录」；users 空表时服务起不来（fail-closed），前端只会看到「服务暂时不可用」。
 - 引导脚本在镜像内（services/api/scripts/ 已随镜像拷贝，WORKDIR /app/services/api），服务器无需 bun/npm。
 
-## AI 助手（宁序）配置（2026-08-09 起）
+## AI 助手（宁序）配置（2026-08-21 起，OpenCode Go 订阅到期 → OpenAI 兼容端点）
 
-- `.env` 新增：`OPENCODE_API_KEY=<opencode 网关 key>`（pi-ai 读 env；缺省模型 `opencode-go/deepseek-v4-flash` 走 opencode.ai 网关）。**不配 `DEEPSEEK_API_KEY`**（DeepSeek 官方直连为备选）。
-- `compose.yml` 已加 `serenique-ai-sessions:/data/sessions` 命名卷（全新卷自动继承镜像 10001 属主；既有卷需一次 `chown -R 10001:10001`）。
+- `.env` 新增：
+  - `AI_API_KEY=<OpenAI 兼容端点 key>`（必配；缺省模型 `newapi/deepseek-v4-flash`）
+  - `AI_BASE_URL=<OpenAI 兼容端点>`（可选，缺省 `http://127.0.0.1:3000/v1`——本机 NewAPI 网关）
+  - `AI_MODEL=<provider>/<modelId>`（可选，缺省 `newapi/deepseek-v4-flash`）
+- 容器无用户级 `~/.pi/agent/models.json` → api 启动时从以上 env 生成最小配置到 `/data/ai/models.json`；开发机则直接复用 `~/.pi/agent/models.json` 的 newapi 提供者（与 pi 自身共享配置，零配置）。
 - 冒烟命令（容器内项目目录，`@/` 别名才能解析）：
+
   ```sh
   docker exec -w /app/services/api serenique-api bun tmp-smoke.ts
   # tmp-smoke.ts: import { aiService } from "@/modules/ai/ai.service";

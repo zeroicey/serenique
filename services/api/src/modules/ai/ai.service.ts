@@ -1,5 +1,6 @@
-import { unlink } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { isAbsolute, join, resolve } from 'node:path'
 import type { AgentMessage } from '@earendil-works/pi-agent-core'
 import {
   type AgentSession,
@@ -11,7 +12,7 @@ import {
   SessionManager,
   SettingsManager,
 } from '@earendil-works/pi-coding-agent'
-import { aiModel, aiSessionDir } from '@/env'
+import { aiModel, aiSessionDir, env } from '@/env'
 import { aiMemoryService } from '@/modules/ai-memory/ai-memory.service'
 import { AppError, ErrorCode } from '@/shared/errors'
 import { logger } from '@/shared/logger'
@@ -32,6 +33,120 @@ import { buildAiTools } from './ai.tools'
 // 创建会话时才创建 —— import 本模块不读模型凭据，无 DEEPSEEK_API_KEY 也不崩。
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 模型提供者解析（OpenAI 兼容自定义端点，见需求「换新大模型厂商」）
+//
+// 模型提供者定义在 pi 的 models.json（含 baseUrl/apiKey/模型清单）。
+//   - 开发机：~/.pi/agent/models.json 已含 newapi 提供者（含凭据）→ 直接使用，
+//     零配置；与 pi 自身运行共享同一份配置。
+//   - 生产/无用户级配置：从 env（AI_BASE_URL / AI_API_KEY）生成一份最小
+//     models.json 到 AI 配置目录，再传给 ModelRuntime —— 容器不自带 ~/.pi。
+//
+// 提供者 id 恒为 "newapi"（与 aiModel 缺省 newapi/deepseek-v4-flash 对应）；
+// 换端点只改 env，不动代码。
+// ---------------------------------------------------------------------------
+
+const USER_MODELS_PATH = join(homedir(), '.pi', 'agent', 'models.json')
+
+/** AI 配置目录：生产 /data/ai（容器卷），dev/test ./.data/ai（相对包根）。 */
+const AI_CONFIG_DIR = env.NODE_ENV === 'production' ? '/data/ai' : './.data/ai'
+const GENERATED_MODELS_PATH = join(AI_CONFIG_DIR, 'models.json')
+
+const DEFAULT_AI_BASE_URL = 'http://127.0.0.1:3000/v1'
+
+// 生成配置内置的模型清单（与 NewAPI 网关常用模型对齐；AI_MODEL 只选其中的 id）。
+const GENERATED_MODELS = [
+  {
+    id: 'deepseek-v4-flash',
+    name: 'DeepSeek V4 Flash',
+    reasoning: true,
+    input: ['text', 'image'],
+    contextWindow: 1_000_000,
+    maxTokens: 16384,
+  },
+  {
+    id: 'deepseek-v4-flash-free',
+    name: 'DeepSeek V4 Flash (Free)',
+    reasoning: true,
+    input: ['text', 'image'],
+    contextWindow: 1_000_000,
+    maxTokens: 16384,
+  },
+  {
+    id: 'deepseek-v4-pro',
+    name: 'DeepSeek V4 Pro',
+    reasoning: true,
+    input: ['text', 'image'],
+    contextWindow: 1_000_000,
+    maxTokens: 16384,
+  },
+  {
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
+    reasoning: true,
+    input: ['text', 'image'],
+    contextWindow: 272_000,
+    maxTokens: 32768,
+  },
+  {
+    id: 'gpt-5.4-mini',
+    name: 'GPT-5.4 Mini',
+    reasoning: true,
+    input: ['text', 'image'],
+    contextWindow: 272_000,
+    maxTokens: 16384,
+  },
+  {
+    id: 'glm-5.2',
+    name: 'GLM 5.2',
+    reasoning: true,
+    input: ['text', 'image'],
+    contextWindow: 1_000_000,
+    maxTokens: 32768,
+  },
+]
+
+/** 用户级 models.json 是否定义了 newapi 提供者（开发机零配置的判断条件）。 */
+async function userHasNewApiProvider(): Promise<boolean> {
+  try {
+    const raw = await readFile(USER_MODELS_PATH, 'utf8')
+    return Boolean((JSON.parse(raw) as { providers?: Record<string, unknown> })?.providers?.newapi)
+  } catch {
+    return false
+  }
+}
+
+/** 写出一份由 env 驱动的最小 models.json（生产容器等无用户级配置时使用）。 */
+async function writeGeneratedModelsJson(): Promise<string> {
+  await mkdir(AI_CONFIG_DIR, { recursive: true })
+  const config = {
+    providers: {
+      newapi: {
+        name: 'NewAPI (OpenAI compatible)',
+        baseUrl: env.AI_BASE_URL ?? DEFAULT_AI_BASE_URL,
+        api: 'openai-completions',
+        // env 未提供 key 时置空：ModelRuntime 可创建但认证失败（isAiEnabled=false），
+        // 前端拿到的错误提示引导配置。
+        apiKey: env.AI_API_KEY ?? '',
+        compat: {
+          supportsDeveloperRole: false,
+          supportsReasoningEffort: true,
+          maxTokensField: 'max_tokens',
+        },
+        models: GENERATED_MODELS,
+      },
+    },
+  }
+  await writeFile(GENERATED_MODELS_PATH, JSON.stringify(config, null, 2))
+  return GENERATED_MODELS_PATH
+}
+
+/** 解析 ModelRuntime 用的 models.json 路径：优先用户级配置，否则生成最小配置。 */
+async function resolveAiModelsPath(): Promise<string> {
+  if (await userHasNewApiProvider()) return USER_MODELS_PATH
+  return writeGeneratedModelsJson()
+}
+
 let sharedModelRuntime: ModelRuntime | undefined
 let sharedLoader: DefaultResourceLoader | undefined
 let runtimeError: Error | undefined
@@ -40,7 +155,13 @@ async function getRuntime(): Promise<ModelRuntime> {
   if (runtimeError) throw runtimeError
   if (!sharedModelRuntime) {
     try {
-      sharedModelRuntime = await ModelRuntime.create()
+      const modelsPath = await resolveAiModelsPath()
+      // env 驱动路径（无用户级配置）下缺少 key → 直接视为未配置，避免「半可用」：
+      // 运行时能建但首次对话 401。开发机走用户级配置，key 内联，不受此检查影响。
+      if (modelsPath === GENERATED_MODELS_PATH && !env.AI_API_KEY) {
+        throw new Error('AI 未配置模型凭据（检查 AI_API_KEY / AI_BASE_URL / AI_MODEL）')
+      }
+      sharedModelRuntime = await ModelRuntime.create({ modelsPath })
     } catch (err) {
       runtimeError = err instanceof Error ? err : new Error(String(err))
       throw runtimeError

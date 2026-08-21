@@ -49,3 +49,41 @@ describe('blob root initialization', () => {
     expect(await body.text()).toBe('legacy')
   })
 })
+
+describe('thumbnail helpers', () => {
+  test('thumbnailStoragePath / stripThumbnailSuffix / isThumbnailPath round-trip', async () => {
+    setTestEnv()
+    const { isThumbnailPath, stripThumbnailSuffix, thumbnailStoragePath } = await import(
+      './storage'
+    )
+
+    const key = 'image/2026/08/abc.png'
+    const thumb = thumbnailStoragePath(key)
+    expect(thumb).toBe('image/2026/08/abc.png.thumb.webp')
+    expect(isThumbnailPath(thumb)).toBe(true)
+    expect(isThumbnailPath(key)).toBe(false)
+    expect(stripThumbnailSuffix(thumb)).toBe(key)
+    expect(stripThumbnailSuffix(key)).toBeUndefined()
+  })
+
+  test('generateThumbnail：真实图片生成 512px 内 WebP，非图片返回 null', async () => {
+    setTestEnv()
+    const { generateThumbnail } = await import('./storage')
+
+    // 一张 1200x800 SVG → PNG（sharp 驱动）
+    const { default: sharp } = await import('sharp')
+    const svg = Buffer.from(
+      `<svg width="1200" height="800"><rect width="1200" height="800" fill="#4f86f7"/></svg>`,
+    )
+    const png = await sharp(svg).png().toBuffer()
+
+    const thumb = await generateThumbnail(png)
+    expect(thumb).not.toBeNull()
+    const meta = await sharp(thumb!).metadata()
+    expect(meta.format).toBe('webp')
+    expect(meta.width).toBeLessThanOrEqual(512)
+
+    // 非图片（随机字节）→ null 而非抛错
+    expect(await generateThumbnail(Buffer.from('not an image at all'))).toBeNull()
+  })
+})

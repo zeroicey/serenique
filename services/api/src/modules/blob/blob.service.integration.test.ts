@@ -182,6 +182,54 @@ describe.skipIf(!RUN_DB_TESTS)('blob service DB integration', () => {
     expect(buf.length).toBe(PNG_BYTES.length)
   })
 
+  test('getThumbnail：图片懒生成缩略图，非图片 404，删除时缩略图一并删除', async () => {
+    const { thumbnailStoragePath } = await import('@/shared/storage')
+    const entry = await upload('thumb.png', 'image/png', PNG_BYTES)
+    const [{ storagePath }] = await db
+      .select({ storagePath: blobsTable.storagePath })
+      .from(blobsTable)
+      .where(eq(blobsTable.id, entry.id))
+
+    const thumb = await blobService.getThumbnail(entry.id)
+    expect(thumb.mimeType).toBe('image/webp')
+    expect(thumb.size).toBeGreaterThan(0)
+    expect(thumb.size).toBeLessThan(PNG_BYTES.length)
+
+    // 缩略图已持久化到存储（懒生成回填）
+    const { openFileFromStorage } = await import('@/shared/storage')
+    const saved = await openFileFromStorage(blobRoot, thumbnailStoragePath(storagePath))
+    expect(saved.size).toBe(thumb.size)
+
+    // 缩略图 access-link 带 thumbnail=1，签名仍按 blobId 验
+    const link = await blobService.createAccessLink(entry.id, {
+      expiresInSeconds: 60,
+      kind: 'thumb',
+    })
+    expect(link.path).toContain('thumbnail=1')
+    const params = new URLSearchParams(link.path.split('?')[1] ?? '')
+    expect(() =>
+      blobService.verifyAccessSignature(entry.id, {
+        expires: params.get('expires')!,
+        signature: params.get('signature')!,
+      }),
+    ).not.toThrow()
+
+    // 非图片类型：getThumbnail / thumb 链接签发均 404
+    const pdf = await upload('thumb.pdf', 'application/pdf', Buffer.from('pdf-thumb'))
+    await expect(blobService.getThumbnail(pdf.id)).rejects.toMatchObject({ status: 404 })
+    await expect(
+      blobService.createAccessLink(pdf.id, { expiresInSeconds: 60, kind: 'thumb' }),
+    ).rejects.toMatchObject({ status: 404 })
+
+    // 删除原图后缩略图也不在存储里
+    await blobService.delete(entry.id)
+    await blobService.delete(pdf.id)
+    const { listStoragePaths } = await import('@/shared/storage')
+    const remaining = await listStoragePaths(blobRoot)
+    expect(remaining.some((p) => p.includes('thumb.png.thumb.webp'))).toBe(false)
+    expect(remaining.some((p) => p.includes('thumb.png'))).toBe(false)
+  })
+
   test('createAccessLink + verifyAccessSignature round-trip and reject forged/expired', async () => {
     const entry = await upload('signed.png', 'image/png', PNG_BYTES)
 

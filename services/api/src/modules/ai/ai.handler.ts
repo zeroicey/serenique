@@ -241,7 +241,7 @@ export function createAiWebSocket(upgradeWebSocket: typeof import('hono/bun').up
         connections.set(ws.raw, conn)
         try {
           if (!(await aiService.isAiEnabled())) {
-            throw new Error('AI 未配置模型凭据（检查 DEEPSEEK_API_KEY / AI_MODEL）')
+            throw new Error('AI 未配置模型凭据（检查 AI_API_KEY / AI_BASE_URL / AI_MODEL）')
           }
           // 恢复最近会话；24h 空闲 → 自动切到新链尾（决策 #3；惰性跟随，见头注释）
           let { sm, session } = await aiService.openRecentOrCreate()

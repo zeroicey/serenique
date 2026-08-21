@@ -35,10 +35,15 @@ import {
   buildStoragePath,
   deleteFileFromStorage,
   extractImageDimensions,
+  generateThumbnail,
+  isThumbnailPath,
   listStoragePaths,
   openFileFromStorage,
+  readFileFromStorage,
   saveFile,
   sha256,
+  stripThumbnailSuffix,
+  thumbnailStoragePath,
 } from '@/shared/storage'
 
 // ---------------------------------------------------------------------------
@@ -49,6 +54,33 @@ import {
 // ---------------------------------------------------------------------------
 
 type BlobRow = typeof blobs.$inferSelect
+
+/**
+ * 确保缩略图存在（懒生成并持久化）：读原图 → sharp 缩略 → 写入存储。
+ * 对所有存储后端一致（local/R2）；失败返回 null（调用方降级为原图/跳过）。
+ * 存量图片首次请求缩略图时会走一次原图读取，之后全部命中。
+ */
+async function ensureThumbnail(row: BlobRow): Promise<Buffer | null> {
+  const thumbPath = thumbnailStoragePath(row.storagePath)
+  try {
+    await openFileFromStorage(env.BLOB_ROOT, thumbPath)
+    return null // 已存在，无需生成（调用方直接读）
+  } catch {
+    // 不存在 → 生成
+  }
+  try {
+    const original = await readFileFromStorage(env.BLOB_ROOT, row.storagePath)
+    const thumb = await generateThumbnail(original)
+    if (thumb) {
+      await saveFile(env.BLOB_ROOT, thumbPath, thumb, { mimeType: 'image/webp' })
+      return thumb
+    }
+    return null
+  } catch (err) {
+    logger.warn({ err, id: row.id }, '缩略图生成失败，降级使用原图')
+    return null
+  }
+}
 
 /** 单个 blob 的业务引用数量（被 blob_attachments 引用的 blob 不可物理删除）。 */
 async function countBlobRefs(blobId: string): Promise<number> {
@@ -85,6 +117,20 @@ export const blobService = {
     const path = buildStoragePath(mimeType, id, file.name)
 
     await saveFile(env.BLOB_ROOT, path, buf, { mimeType })
+
+    // --- 缩略图（图片：上传即预生成，网格加载不再拉原图；失败不阻断上传）---
+    if (mimeType.startsWith('image/')) {
+      try {
+        const thumb = await generateThumbnail(buf)
+        if (thumb) {
+          await saveFile(env.BLOB_ROOT, thumbnailStoragePath(path), thumb, {
+            mimeType: 'image/webp',
+          })
+        }
+      } catch (err) {
+        logger.warn({ err, id }, '上传时缩略图生成失败（后续访问时懒生成重试）')
+      }
+    }
 
     // --- extract image dimensions ---
     let width: number | null = null
@@ -203,6 +249,24 @@ export const blobService = {
     return { body, size, mimeType: row.mimeType, filename: row.originalName }
   },
 
+  /**
+   * 打开图片缩略图（懒生成 + 持久化，见 shared/storage.ts 的缩略图说明）。
+   * 非图片类型返回 404（素材库只在图片瓦片上请求缩略图）。
+   */
+  async getThumbnail(id: string): Promise<BlobFile> {
+    const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
+    if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
+    if (!row.mimeType.startsWith('image/')) {
+      throw new AppError(ErrorCode.NOT_FOUND, '该文件不是图片，无缩略图', 404)
+    }
+    await ensureThumbnail(row)
+    const { body, size } = await openFileFromStorage(
+      env.BLOB_ROOT,
+      thumbnailStoragePath(row.storagePath),
+    )
+    return { body, size, mimeType: 'image/webp', filename: `${row.originalName}.thumb.webp` }
+  },
+
   /** Create a temporary HMAC-signed access link for a blob file. */
   async createAccessLink(
     blobId: string,
@@ -211,15 +275,23 @@ export const blobService = {
     const [row] = await db.select().from(blobs).where(eq(blobs.id, blobId))
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
 
+    const isThumb = input.kind === 'thumb'
+    if (isThumb && !row.mimeType.startsWith('image/')) {
+      throw new AppError(ErrorCode.NOT_FOUND, '该文件不是图片，无缩略图', 404)
+    }
+
     const expires = Math.floor(Date.now() / 1000) + input.expiresInSeconds
 
     // ---- R2 直链（迁移后主路径）：签名走 Worker 网关校验，前端绕过 API 代理 ──
     // 仅在「后端确实是 r2」+ R2 配置齐全时才启用；local 后端/开发一律回退 API 代理
     // （否则回滚期间新增的本地 blob 会错发 R2 直链 404）。
+    // 缩略图直链：先懒生成（读写 R2 一次，之后命中），再签派生 key。
     if (env.STORAGE_BACKEND === 'r2' && env.R2_ACCESS_SIGNING_SECRET && env.R2_PUBLIC_HOST) {
       const host = env.R2_PUBLIC_HOST.replace(/\/+$/, '')
-      const signature = signR2Access(env.R2_ACCESS_SIGNING_SECRET, row.storagePath, expires)
-      const path = `${host}/${row.storagePath}?e=${expires}&s=${signature}`
+      const storageKey = isThumb ? thumbnailStoragePath(row.storagePath) : row.storagePath
+      if (isThumb) await ensureThumbnail(row)
+      const signature = signR2Access(env.R2_ACCESS_SIGNING_SECRET, storageKey, expires)
+      const path = `${host}/${storageKey}?e=${expires}&s=${signature}`
       return {
         url: path,
         path,
@@ -229,12 +301,13 @@ export const blobService = {
       }
     }
 
-    // ---- 旧 API 代理链接（无 R2 配置时的既有行为，保持不变）----
+    // ---- 旧 API 代理链接（无 R2 配置时的既有行为，保持不变；缩略图加 query）----
     const secret = requireSigningSecret(env.BLOB_SIGNING_SECRET)
     const signature = signBlobAccess(secret, blobId, expires)
     const params = new URLSearchParams({
       expires: expires.toString(),
       signature,
+      ...(isThumb ? { thumbnail: '1' } : {}),
     })
     const path = `/api/blobs/${blobId}/file?${params.toString()}`
     const url = input.baseUrl ? new URL(path, input.baseUrl).toString() : path
@@ -437,6 +510,9 @@ export const blobService = {
 
     for (const path of diskPaths) {
       if (referenced.has(path)) continue
+      // 缩略图与其原图同生命周期：原图仍被引用时，缩略图不是孤儿。
+      const base = stripThumbnailSuffix(path)
+      if (isThumbnailPath(path) && base && referenced.has(base)) continue
 
       try {
         await deleteFileFromStorage(env.BLOB_ROOT, path)
@@ -478,6 +554,12 @@ export const blobService = {
       await deleteFileFromStorage(env.BLOB_ROOT, row.storagePath)
     } catch (err) {
       logger.error({ err, path: row.storagePath }, '磁盘文件删除失败，数据库记录已删除')
+    }
+    // 缩略图与原图同生命周期，一并删除（best-effort，幂等）。
+    try {
+      await deleteFileFromStorage(env.BLOB_ROOT, thumbnailStoragePath(row.storagePath))
+    } catch (err) {
+      logger.error({ err, path: 'thumb' }, '缩略图删除失败，数据库记录已删除')
     }
   },
 }
