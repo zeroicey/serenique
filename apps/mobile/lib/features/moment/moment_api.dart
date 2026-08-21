@@ -99,11 +99,14 @@ class MomentApi {
     // 1) 签发直传凭据（仅 r2 后端可用）
     UploadUrl cred;
     try {
-      final data = await _client.postData('/api/blobs/upload-url', body: {
-        'filename': filename,
-        'mimeType': mimeType,
-        'size': bytes.length,
-      });
+      final data = await _client.postData(
+        '/api/blobs/upload-url',
+        body: {
+          'filename': filename,
+          'mimeType': mimeType,
+          'size': bytes.length,
+        },
+      );
       cred = UploadUrl.fromJson(data as Map<String, dynamic>);
     } on ApiException catch (e) {
       if (e.statusCode == 400) {
@@ -122,19 +125,26 @@ class MomentApi {
     // 2) 直传 PUT（Worker 校验写 R2）
     final status = await _client.putBinary(cred.url, bytes, mimeType);
     if (status < 200 || status >= 300) {
-      throw ApiException('UPLOAD_FAILED', '文件直传失败（$status），请重试', statusCode: status);
+      throw ApiException(
+        'UPLOAD_FAILED',
+        '文件直传失败（$status），请重试',
+        statusCode: status,
+      );
     }
 
     // 3) SHA-256 + confirm（去重 + 落库）
     final checksum = sha256.convert(bytes).toString();
-    final data = await _client.postData('/api/blobs/confirm', body: {
-      'blobId': cred.blobId,
-      'storagePath': cred.storagePath,
-      'originalName': filename,
-      'mimeType': mimeType,
-      'size': bytes.length,
-      'checksum': checksum,
-    });
+    final data = await _client.postData(
+      '/api/blobs/confirm',
+      body: {
+        'blobId': cred.blobId,
+        'storagePath': cred.storagePath,
+        'originalName': filename,
+        'mimeType': mimeType,
+        'size': bytes.length,
+        'checksum': checksum,
+      },
+    );
     return MomentBlob.fromJson(data as Map<String, dynamic>);
   }
 
