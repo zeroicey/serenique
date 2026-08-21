@@ -20,7 +20,7 @@
  * 或先在容器里：bun scripts/migrate-blobs-to-r2.ts --dry-run
  */
 import { readdir } from 'node:fs/promises'
-import { join, relative, extname } from 'node:path'
+import { extname, join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
 import { ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { drizzle } from 'drizzle-orm/postgres-js'
