@@ -31,6 +31,8 @@ interface UploadUrlEntry {
   expires: number
   expiresAt: string
   mode: 'direct-r2'
+  /** 图片缩略图 PUT 直链（可选）：浏览器生成 WebP 后直传，无需 confirm。 */
+  thumbUrl?: string
 }
 
 export interface BlobAttachmentEntry {
@@ -83,12 +85,67 @@ async function uploadViaMultipart(file: File): Promise<BlobEntry> {
   return unwrap<BlobEntry>(res)
 }
 
+/** 缩略图最长边（px），与后端 THUMBNAIL_MAX_EDGE 一致。 */
+const THUMB_MAX_EDGE = 512
+
+/**
+ * 浏览器端生成 WebP 缩略图（canvas 缩放 → toBlob('image/webp', 0.75)）。
+ * 解码失败（HEIC/部分 SVG 等 createImageBitmap 不支持的格式）返回 null → 调用方跳过缩略图。
+ */
+async function generateClientThumb(file: File): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    try {
+      const scale = Math.min(1, THUMB_MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+      const w = Math.max(1, Math.round(bitmap.width * scale))
+      const h = Math.max(1, Math.round(bitmap.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      ctx.drawImage(bitmap, 0, 0, w, h)
+      return await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), 'image/webp', 0.75)
+      })
+    } finally {
+      bitmap.close()
+    }
+  } catch {
+    return null
+  }
+}
+
+/** 校验直传 URL 域名白名单（官方网关；防御性，URL 本由后端签发）。 */
+function assertAllowedPutOrigin(rawUrl: string): URL {
+  let putUrl: URL
+  try {
+    putUrl = new URL(rawUrl)
+  } catch {
+    throw new Error('非法直传地址')
+  }
+  if (putUrl.origin !== 'https://s3.0icey.icu') {
+    throw new Error('非法直传地址')
+  }
+  return putUrl
+}
+
 export async function uploadBlob(file: File): Promise<BlobEntry> {
   // 1) 签发直传凭据（仅 r2 后端可用；local 返回 400 → multipart 回退）
+  //    图片：先本地生成缩略图（canvas→WebP），把 thumbSize 一并上报，后端为派生 key
+  //    另签一个缩略图 PUT 直链（不经 API 容器，D-032：API 零 R2 网络）。
+  const isImage = (file.type || 'application/octet-stream').startsWith('image/')
+  const thumb = isImage ? await generateClientThumb(file) : null
+
   let cred: UploadUrlEntry
   try {
     const res = await api.post(apiUrl('blobs/upload-url'), {
-      json: { filename: file.name, mimeType: file.type || undefined, size: file.size },
+      json: {
+        filename: file.name,
+        mimeType: file.type || undefined,
+        size: file.size,
+        ...(thumb ? { thumbSize: thumb.size } : {}),
+      },
       timeout: 30_000,
     })
     cred = await unwrap<UploadUrlEntry>(res)
@@ -101,15 +158,7 @@ export async function uploadBlob(file: File): Promise<BlobEntry> {
 
   // 2) 浏览器直传 PUT → Worker 写 R2（fetch 自动带 Content-Length；Content-Type 决定 R2 元数据）
   //    白名单校验：仅允许官方网关域名（防御性，URL 本由后端签发）。
-  let putUrl: URL
-  try {
-    putUrl = new URL(cred.url)
-  } catch {
-    throw new Error('非法直传地址')
-  }
-  if (putUrl.origin !== 'https://s3.0icey.icu') {
-    throw new Error('非法直传地址')
-  }
+  const putUrl = assertAllowedPutOrigin(cred.url)
   const putRes = await fetch(putUrl, {
     method: 'PUT',
     body: file,
@@ -117,6 +166,23 @@ export async function uploadBlob(file: File): Promise<BlobEntry> {
   })
   if (!putRes.ok) {
     throw new Error(`文件直传失败（${putRes.status}），请重试`)
+  }
+
+  // 2b) 缩略图直传（可选；失败不阻断上传——网格瓦片会回退原图）
+  if (cred.thumbUrl && thumb) {
+    try {
+      const thumbPutUrl = assertAllowedPutOrigin(cred.thumbUrl)
+      const thumbRes = await fetch(thumbPutUrl, {
+        method: 'PUT',
+        body: thumb,
+        headers: { 'Content-Type': 'image/webp' },
+      })
+      if (!thumbRes.ok) {
+        console.error('缩略图直传失败，网格将回退原图', thumbRes.status)
+      }
+    } catch (err) {
+      console.error('缩略图直传失败，网格将回退原图', err)
+    }
   }
 
   // 3) 计算 SHA-256 并 confirm 落库（去重 + 元数据）

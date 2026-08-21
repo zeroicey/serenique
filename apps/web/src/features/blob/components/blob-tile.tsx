@@ -1,11 +1,12 @@
 import { AudioLines, File, FileText, Play, Trash2, Video } from 'lucide-react'
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { BlobEntry } from '@/features/blob/api'
 
-// 素材库网格卡片：图片显示缩略图直链（512px WebP，懒生成；不再拉原图解决滚动卡顿）；
-// 视频显示 ▶ 可播放瓦片（无缩略图，点击进灯箱播放原视频）；音频/其他类型显示
-// 图标 + 文件名 + 大小。hover 时浮现「在用」徽标与删除按钮。
+// 素材库网格卡片：图片显示缩略图直链（浏览器上传时 canvas 生成 512px WebP；避免
+// 滚动时直接拉原图卡顿）；视频显示 ▶ 可播放瓦片（点击进灯箱播放原视频）；音频/其他
+// 类型显示图标 + 文件名 + 大小。hover 时浮现「在用」徽标与删除按钮。
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -25,13 +26,18 @@ interface BlobTileProps {
   blob: BlobEntry
   /** 图片缩略图直链 / 视频音频原图直链；未申请到 / 非可预览类型时为 undefined。 */
   src?: string
+  /** 缩略图缺失/失败时的回退原图直链（R2 存量图无缩略图对象时 404 → 回退原图）。 */
+  fallbackSrc?: string
   onClick: () => void
   onDelete: () => void
 }
 
-export function BlobTile({ blob, src, onClick, onDelete }: BlobTileProps) {
+export function BlobTile({ blob, src, fallbackSrc, onClick, onDelete }: BlobTileProps) {
   const isImage = blob.mimeType.startsWith('image/')
   const isVideo = blob.mimeType.startsWith('video/')
+  // 缩略图加载失败（如 R2 存量图还没有缩略图对象）→ 切换到原图直链，保证瓦片可见。
+  const [thumbFailed, setThumbFailed] = useState(false)
+  const imageSrc = thumbFailed && fallbackSrc ? fallbackSrc : src
 
   return (
     <div
@@ -44,12 +50,13 @@ export function BlobTile({ blob, src, onClick, onDelete }: BlobTileProps) {
       className="group relative aspect-square cursor-pointer overflow-hidden rounded-lg border bg-muted"
     >
       {isImage ? (
-        src ? (
+        imageSrc ? (
           <img
-            src={src}
+            src={imageSrc}
             alt={blob.originalName}
             loading="lazy"
             decoding="async"
+            onError={fallbackSrc ? () => setThumbFailed(true) : undefined}
             className="h-full w-full object-cover"
           />
         ) : (

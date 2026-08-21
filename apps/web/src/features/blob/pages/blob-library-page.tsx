@@ -118,6 +118,7 @@ export default function BlobLibraryPage() {
                       ? thumbUrls?.[blob.id]
                       : accessUrls?.[blob.id]
                   }
+                  fallbackSrc={accessUrls?.[blob.id]}
                   onClick={() => {
                     // 签名直链未就绪时不打开灯箱（避免空 <img src> 抖动）
                     if (!previewItems.some((b) => b.id === blob.id)) return

@@ -51,6 +51,7 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
             <AttachmentTile
               attachment={a}
               src={thumbUrls?.[a.blob.id] ?? accessUrls?.[a.blob.id] ?? a.blob.fileUrl}
+              fallbackSrc={accessUrls?.[a.blob.id] ?? a.blob.fileUrl}
             />
           </div>
         ))}
@@ -78,22 +79,46 @@ export function MomentAttachmentGrid({ attachments }: MomentAttachmentGridProps)
   )
 }
 
-function AttachmentTile({ attachment, src }: { attachment: MomentAttachmentEntry; src: string }) {
+interface AttachmentTileProps {
+  attachment: MomentAttachmentEntry
+  /** 图片缩略图直链（可能缺失：R2 存量图无缩略图对象）。 */
+  src: string
+  /** 缩略图缺失/失败时的回退原图直链。 */
+  fallbackSrc: string
+}
+
+function AttachmentTile({ attachment, src, fallbackSrc }: AttachmentTileProps) {
   const { blob } = attachment
   const isVideo = blob.mimeType.startsWith('video/')
   if (blob.mimeType.startsWith('image/')) {
-    return (
-      <img
-        src={src}
-        alt={blob.originalName}
-        loading="lazy"
-        className="h-full w-full object-cover"
-      />
-    )
+    return <ImageTileWithFallback src={src} fallbackSrc={fallbackSrc} alt={blob.originalName} />
   }
   return (
     <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
       {isVideo ? '▶' : '📎'}
     </div>
+  )
+}
+
+/** 缩略图加载失败（404/解码错）→ 回退原图直链，保证网格瓦片始终可见。 */
+function ImageTileWithFallback({
+  src,
+  fallbackSrc,
+  alt,
+}: {
+  src: string
+  fallbackSrc: string
+  alt: string
+}) {
+  const [failed, setFailed] = useState(false)
+  return (
+    <img
+      src={failed ? fallbackSrc : src}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+      className="h-full w-full object-cover"
+    />
   )
 }

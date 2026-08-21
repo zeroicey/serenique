@@ -94,6 +94,49 @@ describe('uploadBlob', () => {
 
     await expect(uploadBlob(file)).rejects.toThrow('直传失败')
   })
+
+  it('图片：本地生成 WebP 缩略图并直传网关（thumbSize 随 upload-url 上报）', async () => {
+    const file = new File(['abc'], 'a.png', { type: 'image/png' })
+    // jsdom 无真实解码/画布：桩掉 createImageBitmap + canvas
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn().mockResolvedValue({ width: 800, height: 600, close: vi.fn() }),
+    )
+    const ctx = { drawImage: vi.fn() }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      ctx as unknown as CanvasRenderingContext2D,
+    )
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((cb) => {
+      ;(cb as (b: Blob | null) => void)(new Blob(['thumb'], { type: 'image/webp' }))
+      return undefined
+    })
+
+    const put = vi.fn().mockResolvedValue(new Response('OK', { status: 200 }))
+    vi.stubGlobal('fetch', put)
+    mockedPost
+      .mockResolvedValueOnce(
+        wrap({
+          ...cred,
+          thumbUrl: 'https://s3.0icey.icu/image/2026/08/u1.png.thumb.webp?e=1&s=t1',
+        }),
+      )
+      .mockResolvedValueOnce(wrap(entry))
+
+    const result = await uploadBlob(file)
+
+    expect(result.id).toBe('b1')
+    // upload-url 请求携带 thumbSize（本体尺寸 + 缩略图尺寸两个参数）
+    const [, uploadOpts] = mockedPost.mock.calls[0] as [string, { json?: unknown }]
+    const uploadBody = uploadOpts.json as { size: number; thumbSize?: number }
+    expect(uploadBody.size).toBe(3)
+    expect(uploadBody.thumbSize).toBeGreaterThan(0)
+    // 两次 PUT：原图 + 缩略图（Content-Type: image/webp，域名白名单）
+    expect(put).toHaveBeenCalledTimes(2)
+    const [thumbUrl, thumbOpts] = put.mock.calls[1] as [URL, RequestInit]
+    expect(thumbUrl.href).toContain('thumb.webp')
+    expect(thumbUrl.origin).toBe('https://s3.0icey.icu')
+    expect((thumbOpts.headers as Record<string, string>)['Content-Type']).toBe('image/webp')
+  })
 })
 
 describe('listBlobs', () => {

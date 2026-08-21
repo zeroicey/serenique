@@ -183,8 +183,14 @@ describe.skipIf(!RUN_DB_TESTS)('blob service DB integration', () => {
   })
 
   test('getThumbnail：图片懒生成缩略图，非图片 404，删除时缩略图一并删除', async () => {
+    // 用 sharp 生成一张真实 PNG（合成测试 PNG 的 CRC 不合法，sharp 会拒绝解码）。
+    const { default: sharp } = await import('sharp')
+    const svg = Buffer.from(
+      `<svg width="800" height="600"><rect width="800" height="600" fill="#4f86f7"/><circle cx="400" cy="300" r="150" fill="#fff"/></svg>`,
+    )
+    const realPng = await sharp(svg).png().toBuffer()
     const { thumbnailStoragePath } = await import('@/shared/storage')
-    const entry = await upload('thumb.png', 'image/png', PNG_BYTES)
+    const entry = await upload('thumb.png', 'image/png', realPng)
     const [{ storagePath }] = await db
       .select({ storagePath: blobsTable.storagePath })
       .from(blobsTable)
@@ -193,7 +199,7 @@ describe.skipIf(!RUN_DB_TESTS)('blob service DB integration', () => {
     const thumb = await blobService.getThumbnail(entry.id)
     expect(thumb.mimeType).toBe('image/webp')
     expect(thumb.size).toBeGreaterThan(0)
-    expect(thumb.size).toBeLessThan(PNG_BYTES.length)
+    expect(thumb.size).toBeLessThan(realPng.length)
 
     // 缩略图已持久化到存储（懒生成回填）
     const { openFileFromStorage } = await import('@/shared/storage')

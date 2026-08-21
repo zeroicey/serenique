@@ -40,6 +40,13 @@ export const CreateUploadUrlSchema = z.object({
   /** 建议填 MIME（确定 storagePath 的 mime-main 目录）；缺省 application/octet-stream。 */
   mimeType: z.string().min(1).max(255).optional(),
   size: z.coerce.number().int().positive(),
+  /** 图片缩略图字节数（浏览器先生成 canvas WebP 再上传；提供则额外签发缩略图 PUT 直链）。 */
+  thumbSize: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(2 * 1024 * 1024)
+    .optional(),
 })
 
 /** 直传完成确认：去重 + 落 blobs 行（元数据由客户端上报）。 */
@@ -63,6 +70,8 @@ export type UploadUrlEntry = {
   storagePath: string
   method: 'PUT'
   url: string
+  /** 图片缩略图 PUT 直链（可选）：浏览器生成 canvas WebP 后直传，无需 confirm。 */
+  thumbUrl?: string
   expires: number
   expiresAt: string
   mode: 'direct-r2'

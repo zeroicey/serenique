@@ -252,6 +252,7 @@ export const blobService = {
   /**
    * 打开图片缩略图（懒生成 + 持久化，见 shared/storage.ts 的缩略图说明）。
    * 非图片类型返回 404（素材库只在图片瓦片上请求缩略图）。
+   * 缩略图生成/解码失败（如异常文件）→ 降级返回原图，绝不 500。
    */
   async getThumbnail(id: string): Promise<BlobFile> {
     const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
@@ -260,11 +261,17 @@ export const blobService = {
       throw new AppError(ErrorCode.NOT_FOUND, '该文件不是图片，无缩略图', 404)
     }
     await ensureThumbnail(row)
-    const { body, size } = await openFileFromStorage(
-      env.BLOB_ROOT,
-      thumbnailStoragePath(row.storagePath),
-    )
-    return { body, size, mimeType: 'image/webp', filename: `${row.originalName}.thumb.webp` }
+    try {
+      const { body, size } = await openFileFromStorage(
+        env.BLOB_ROOT,
+        thumbnailStoragePath(row.storagePath),
+      )
+      return { body, size, mimeType: 'image/webp', filename: `${row.originalName}.thumb.webp` }
+    } catch {
+      // 缩略图不存在（生成失败）→ 原图降级，保证网格瓦片仍可显示。
+      const { body, size } = await openFileFromStorage(env.BLOB_ROOT, row.storagePath)
+      return { body, size, mimeType: row.mimeType, filename: row.originalName }
+    }
   },
 
   /** Create a temporary HMAC-signed access link for a blob file. */
@@ -285,11 +292,11 @@ export const blobService = {
     // ---- R2 直链（迁移后主路径）：签名走 Worker 网关校验，前端绕过 API 代理 ──
     // 仅在「后端确实是 r2」+ R2 配置齐全时才启用；local 后端/开发一律回退 API 代理
     // （否则回滚期间新增的本地 blob 会错发 R2 直链 404）。
-    // 缩略图直链：先懒生成（读写 R2 一次，之后命中），再签派生 key。
+    // 缩略图直链：签派生 key（对象由浏览器直传网关生成；缺失时前端回退原图）。
+    // 注意：**不做任何 R2 读/写**（D-032：API 零 R2 网络）——签名是纯本地 HMAC。
     if (env.STORAGE_BACKEND === 'r2' && env.R2_ACCESS_SIGNING_SECRET && env.R2_PUBLIC_HOST) {
       const host = env.R2_PUBLIC_HOST.replace(/\/+$/, '')
       const storageKey = isThumb ? thumbnailStoragePath(row.storagePath) : row.storagePath
-      if (isThumb) await ensureThumbnail(row)
       const signature = signR2Access(env.R2_ACCESS_SIGNING_SECRET, storageKey, expires)
       const path = `${host}/${storageKey}?e=${expires}&s=${signature}`
       return {
@@ -365,7 +372,27 @@ export const blobService = {
     const host = env.R2_PUBLIC_HOST.replace(/\/+$/, '')
     const url = `${host}/${storagePath}?e=${expires}&s=${signature}`
 
-    return {
+    // ---- 图片缩略图直传凭据（可选）----
+    // 浏览器先生成 canvas WebP 缩略图（thumbSize 已知），再签发派生 key
+    // （`${storagePath}.thumb.webp`）的 PUT：客户端直传网关，**不经 API 容器**
+    // （D-032：API 零 R2 网络）。无数据库行、无需 confirm——存在即用，
+    // 缺失时前端回退原图。不做服务端生成（容器碰不到图片字节，也连不上 R2）。
+    // 签名 size 必须与请求 Content-Length 严格一致（gateway.js 校验）。
+    const thumbUrl =
+      mimeType.startsWith('image/') && input.thumbSize !== undefined
+        ? (() => {
+            const thumbStoragePath = thumbnailStoragePath(storagePath)
+            const thumbSignature = signR2Put(
+              env.R2_ACCESS_SIGNING_SECRET,
+              thumbStoragePath,
+              expires,
+              input.thumbSize as number,
+            )
+            return `${host}/${thumbStoragePath}?e=${expires}&s=${thumbSignature}`
+          })()
+        : undefined
+
+    const out: UploadUrlEntry = {
       blobId,
       storagePath,
       method: 'PUT',
@@ -374,6 +401,8 @@ export const blobService = {
       expiresAt: new Date(expires * 1000).toISOString(),
       mode: 'direct-r2',
     }
+    if (thumbUrl) out.thumbUrl = thumbUrl
+    return out
   },
 
   /**
