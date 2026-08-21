@@ -1,7 +1,7 @@
 # 文件存储迁移到 Cloudflare R2 对象存储
 
 - 日期：2026-08-20
-- 状态：🔶设计中（可行性已初步调研，见本文件 §5；实施待排期）
+- 状态：✅已实施（2026-08-21 生产切换完成，端到端验证通过）
 - 范围：`services/api`（blob 存储层）、部署（hpcore / Docker compose）、数据迁移
 - 相关文档：`.ai/runbooks/hpcore-deploy.md`（服务器拓扑）
 
