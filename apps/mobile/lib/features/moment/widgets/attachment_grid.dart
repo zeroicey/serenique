@@ -7,7 +7,11 @@ import '../moment_providers.dart';
 /// 朋友圈 3 列附件缩略图网格。>9 张折叠显示前 8 张 + 「+N 更多」瓦片，
 /// 点「更多」就地展开全部。点击第 i 个瓦片回调 onTapTile(i)。
 class AttachmentGrid extends ConsumerStatefulWidget {
-  const AttachmentGrid({super.key, required this.attachments, required this.onTapTile});
+  const AttachmentGrid({
+    super.key,
+    required this.attachments,
+    required this.onTapTile,
+  });
 
   final List<MomentAttachment> attachments;
   final void Function(int index) onTapTile;
@@ -25,8 +29,9 @@ class _AttachmentGridState extends ConsumerState<AttachmentGrid> {
   Widget build(BuildContext context) {
     final sorted = sortedAttachments(widget.attachments);
     final needsExpand = sorted.length > _previewCount + 1;
-    final display =
-        needsExpand && !_expanded ? sorted.sublist(0, _previewCount) : sorted;
+    final display = needsExpand && !_expanded
+        ? sorted.sublist(0, _previewCount)
+        : sorted;
 
     return GridView.builder(
       shrinkWrap: true,
@@ -76,8 +81,10 @@ class _MoreTile extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.more_horiz, size: 28, color: scheme.onSurfaceVariant),
-            Text('+$extra 更多',
-                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+            Text(
+              '+$extra 更多',
+              style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+            ),
           ],
         ),
       ),
@@ -109,7 +116,8 @@ class _AttachmentTile extends ConsumerWidget {
             loading: () => ColoredBox(
               color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
               child: const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2)),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             ),
             error: (_, _) => ColoredBox(
               color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
@@ -117,16 +125,22 @@ class _AttachmentTile extends ConsumerWidget {
             ),
             data: (u) => switch (blob) {
               _ when blob.isImage => CachedNetworkImage(
-                  imageUrl: u,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) => const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                  errorWidget: (_, _, _) => ColoredBox(
-                    color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                    child: Icon(Icons.broken_image, color: scheme.onSurfaceVariant),
+                imageUrl: u,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => const Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                errorWidget: (_, _, _) => ColoredBox(
+                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  child: Icon(
+                    Icons.broken_image,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
-              _ when blob.isVideo => _VideoPlaceholder(durationMs: blob.duration),
+              ),
+              _ when blob.isVideo => _VideoPlaceholder(
+                durationMs: blob.duration,
+              ),
               _ => _AudioPlaceholder(label: attachment.displayLabel),
             },
           ),
@@ -150,8 +164,11 @@ class _VideoPlaceholder extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Icon(Icons.play_circle_outline,
-              size: 32, color: scheme.onSurfaceVariant),
+          Icon(
+            Icons.play_circle_outline,
+            size: 32,
+            color: scheme.onSurfaceVariant,
+          ),
           Positioned(
             right: 4,
             bottom: 4,

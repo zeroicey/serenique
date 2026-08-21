@@ -44,8 +44,9 @@ class MediaPreviewOverlay extends ConsumerStatefulWidget {
 }
 
 class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
-  late final PageController _controller =
-      PageController(initialPage: widget.initialIndex);
+  late final PageController _controller = PageController(
+    initialPage: widget.initialIndex,
+  );
   late int _current = widget.initialIndex;
 
   @override
@@ -63,8 +64,7 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
           controller: _controller,
           itemCount: attachments.length,
           onPageChanged: (i) => setState(() => _current = i),
-          itemBuilder: (ctx, i) =>
-              _MediaPage(attachment: attachments[i]),
+          itemBuilder: (ctx, i) => _MediaPage(attachment: attachments[i]),
         ),
         Positioned(
           left: 0,
@@ -73,10 +73,7 @@ class _MediaPreviewOverlayState extends ConsumerState<MediaPreviewOverlay> {
           child: Center(
             child: Text(
               '${_current + 1} / ${attachments.length}',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ),
         ),
@@ -107,9 +104,13 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     duration: const Duration(milliseconds: 200),
   );
   // 单一 animation：toggle 只改 tween 端点再 forward，避免重复 addListener 互相覆盖。
-  late final _zoomTween = Matrix4Tween(begin: Matrix4.identity(), end: Matrix4.identity());
+  late final _zoomTween = Matrix4Tween(
+    begin: Matrix4.identity(),
+    end: Matrix4.identity(),
+  );
   late final Animation<Matrix4> _zoomAnim = _zoomTween.animate(
-      CurvedAnimation(parent: _zoomController, curve: Curves.easeOut));
+    CurvedAnimation(parent: _zoomController, curve: Curves.easeOut),
+  );
   bool _zoomed = false;
   Offset _doubleTapFocal = Offset.zero;
   bool _inDoubleTapCooldown = false;
@@ -175,8 +176,7 @@ class _MediaPageState extends ConsumerState<_MediaPage>
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _handleTap,
-      onDoubleTapDown: (details) =>
-          _doubleTapFocal = details.localPosition,
+      onDoubleTapDown: (details) => _doubleTapFocal = details.localPosition,
       onDoubleTap: _handleDoubleTap,
       child: url.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -195,41 +195,46 @@ class _MediaPageState extends ConsumerState<_MediaPage>
                     placeholder: (_, _) =>
                         const Center(child: CircularProgressIndicator()),
                     errorWidget: (_, _, _) => Center(
-                      child: Icon(Icons.broken_image,
-                          size: 64, color: Colors.white54),
+                      child: Icon(
+                        Icons.broken_image,
+                        size: 64,
+                        color: Colors.white54,
+                      ),
                     ),
                   ),
                 ),
               )
             : blob.isVideo
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.play_circle_outline,
-                            size: 72, color: Colors.white70),
-                        const SizedBox(height: 8),
-                        Text(
-                          formatDurationMs(blob.duration),
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ],
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.play_circle_outline,
+                      size: 72,
+                      color: Colors.white70,
                     ),
-                  )
-                : Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.audio_file,
-                            size: 72, color: Colors.white70),
-                        const SizedBox(height: 8),
-                        Text(
-                          _attachment.displayLabel,
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                      ],
+                    const SizedBox(height: 8),
+                    Text(
+                      formatDurationMs(blob.duration),
+                      style: const TextStyle(color: Colors.white70),
                     ),
-                  ),
+                  ],
+                ),
+              )
+            : Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.audio_file, size: 72, color: Colors.white70),
+                    const SizedBox(height: 8),
+                    Text(
+                      _attachment.displayLabel,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }

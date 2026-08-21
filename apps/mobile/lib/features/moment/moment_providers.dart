@@ -237,6 +237,9 @@ final blobAccessServiceProvider = Provider<BlobAccessService>((ref) {
 /// 签名直链 Future（按 blobId）。keepAlive（非 autoDispose）：滚动列表项销毁后
 /// Future 结果仍缓存，回看时不重新 resolve（配合 BlobAccessService 的 URL 缓存，
 /// URL 稳定 → ImageCache/CachedNetworkImage 命中 → 不再转圈重载）。
-final blobAccessUrlProvider = FutureProvider.family<String, String>((ref, blobId) {
+final blobAccessUrlProvider = FutureProvider.family<String, String>((
+  ref,
+  blobId,
+) {
   return ref.watch(blobAccessServiceProvider).resolve(blobId);
 });
