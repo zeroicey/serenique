@@ -172,10 +172,23 @@ describe('deleteBlob', () => {
     vi.clearAllMocks()
   })
 
-  it('DELETE /blobs/:id 解包成功', async () => {
-    mockedDelete.mockResolvedValueOnce(wrap(null))
+  it('DELETE /blobs/:id 204（local 后端）返回空 deleteUrls', async () => {
+    mockedDelete.mockResolvedValueOnce(new Response(null, { status: 204 }))
 
-    await expect(deleteBlob('b1')).resolves.toBeUndefined()
+    await expect(deleteBlob('b1')).resolves.toEqual({ deleted: true, deleteUrls: [] })
+
+    expect(mockedDelete).toHaveBeenCalledWith('/api/blobs/b1')
+  })
+
+  it('DELETE /blobs/:id 200（r2 后端）解包 deleteUrls', async () => {
+    mockedDelete.mockResolvedValueOnce(
+      wrap({ deleted: true, deleteUrls: ['https://s3.0icey.icu/x.png?e=1&s=abc'] }),
+    )
+
+    await expect(deleteBlob('b1')).resolves.toEqual({
+      deleted: true,
+      deleteUrls: ['https://s3.0icey.icu/x.png?e=1&s=abc'],
+    })
 
     expect(mockedDelete).toHaveBeenCalledWith('/api/blobs/b1')
   })

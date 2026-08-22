@@ -7,9 +7,10 @@
  *   - 读  GET/HEAD：`HMAC(secret, "v1:" + storagePath + ":" + expires)`，query 参数 e/s
  *   - 写  PUT     ：`HMAC(secret, "up:" + storagePath + ":" + expires + ":" + contentLength)`
  *                     query 参数 e/s；Content-Length 必须等于签名中的 size（防篡改大小）
+ *   - 删  DELETE  ：`HMAC(secret, "del:" + storagePath + ":" + expires)`，query 参数 e/s
  * - 无有效签名 / 已过期 → 403。bucket 永不公开（无 r2.dev、不绑 bucket 级自定义域名）。
  * - 读支持 Range / 206，透传 Content-Range。
- * - CORS：仅放行 Serenique 前端 origin；PUT 需要预检（Allow: GET HEAD PUT OPTIONS）。
+ * - CORS：仅放行 Serenique 前端 origin；PUT/DELETE 需要预检（Allow: GET HEAD PUT DELETE OPTIONS）。
  * - 读缓存：`private, max-age=300`；上传不缓存。
  *
  * Bindings（wrangler.toml / dashboard）：
@@ -29,7 +30,7 @@ const MAX_PUT_SIZE = 110 * 1024 * 1024
 function corsHeaders(request, extra = {}) {
   const origin = request.headers.get('Origin')
   const base = {
-    'Access-Control-Allow-Methods': 'GET, HEAD, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, HEAD, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Content-Length, Range',
     'Access-Control-Expose-Headers': 'Content-Range, Accept-Ranges, ETag, Content-Length',
     Vary: 'Origin',
@@ -91,6 +92,13 @@ export default {
       return new Response(null, { status: 204, headers: cors })
     }
 
+    // fail-closed（与 API 侧一致）：漏配签名密钥时绝不把字面量 "undefined" 当
+    // HMAC 密钥（validSig 的 encoder.encode(undefined) 会静默编码成功 = 公开伪造
+    // v1:/up:/del: 全部签名域）。
+    if (!env.R2_ACCESS_SIGNING_SECRET) {
+      return new Response('Server Error', { status: 500, headers: cors })
+    }
+
     let key
     try {
       key = safeKey(url.pathname)
@@ -127,6 +135,21 @@ export default {
       await env.BUCKET.put(key, request.body ?? new ReadableStream(), {
         httpMetadata: contentType ? { contentType } : undefined,
       })
+      return new Response('OK', { status: 200, headers: cors })
+    }
+
+    // ---- DELETE：签名删除对象（防越权删除，签名域 del:；幂等，不存在也 200）----
+    if (request.method === 'DELETE') {
+      if (!key || !expires || !/^\d+$/.test(expires) || !sig) {
+        return new Response('Forbidden', { status: 403, headers: cors })
+      }
+      if (Number(expires) * 1000 < Date.now()) {
+        return new Response('Forbidden', { status: 403, headers: cors })
+      }
+      if (!(await validSig(env.R2_ACCESS_SIGNING_SECRET, `del:${key}:${expires}`, sig))) {
+        return new Response('Forbidden', { status: 403, headers: cors })
+      }
+      await env.BUCKET.delete(key)
       return new Response('OK', { status: 200, headers: cors })
     }
 

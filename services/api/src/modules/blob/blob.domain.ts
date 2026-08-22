@@ -81,6 +81,15 @@ export function signR2Put(
   return createHmac('sha256', secret).update(`up:${storagePath}:${expires}:${size}`).digest('hex')
 }
 
+/**
+ * R2 签名删除（hex）。签名域必须与 Worker 网关
+ * (infra/r2-gateway/gateway.js 的 DELETE 分支) 完全一致：
+ * HMAC-SHA256(secret, `del:${storagePath}:${expires}`)，改任一处必须同步改另一处。
+ */
+export function signR2Delete(secret: string, storagePath: string, expires: number): string {
+  return createHmac('sha256', secret).update(`del:${storagePath}:${expires}`).digest('hex')
+}
+
 /** Constant-time signature comparison. */
 export function signaturesEqual(actual: string, expected: string): boolean {
   const actualBuf = Buffer.from(actual)

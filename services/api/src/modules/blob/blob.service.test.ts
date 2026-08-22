@@ -138,6 +138,23 @@ describe('blob domain — access signatures', () => {
     expect(signR2Put(secret, `${path}x`, expires, size)).not.toBe(expected)
   })
 
+  test('signR2Delete hex output matches the worker DELETE signing domain (fixed vector)', async () => {
+    setTestEnv()
+    const { signR2Delete } = await import('./blob.domain')
+    // 与 infra/r2-gateway/gateway.js DELETE 分支同域：
+    // HMAC(secret, `del:${path}:${expires}`)→hex（用 node:crypto 独立复算锁定）。
+    const { createHmac } = await import('node:crypto')
+    const secret = 'test-r2-signing-secret-0123456789abcdef'
+    const path = 'image/2026/08/abc-123.jpg'
+    const expires = 1755667200
+    const expected = createHmac('sha256', secret).update(`del:${path}:${expires}`).digest('hex')
+    expect(signR2Delete(secret, path, expires)).toBe(expected)
+    expect(signR2Delete(secret, path, expires)).toMatch(/^[0-9a-f]{64}$/)
+    // 不同 path / expires 必须产出不同签名
+    expect(signR2Delete(secret, `${path}x`, expires)).not.toBe(expected)
+    expect(signR2Delete(secret, path, expires + 1)).not.toBe(expected)
+  })
+
   test('requireSigningSecret throws INTERNAL when missing', async () => {
     setTestEnv()
     const { requireSigningSecret } = await import('./blob.domain')

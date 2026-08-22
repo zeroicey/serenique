@@ -143,3 +143,9 @@ export type BlobCleanupResult = {
     message: string
   }>
 }
+
+/** DELETE /api/blobs/:id 的结果。r2 后端返回签名删除 URL 供客户端直发网关。 */
+export type BlobDeleteResult = {
+  deleted: boolean
+  deleteUrls: string[]
+}

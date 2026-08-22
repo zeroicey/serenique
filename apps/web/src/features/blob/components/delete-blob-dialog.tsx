@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { BlobEntry } from '@/features/blob/api'
+import { type BlobEntry, R2_GATEWAY_ORIGIN } from '@/features/blob/api'
 import { useBlobAttachments, useDeleteBlob } from '@/features/blob/queries'
 
 // ownerType → 用户可读名。moment 附件同样写入 blob_attachments（ownerType='moment'），
@@ -50,7 +50,21 @@ export function DeleteBlobDialog({
   const handleDelete = () => {
     if (!blob) return
     deleteBlob.mutate(blob.id, {
-      onSuccess: () => onClose(),
+      onSuccess: (result) => {
+        // r2 后端：DB 行已删，文件体需浏览器直发网关签名删除（best-effort，
+        // fire-and-forget；失败不阻断——孤儿对象由后续清理兜底）。
+        for (const url of result?.deleteUrls ?? []) {
+          let u: URL | null = null
+          try {
+            u = new URL(url)
+          } catch {
+            continue
+          }
+          if (u.origin !== R2_GATEWAY_ORIGIN) continue // 防御性：仅官方网关
+          void fetch(u, { method: 'DELETE' }).catch(() => {})
+        }
+        onClose()
+      },
     })
   }
 

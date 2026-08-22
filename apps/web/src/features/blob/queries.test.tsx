@@ -89,7 +89,7 @@ describe('useBlobLibrary', () => {
 
 describe('useDeleteBlob', () => {
   it('mutate 触发 deleteBlob 并 toast 成功', async () => {
-    mockedDelete.mockResolvedValueOnce(undefined)
+    mockedDelete.mockResolvedValueOnce({ deleted: true, deleteUrls: [] })
 
     const { result } = renderHook(() => useDeleteBlob(), { wrapper })
 

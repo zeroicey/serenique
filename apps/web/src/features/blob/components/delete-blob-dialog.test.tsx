@@ -6,7 +6,10 @@ import { DeleteBlobDialog } from './delete-blob-dialog'
 
 const mocks = {
   refs: vi.fn(),
-  delete: vi.fn((_id: string, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.()),
+  delete: vi.fn(
+    (_id: string, opts?: { onSuccess?: (r: { deleted: boolean; deleteUrls: string[] }) => void }) =>
+      opts?.onSuccess?.({ deleted: true, deleteUrls: [] }),
+  ),
 }
 
 vi.mock('@/features/blob/queries', () => ({
@@ -75,6 +78,37 @@ describe('DeleteBlobDialog', () => {
 
     expect(mocks.delete).toHaveBeenCalledWith('b1', expect.anything())
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('r2 deleteUrls：成功后直发网关 DELETE（仅官方域名，fire-and-forget）', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 200 }))
+    mocks.refs.mockReturnValue({ data: [], isLoading: false })
+    mocks.delete.mockImplementation(
+      (
+        _id: string,
+        opts?: { onSuccess?: (r: { deleted: boolean; deleteUrls: string[] }) => void },
+      ) =>
+        opts?.onSuccess?.({
+          deleted: true,
+          deleteUrls: [
+            'https://s3.0icey.icu/image/2026/08/x.png?e=1&s=abc',
+            'https://evil.example/path', // 非官方域名 → 忽略
+          ],
+        }),
+    )
+    const onClose = vi.fn()
+    render(<DeleteBlobDialog blob={makeBlob(0)} onClose={onClose} />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /确认删除/ })).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: /确认删除/ }))
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(fetchSpy.mock.calls[0][0]).toMatchObject({ origin: 'https://s3.0icey.icu' })
+    expect(fetchSpy.mock.calls[0][1]).toMatchObject({ method: 'DELETE' })
+    expect(onClose).toHaveBeenCalled()
+    fetchSpy.mockRestore()
   })
 
   it('引用加载中：确认按钮禁用', async () => {

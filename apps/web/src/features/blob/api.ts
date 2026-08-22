@@ -46,6 +46,9 @@ export interface BlobAttachmentEntry {
   createdAt: string
 }
 
+/** 官方 R2 网关域名：直传 PUT / 签名删除 DELETE 的白名单（防御性校验用）。 */
+export const R2_GATEWAY_ORIGIN = 'https://s3.0icey.icu'
+
 /** 分页列表（mimeType 为前缀过滤，如 "image/"）。 */
 export async function listBlobs(input: {
   page: number
@@ -61,10 +64,25 @@ export async function listBlobs(input: {
   return unwrap<{ items: BlobEntry[]; total: number }>(res)
 }
 
-/** 删除物理 blob（被引用时后端 409 拒绝）。 */
-export async function deleteBlob(id: string): Promise<void> {
+/**
+ * DELETE /api/blobs/:id 的响应 data。r2 后端返回签名删除 URL 列表
+ * （原图 + 图片缩略图），由客户端直发网关删除（API 容器零 R2 网络，D-032）。
+ */
+export interface BlobDeleteResult {
+  deleted: boolean
+  deleteUrls: string[]
+}
+
+/**
+ * 删除物理 blob（被引用时后端 409 拒绝）。
+ * - local 后端：204 无响应体（后端已直接删除文件）。
+ * - r2 后端：200 + data.deleteUrls，调用方拿到后直发网关 DELETE（best-effort）。
+ */
+export async function deleteBlob(id: string): Promise<BlobDeleteResult> {
   const res = await api.delete(apiUrl(`blobs/${id}`))
-  await unwrap(res)
+  // 204 无响应体，不能走 unwrap（response.json() 会炸），对齐 delete 类接口的守卫。
+  if (res.status === 204) return { deleted: true, deleteUrls: [] }
+  return unwrap<BlobDeleteResult>(res)
 }
 
 /** 查一个 blob 的所有业务引用（删除前判断引用方）。 */
@@ -124,7 +142,7 @@ function assertAllowedPutOrigin(rawUrl: string): URL {
   } catch {
     throw new Error('非法直传地址')
   }
-  if (putUrl.origin !== 'https://s3.0icey.icu') {
+  if (putUrl.origin !== R2_GATEWAY_ORIGIN) {
     throw new Error('非法直传地址')
   }
   return putUrl

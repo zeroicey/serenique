@@ -12,6 +12,7 @@ import {
   signaturesEqual,
   signBlobAccess,
   signR2Access,
+  signR2Delete,
   signR2Put,
 } from '@/modules/blob/blob.domain'
 import { toBlobAttachmentEntry, toPublicBlobEntry } from '@/modules/blob/blob.mappers'
@@ -20,6 +21,7 @@ import type {
   BlobAccessLinkEntry,
   BlobAttachmentEntry,
   BlobCleanupResult,
+  BlobDeleteResult,
   BlobEntry,
   BlobFile,
   ConfirmUploadInput,
@@ -98,6 +100,15 @@ export const blobService = {
    * record without writing to disk (idempotent upload).
    */
   async upload(file: File): Promise<BlobEntry> {
+    // r2 后端：API 容器零 R2 网络（D-032），旧 multipart 上传不可达 S3——
+    // 直接报错引导直传，禁止容器内发起 PutObject（会挂起/超时）。
+    if (env.STORAGE_BACKEND === 'r2') {
+      throw new AppError(
+        ErrorCode.VALIDATION,
+        'R2 后端已启用直传，请使用新版客户端上传（upload-url + confirm）',
+        400,
+      )
+    }
     // --- size guard ---
     assertBlobSize(file.size, env.BLOB_MAX_SIZE)
 
@@ -243,6 +254,11 @@ export const blobService = {
 
   /** Open the file body + metadata needed for streaming. */
   async getFile(id: string): Promise<BlobFile> {
+    // r2 后端：读路径是 Worker 签名直链（createAccessLink），API 代理读会触发容器内
+    // GetObject（D-032：API 零 R2 网络）——直接报错引导直链，禁止 S3 读。
+    if (env.STORAGE_BACKEND === 'r2') {
+      throw new AppError(ErrorCode.VALIDATION, 'R2 后端请使用签名直链访问文件', 400)
+    }
     const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
     const { body, size } = await openFileFromStorage(env.BLOB_ROOT, row.storagePath)
@@ -255,6 +271,11 @@ export const blobService = {
    * 缩略图生成/解码失败（如异常文件）→ 降级返回原图，绝不 500。
    */
   async getThumbnail(id: string): Promise<BlobFile> {
+    // r2 后端：缩略图走派生 key 的签名直链（createAccessLink kind='thumb'），
+    // 代理读会触发容器内 GetObject（D-032）——直接报错引导直链。
+    if (env.STORAGE_BACKEND === 'r2') {
+      throw new AppError(ErrorCode.VALIDATION, 'R2 后端请使用签名直链访问缩略图', 400)
+    }
     const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
     if (!row.mimeType.startsWith('image/')) {
@@ -529,6 +550,15 @@ export const blobService = {
 
   /** Delete disk files that no blob row references. */
   async cleanupOrphanFiles(): Promise<BlobCleanupResult> {
+    // r2 后端：容器内 ListObjectsV2/DeleteObject 不可达（D-032）；孤儿清理
+    // 需在能直连 R2 的迁移脚本环境（本机）执行，禁止在 API 进程内发起。
+    if (env.STORAGE_BACKEND === 'r2') {
+      throw new AppError(
+        ErrorCode.VALIDATION,
+        'R2 后端下孤儿清理请在迁移脚本环境（本机直连）执行',
+        400,
+      )
+    }
     const [diskPaths, referencedRows] = await Promise.all([
       listStoragePaths(env.BLOB_ROOT),
       db.select({ storagePath: blobs.storagePath }).from(blobs),
@@ -556,9 +586,10 @@ export const blobService = {
 
   /**
    * Delete physical blob only when no business references remain. Deletes DB
-   * record first, then deletes the disk file best-effort.
+   * record first, then deletes the file (local) or returns signed delete URLs
+   * for the client to send to the R2 gateway directly (r2, D-032 零网络)。
    */
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<BlobDeleteResult> {
     const [row] = await db.select().from(blobs).where(eq(blobs.id, id))
     if (!row) throw new AppError(ErrorCode.NOT_FOUND, '文件不存在', 404)
 
@@ -570,6 +601,25 @@ export const blobService = {
       throw new AppError(ErrorCode.CONFLICT, '文件仍被业务记录引用，请先删除关联', 409)
     }
 
+    // ---- r2 后端：删库前先签发删除凭证（纯本地 HMAC，零 R2 网络）----
+    // 客户端拿到 deleteUrls 后直发网关 DELETE（浏览器/移动端直连 s3.0icey.icu，
+    // Worker 校验 `del:` 签名后删对象）。配置缺失属部署错误，在删库前报出。
+    const deleteUrls: string[] = []
+    if (env.STORAGE_BACKEND === 'r2') {
+      if (!env.R2_ACCESS_SIGNING_SECRET || !env.R2_PUBLIC_HOST) {
+        throw new AppError(ErrorCode.INTERNAL, '未配置 R2 删除凭据', 500)
+      }
+      const host = env.R2_PUBLIC_HOST.replace(/\/+$/, '')
+      const expires = Math.floor(Date.now() / 1000) + 60 * 60
+      const signDelete = (storageKey: string) =>
+        `${host}/${storageKey}?e=${expires}&s=${signR2Delete(env.R2_ACCESS_SIGNING_SECRET!, storageKey, expires)}`
+      deleteUrls.push(signDelete(row.storagePath))
+      // 缩略图与原图同生命周期：图片一并签发删除（缺失对象删除幂等，网关 200）。
+      if (row.mimeType.startsWith('image/')) {
+        deleteUrls.push(signDelete(thumbnailStoragePath(row.storagePath)))
+      }
+    }
+
     await db.delete(blobs).where(eq(blobs.id, id))
 
     fireAuditRecord({
@@ -579,16 +629,21 @@ export const blobService = {
       detail: { id, fileName: row.originalName, mimeType: row.mimeType },
     })
 
-    try {
-      await deleteFileFromStorage(env.BLOB_ROOT, row.storagePath)
-    } catch (err) {
-      logger.error({ err, path: row.storagePath }, '磁盘文件删除失败，数据库记录已删除')
+    // ---- local 后端：直接删除文件（best-effort，幂等）----
+    if (env.STORAGE_BACKEND !== 'r2') {
+      try {
+        await deleteFileFromStorage(env.BLOB_ROOT, row.storagePath)
+      } catch (err) {
+        logger.error({ err, path: row.storagePath }, '磁盘文件删除失败，数据库记录已删除')
+      }
+      // 缩略图与原图同生命周期，一并删除（best-effort，幂等）。
+      try {
+        await deleteFileFromStorage(env.BLOB_ROOT, thumbnailStoragePath(row.storagePath))
+      } catch (err) {
+        logger.error({ err, path: 'thumb' }, '缩略图删除失败，数据库记录已删除')
+      }
     }
-    // 缩略图与原图同生命周期，一并删除（best-effort，幂等）。
-    try {
-      await deleteFileFromStorage(env.BLOB_ROOT, thumbnailStoragePath(row.storagePath))
-    } catch (err) {
-      logger.error({ err, path: 'thumb' }, '缩略图删除失败，数据库记录已删除')
-    }
+
+    return { deleted: true, deleteUrls }
   },
 }

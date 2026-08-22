@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner'
 import {
   type BlobAttachmentEntry,
+  type BlobDeleteResult,
   type BlobEntry,
   deleteBlob,
   listBlobAttachments,
@@ -39,7 +40,7 @@ export function useBlobLibrary(input: { pageSize: number; mimeType?: string }) {
 }
 
 /** 删除物理 blob；成功 invalidate ['blobs'] 刷新列表。409（被引用）由后端拒绝。 */
-export function useDeleteBlob(): UseMutationResult<void, Error, string> {
+export function useDeleteBlob(): UseMutationResult<BlobDeleteResult, Error, string> {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id) => deleteBlob(id),

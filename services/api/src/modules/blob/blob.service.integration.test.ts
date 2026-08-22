@@ -323,7 +323,10 @@ describe.skipIf(!RUN_DB_TESTS)('blob service DB integration', () => {
       status: 409,
     })
 
-    // 未被引用 blob 可删除
-    await expect(blobService.delete(lone.id)).resolves.toBeUndefined()
+    // 未被引用 blob 可删除（local 后端：直接删文件，deleteUrls 为空）
+    await expect(blobService.delete(lone.id)).resolves.toMatchObject({
+      deleted: true,
+      deleteUrls: [],
+    })
   })
 })

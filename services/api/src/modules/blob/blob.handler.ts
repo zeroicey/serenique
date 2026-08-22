@@ -202,7 +202,11 @@ export const blobHandler = {
   /** DELETE /api/blobs/:id */
   async delete(c: Context) {
     try {
-      await blobService.delete(uuidParam(c, 'id'))
+      const result = await blobService.delete(uuidParam(c, 'id'))
+      // r2 后端：返回签名删除 URL 供客户端直发网关（响应带 data）；local 保持 204。
+      if (result.deleteUrls.length > 0) {
+        return Res.ok('文件删除成功', result).build(c)
+      }
       return Res.noContent('文件删除成功').build(c)
     } catch (e) {
       return handleError(e, c, 'blob')
