@@ -11,7 +11,7 @@
 ## 变更总览
 
 | 08-04 设计 | 08-05 定稿 | 变更原因 |
-|-----------|-----------|---------|
+| ----------- | ----------- | --------- |
 | `text/tabwriter` 表格对齐 | 自研 CJK 显示宽度对齐（`output/` 内手动 padding） | tabwriter 按字节计列宽，CJK 中文会错位 |
 | `--config`/`-c` 仅声明未使用 | `config.SetPath(flagConfig)` + `PersistentPreRunE` 真正生效 | 修复「文档声明但完全不生效」缺陷 |
 | 下载默认路径直接取 `originalName` | `filepath.Base(originalName)` 净化 + 空/`.` 兜底 | 修复路径穿越/任意文件覆盖 |
@@ -36,7 +36,7 @@ apps/cli/
 ├── README.md               # 中文使用 + AI 使用指南
 ├── cmd/                    # Cobra 命令定义
 │   ├── root.go             # 根命令 + 全局 flags + 配置注入 + 单一错误渲染
-│   ├── init.go / config.go / diary.go / moment.go / blob.go
+│   ├── init.go / config.go / moment.go / blob.go
 │   ├── helpers.go          # confirm() / truncateRunes()（命令层公共助手）
 │   ├── commands_test.go / helpers_test.go
 └── internal/

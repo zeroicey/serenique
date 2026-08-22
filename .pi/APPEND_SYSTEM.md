@@ -39,7 +39,7 @@
 
 ```sh
 bun install          # 安装 workspace 依赖
-bun run typecheck    # typecheck api + mcp + web
+bun run typecheck    # typecheck api + web（mcp 已冻结不编译）
 bun run lint         # biome check
 ```
 

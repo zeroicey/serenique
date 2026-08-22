@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+// 个人信息（profile）属 auth 域数据；settings 页面消费 auth 查询是刻意耦合（规则 5 豁免）。
+// 若新增其他消费方，考虑将 profile 查询下沉到共享层（如 @/lib/auth）。
 import { useProfile, useUpdateProfile } from '@/features/auth/queries'
 
 // 个人信息表单（/users/me）：name / email / birthday。

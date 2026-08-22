@@ -4,7 +4,6 @@ import { AI_MEMORY_SINGLETON_ID, isEmptyProfile } from '@/modules/ai-memory/ai-m
 import { toAiMemoryEntry } from '@/modules/ai-memory/ai-memory.mappers'
 import { aiMemory } from '@/modules/ai-memory/ai-memory.schema'
 import type { AiMemoryEntry, PutAiMemoryInput } from '@/modules/ai-memory/ai-memory.types'
-import { logger } from '@/shared/logger'
 
 // ---------------------------------------------------------------------------
 // AI memory service — 用户画像（L2）单行 CRUD。
@@ -56,7 +55,3 @@ export const aiMemoryService = {
     return text
   },
 }
-
-// 模块加载时的静态引用校验（避免 tree-shake 掉日志依赖——保留 logger 供
-// 后续缓存失效/写入追踪用）。
-void logger

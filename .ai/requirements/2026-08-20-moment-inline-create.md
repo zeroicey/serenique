@@ -1,7 +1,7 @@
 # Moment 闪记列表页内嵌快速新建
 
 - 日期：2026-08-20
-- 状态：🔶设计中
+- 状态：✅已实施（2026-08-21 Web 端 `MomentQuickCreate` 落地 + 测试；移动端未实现）
 - 范围：Web（`apps/web`）`features/moment`
 - 前置记录：`2026-08-16-moment-draft-cache.md`、`2026-08-08-moment-location.md`、`2026-08-05-moment-tags.md`
 

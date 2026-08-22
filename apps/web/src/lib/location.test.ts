@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDistance, formatLocationLabel, locationAmapUrl } from './format'
+import { formatDistance, formatLocationLabel, locationAmapUrl } from './location'
 
 describe('formatLocationLabel', () => {
   it('name 优先', () => {

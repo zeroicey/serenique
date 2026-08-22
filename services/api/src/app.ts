@@ -73,6 +73,8 @@ export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSoc
         'auth',
         'tokens',
         'location',
+        'ai',
+        'ai-memory',
       ],
     }).build(c),
   )

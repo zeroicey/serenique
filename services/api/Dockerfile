@@ -35,8 +35,7 @@ COPY apps/web/package.json apps/web/
 # workspace, so bun reports a spurious lockfile diff and fails. --omit=dev is
 # used instead of the equivalent --production because bun treats --production
 # as implying a frozen lockfile and errors for the same reason. The committed
-# lockfile still pins resolved versions; the MCP image (full workspace)
-# installs with --frozen-lockfile and acts as the lockfile freshness gate.
+# lockfile still pins resolved versions.
 RUN bun install --filter @serenique/api --omit=dev
 
 COPY --chown=10001:10001 services/api/ services/api/

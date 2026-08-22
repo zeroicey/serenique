@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { formatLocationLabel, locationAmapUrl } from '@/features/location/format'
 import type { MomentEntry, MomentLocation } from '@/features/moment/api'
 import {
   useCreateMomentComment,
@@ -28,6 +27,7 @@ import {
 import { TagPicker } from '@/features/tag/components/tag-picker'
 import { useTags } from '@/features/tag/queries'
 import { formatDate } from '@/lib/format'
+import { formatLocationLabel, locationAmapUrl } from '@/lib/location'
 import { MomentAttachmentGrid } from './moment-attachment-grid'
 import { MomentCommentList } from './moment-comment-list'
 import { MomentCommentsDialog } from './moment-comments-dialog'

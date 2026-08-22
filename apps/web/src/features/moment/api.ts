@@ -1,6 +1,7 @@
 import { api, apiUrl } from '@/api/client'
 import { unwrap } from '@/api/unwrap'
 import type { TagEntry } from '@/features/tag/api'
+import type { MomentLocation } from '@/lib/location'
 import type { Paged } from '@/types/api'
 
 // Moment 模块 API 契约（手动定义，对齐 services/api 现状）。
@@ -41,11 +42,8 @@ export interface MomentCommentEntry {
 
 // 位置对象（微信朋友圈式）：name / 坐标均可选，至少一个字段。
 // 坐标直接存储后端返回的 GCJ-02 值，客户端不做坐标系转换。
-export interface MomentLocation {
-  name?: string
-  latitude?: number
-  longitude?: number
-}
+// 类型与位置纯函数统一下沉到 @/lib/location（跨 feature 共享，避免 location↔moment 互引）。
+export type { MomentLocation }
 
 export interface MomentEntry {
   id: string

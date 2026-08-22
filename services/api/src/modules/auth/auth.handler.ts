@@ -107,7 +107,7 @@ export const authHandler = {
         ip,
       })
       if (result.status === 'throttled') {
-        return Res.error('尝试过于频繁，请稍后再试').status(429).build(c)
+        return Res.error('尝试过于频繁，请稍后再试').status(429).code('RATE_LIMITED').build(c)
       }
       if (result.status === 'rejected') {
         return Res.unauthorized('登录验证失败').build(c)

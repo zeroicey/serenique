@@ -1,7 +1,15 @@
-import type { MomentLocation } from '@/features/moment/api'
+// 跨 feature 共享的位置类型与纯函数（规则 5：features 之间不互引业务代码）。
+// Moment 位置字段与位置展示/深链规则归此处，moment 与 location 两个 feature
+// 都只消费本模块；数据查询 hook（features/location/queries）仍留在 location feature。
 
-// 位置展示/深链纯函数：列表卡片与创建页共用同一套显示规则。
+/** Moment 附件的位置信息（moment 模块契约字段：name + GCJ-02 坐标）。 */
+export interface MomentLocation {
+  name?: string
+  latitude?: number
+  longitude?: number
+}
 
+/** 位置展示/深链纯函数：列表卡片与创建页共用同一套显示规则。 */
 export function formatLocationLabel(loc: MomentLocation): string {
   if (loc.name) return loc.name
   if (loc.latitude != null && loc.longitude != null) {

@@ -112,7 +112,8 @@ JSON 模式（--json）下，批量结果位于 data.results[].blobId（每个�
 
 		for _, filePath := range args {
 			if !useJSON {
-				fmt.Printf("上传中: %s ... ", filePath)
+				// 进度走 stderr（08-05 定稿：进度/确认/错误全部 stderr；stdout 只放结果）
+				fmt.Fprintf(os.Stderr, "上传中: %s ... ", filePath)
 			}
 
 			var result BlobEntry
@@ -121,7 +122,7 @@ JSON 模式（--json）下，批量结果位于 data.results[].blobId（每个�
 				failCount++
 				results = append(results, uploadResult{File: filePath, Error: err.Error()})
 				if !useJSON {
-					fmt.Printf("失败\n  %s\n", err.Error())
+					fmt.Fprintf(os.Stderr, "失败\n  %s\n", err.Error())
 				}
 				if firstErr == nil {
 					firstErr = err
@@ -132,7 +133,7 @@ JSON 模式（--json）下，批量结果位于 data.results[].blobId（每个�
 			successCount++
 			results = append(results, uploadResult{File: filePath, BlobID: result.ID})
 			if !useJSON {
-				fmt.Printf("✓\n")
+				fmt.Fprintln(os.Stderr, "✓")
 				fmt.Printf("  ID: %s, 大小: %s, 类型: %s\n", result.ID, formatSize(result.Size), result.MimeType)
 			}
 		}
@@ -154,7 +155,8 @@ JSON 模式（--json）下，批量结果位于 data.results[].blobId（每个�
 			return nil
 		}
 
-		fmt.Printf("\n上传完成: %d 成功, %d 失败\n", successCount, failCount)
+		// 批次汇总属确认信息 → stderr；逐条结果已在上方打到 stdout。
+		fmt.Fprintf(os.Stderr, "\n上传完成: %d 成功, %d 失败\n", successCount, failCount)
 		if firstErr != nil {
 			// The per-file failures were already printed inline above; return a
 			// renderedError so Execute() does not print the message a second
@@ -254,7 +256,8 @@ var blobDownloadCmd = &cobra.Command{
 		}
 
 		if !useJSON {
-			fmt.Printf("下载中: %s -> %s ...\n", blobID, outputPath)
+			// 进度走 stderr（08-05 定稿：进度/确认/错误全部 stderr；stdout 只放结果）
+			fmt.Fprintf(os.Stderr, "下载中: %s -> %s ...\n", blobID, outputPath)
 		}
 
 		if err := apiClient.DownloadFile(ctx, blobID, outputPath, blobDownloadAttachment, blobDownloadOverwrite); err != nil {

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *Client) {
@@ -377,12 +378,12 @@ func TestVerifyDownloadCount(t *testing.T) {
 		received, declared int64
 		wantErr            bool
 	}{
-		{5, 5, false},          // exact match
-		{0, 0, false},          // empty file, declared 0
-		{5, 100, true},         // truncated
-		{100, 5, true},         // over-received (mismatch)
-		{5, -1, false},         // chunked/unknown length: no check
-		{0, -1, false},         // unknown length, empty
+		{5, 5, false},  // exact match
+		{0, 0, false},  // empty file, declared 0
+		{5, 100, true}, // truncated
+		{100, 5, true}, // over-received (mismatch)
+		{5, -1, false}, // chunked/unknown length: no check
+		{0, -1, false}, // unknown length, empty
 	}
 	for _, tc := range cases {
 		err := verifyDownloadCount(tc.received, tc.declared)
@@ -630,5 +631,29 @@ func TestDoRejectsOversizedBody(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "响应体过大") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestSnippetTruncatesRuneSafely(t *testing.T) {
+	// CJK 单字 3 字节：300 字节约 100 字；字节切片会劈开第 101 个字，
+	// rune 安全截断保证整字边界 + 合法 UTF-8。
+	long := strings.Repeat("界", 100) + "你好" + strings.Repeat("x", 400)
+	out := snippet([]byte(long))
+	if !utf8.ValidString(out) {
+		t.Fatalf("snippet produced invalid UTF-8: %q", out)
+	}
+	if !strings.HasSuffix(out, "...") {
+		t.Fatalf("expected ellipsis suffix, got: %q", out)
+	}
+	if len([]rune(out)) > 303 { // 300 runes + "..."
+		t.Fatalf("snippet exceeded rune bound: %d runes", len([]rune(out)))
+	}
+	// 空体 → 占位文案
+	if got := snippet(nil); got != "(空响应体)" {
+		t.Fatalf("unexpected empty-body snippet: %q", got)
+	}
+	// 短内容原样返回
+	if got := snippet([]byte("ok")); got != "ok" {
+		t.Fatalf("unexpected short snippet: %q", got)
 	}
 }

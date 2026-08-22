@@ -1,6 +1,7 @@
 # Web 前端 — 主题切换 + 日记模块 + diary by-date 端点设计（2026-08-05）
 
-状态: **已确认，待实施**
+> ⚠️ **已被取代**：日记模块已于 2026-08-09 全端移除并并入 Moment（标签 `#diary`）。本设计文档仅作历史参考，不再实施。
+
 适用范围: `apps/web`（浏览器端）+ `services/api`（by-date 端点）+ `services/mcp` + `apps/cli`（按日期查日记）
 前置: 技术栈与目录见 [[2026-08-05-web-frontend-tech-stack]] / [[2026-08-05-web-frontend-architecture]] / [[2026-08-05-web-moment-feature-design]]。日记后端契约见 `services/api/src/modules/diary/*`。
 设计参考: 旧项目 `serenique-test/apps/web`（无日记模块，仅做整体风格参考）；Moment 模块的列表/新建页布局与动态导航模式。
@@ -10,7 +11,7 @@
 ## 1. 已确认决策（用户拍板）
 
 | # | 决策点 | 结论 |
-|---|--------|------|
+| --- | -------- | ------ |
 | ① | 主题切换位置 | **侧边栏底部**（`SidebarFooter` + `DropdownMenu`：浅色 / 深色 / 跟随系统）。覆盖 moment 设计决策⑦「不做主题切换」 |
 | ② | 日记浏览形态 | **今天优先 + 时间线**：顶部「今天」卡片（有→查看/编辑，无→写今天）+ 下方全部日记倒序时间线 |
 | ③ | 后端端点 | **加 `GET /api/diaries/by-date/:date`**（无则 404），**API / MCP / CLI 三层同步**（用户已确认用子代理并行完成） |
@@ -53,7 +54,7 @@ GET /api/diaries/by-date/:date
 ### 3.2 改动文件（模块骨架对齐）
 
 | 文件 | 改动 |
-|------|------|
+| ------ | ------ |
 | `diary.types.ts` | 加 `GetDiaryByDateSchema = z.object({ date: z.string().regex(dateRegex) })`、`GetDiaryByDateInput = { diaryDate: string }` |
 | `diary.service.ts` | 加 `getByDate(input)`：`select().where(eq(diaries.diaryDate, input.diaryDate))`，无行抛 `NOT_FOUND` 404「日记不存在」，返回 `toDiaryEntry(row)` |
 | `diary.handler.ts` | 加 `getByDate`：`GetDiaryByDateSchema.parse({ date: c.req.param("date") })` → `diaryService.getByDate({ diaryDate: date })` → `Res.ok` |
@@ -163,10 +164,12 @@ diaryFormSchema = z.object({
 ### 6.5 页面与流程
 
 **列表页 `/diary`**（handle.nav = `<DiaryNav/>`）：
+
 - 「今天」卡片：loading（skeleton）→ 有今天 → 显示内容（截断）+「编辑」（→ `/diary/write?date=<今天>`）；无今天 → CTA「写今天的日记」（→ `/diary/write`）。
 - 下方 `DiaryTimeline`：倒序条目，行内含日期 + 内容预览 + 编辑/删除（删除走确认对话框，对齐 moment）。
 
 **新建/编辑页 `/diary/write`**（handle.nav = `<DiaryCreateNav/>`）：
+
 - `useSearchParams` 读 `?date=`，缺省今天（UTC）。
 - `useDiaryByDate(date)`：有 → 编辑态（表单预填，PUT，按钮「保存修改」）；无 → 新建态（空表单，POST，按钮「保存」）。
 - 表单：`<input type="date" max={todayUTC()}>`（原生控件，不加 shadcn calendar 依赖）+ 自动增高 textarea（对齐 moment 新建页写法）。
@@ -192,7 +195,7 @@ diaryFormSchema = z.object({
 ## 7. 实施顺序（子代理并行分配）
 
 | 流 | 范围 | 依赖 | 验证 |
-|----|------|------|------|
+| ---- | ------ | ------ | ------ |
 | A. 后端 by-date | `services/api/src/modules/diary/*` + `exports.ts` + 测试 | 无 | `cd services/api && bun run typecheck && bun test`（集成测试可选） |
 | B. Web（主题切换 + 日记） | `apps/web/src/**` | 无（契约先行，类型手动定义） | `cd apps/web && bun run typecheck && bun run test && bun run lint` |
 | C. CLI by-date | `apps/cli/cmd/diary.go` + 测试 | 无（HTTP 契约） | `cd apps/cli && go build ./... && go vet ./... && go test -count=1 ./...` |

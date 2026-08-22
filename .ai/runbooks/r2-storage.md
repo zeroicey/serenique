@@ -76,6 +76,10 @@ HMAC-SHA256(secret, `v1:<path>:<expires>`) hex → GET https://s3.0icey.icu/<pat
 # 生产端到端日志：docker logs serenique-api | grep upload-url/confirm
 ```
 
+## 孤儿对象清理（r2 模式）
+
+r2 模式下删除是「删库先行 + 客户端 best-effort 直发网关 DELETE」：客户端失败（断网/旧版 App）会留下孤儿对象，且 `cleanupOrphans` API 在 r2 模式返回 400（防容器 S3 IO）。定期在本机直连跑对账脚本（List 全部 key vs DB storagePath）清理孤儿；当前无现成脚本，需要时仿 `scripts/backfill-thumbs-to-r2.ts` 写一个。
+
 ## 相关决策
 
 D-029 架构定稿（Worker 网关私桶 + 自签直链）；D-030 原「代理前提」已被 D-032 取代（Bun 无法经 CONNECT 代理访问 R2 → 客户端直传）；D-031 能力启用必须绑定生效后端开关。

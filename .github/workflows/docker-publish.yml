@@ -1,9 +1,10 @@
 name: docker-publish
 
-# Build & push the api / mcp Docker images to Docker Hub.
-#   - On version tags (v*):   zeroicey/serenique-{api,mcp}:[0.1.0, v0.1.0, latest]
-#   - On pushes to main:      zeroicey/serenique-{api,mcp}:main
+# Build & push the api Docker image to Docker Hub.
+#   - On version tags (v*):   zeroicey/serenique-api:[0.1.0, v0.1.0, latest]
+#   - On pushes to main:      zeroicey/serenique-api:main
 #   - Manual:                 workflow_dispatch (uses the selected ref)
+# Note: MCP 服务已冻结（2026-08-08 sunset），不再构建镜像。
 #
 # Requires GitHub Actions secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
 # (a Docker Hub access token with Read & Write scope).

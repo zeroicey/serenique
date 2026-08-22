@@ -3,7 +3,7 @@
 ## 两步发布
 
 ```sh
-# 1. 提交并推 main → docker-publish 出 zeroicey/serenique-{api,mcp}:main
+# 1. 提交并推 main → docker-publish 出 zeroicey/serenique-api:main
 git push origin main
 
 # 2. 打 tag 推 → docker-publish 出版本+latest，release-cli 出 GitHub Release
@@ -22,7 +22,7 @@ git push origin vX.Y.Z
 
 ## 发布前验证
 
-- `bun run typecheck`（api+mcp+web 全绿）
+- `bun run typecheck`（api+web 全绿；mcp 已冻结不编译）
 - `cd services/api && bun test`（单元全过）
 - `cd apps/cli && go test -count=1 ./...`；`make build-all`（或靠 CI 云编译）
 

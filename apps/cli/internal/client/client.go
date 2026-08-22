@@ -549,10 +549,12 @@ var maxResponseBody = 4 << 20 // 4 MiB
 
 // snippet renders a raw response body for an error message, trimmed to a
 // bounded length so a huge body cannot produce a giant error string.
+// Truncation is rune-safe: byte slicing could split a multi-byte CJK rune
+// and emit invalid UTF-8 into stderr (hard-contract 5: truncateRunes).
 func snippet(body []byte) string {
 	s := strings.TrimSpace(string(body))
-	if len(s) > 300 {
-		s = s[:300] + "..."
+	if len([]rune(s)) > 300 {
+		s = string([]rune(s)[:300]) + "..."
 	}
 	if s == "" {
 		s = "(空响应体)"

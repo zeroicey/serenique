@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import type { LocationPoi } from '@/features/location/api'
-import { formatDistance } from '@/features/location/format'
+// 跨 feature 数据 hook：选点搜索属 location 域，moment 消费其数据是刻意豁免（规则 5）。
 import { useLocationSearch, useNearbyLocations } from '@/features/location/queries'
-import type { MomentLocation } from '@/features/moment/api'
+import type { MomentLocation } from '@/lib/location'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
+import { formatDistance } from '@/lib/location'
 
 interface MomentLocationPickerProps {
   open: boolean
