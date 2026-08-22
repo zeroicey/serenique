@@ -582,12 +582,28 @@ func init() {
 	blobLinkCmd.Flags().IntVarP(&blobLinkExpiresIn, "expires-in", "e", 900, "过期时间（秒），默认 900（15分钟），最长 604800（7天）")
 
 	// blob delete
-	blobDeleteCmd = deleteCommand("delete <id>", "删除文件", `删除指定文件（磁盘文件 + 数据库记录）。如果文件仍被业务实体引用，会返回错误。
+	// blob delete — 专用命令：r2 后端 DELETE /api/blobs/:id 返回签名删除 URL，
+	// 需同步直发网关删除对象（对齐 Web/mobile 参考实现），通用 deleteCommand 不适用。
+	blobDeleteCmd = &cobra.Command{
+		Use:   "delete <id>",
+		Short: "删除文件",
+		Long: `删除指定文件（数据库记录 + R2 对象）。如果文件仍被业务实体引用，会返回错误。
 
 示例:
   serenique blob delete a1b2c3d4
-  serenique blob delete a1b2c3d4 --force`, "文件", true,
-		func(id string) string { return "/api/blobs/" + id }, &blobDeleteForce)
+  serenique blob delete a1b2c3d4 --force`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := confirm("确认永久删除文件 "+args[0], blobDeleteForce); err != nil {
+				return err
+			}
+			if err := apiClient.DeleteBlob(commandContext(cmd), args[0]); err != nil {
+				return err
+			}
+			printDeleteResult("文件已删除", args[0])
+			return nil
+		},
+	}
 	blobDeleteCmd.Flags().BoolVarP(&blobDeleteForce, "force", "f", false, "跳过确认提示")
 
 	// blob attach

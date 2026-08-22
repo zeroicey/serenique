@@ -236,3 +236,84 @@ func TestUploadFileSmartPropagatesGatewayError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestDeleteBlobFiresGatewayDeletes(t *testing.T) {
+	// Gateway: DELETE endpoint counting calls + capturing target paths.
+	var gotPaths []string
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("gateway method = %s, want DELETE", r.Method)
+		}
+		gotPaths = append(gotPaths, r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer gateway.Close()
+
+	// 测试注入：白名单 origin 覆盖为测试网关（生产值 r2GatewayOrigin 为官方域名）。
+	oldOrigin := r2GatewayOrigin
+	r2GatewayOrigin = gateway.URL
+	defer func() { r2GatewayOrigin = oldOrigin }()
+
+	// API: r2 backend returns signed delete URLs for original + thumbnail,
+	// plus one malicious non-gateway URL that must be filtered out.
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"deleted":true,"deleteUrls":[` +
+			`"` + gateway.URL + `/image/2026/08/x.jpg?e=1&s=abc",` +
+			`"` + gateway.URL + `/image/2026/08/x.jpg.thumb.webp?e=1&s=def",` +
+			`"https://evil.example/path?e=1&s=hack"` + `]}}`))
+	}))
+	defer api.Close()
+
+	c, err := NewClient(api.URL, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.DeleteBlob(context.Background(), "blob-1"); err != nil {
+		t.Fatalf("DeleteBlob: %v", err)
+	}
+	if len(gotPaths) != 2 {
+		t.Fatalf("gateway DELETE calls = %d, want 2 (evil origin filtered)", len(gotPaths))
+	}
+}
+
+func TestDeleteBlobLocalNoop(t *testing.T) {
+	// local backend: 204 no body — no gateway calls, no error.
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer api.Close()
+
+	c, err := NewClient(api.URL, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteBlob(context.Background(), "blob-1"); err != nil {
+		t.Fatalf("DeleteBlob (local): %v", err)
+	}
+}
+
+func TestDeleteBlobGatewayFailureWarnsOnly(t *testing.T) {
+	// Gateway returns 500: DeleteBlob must not fail (DB row already removed,
+	// object deletion is best-effort — orphan cleanup catches it later).
+	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer gateway.Close()
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"success":true,"message":"ok","data":{"deleted":true,"deleteUrls":[` +
+			`"` + gateway.URL + `/image/2026/08/x.jpg?e=1&s=abc"` + `]}}`))
+	}))
+	defer api.Close()
+
+	c, err := NewClient(api.URL, "test-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteBlob(context.Background(), "blob-1"); err != nil {
+		t.Fatalf("DeleteBlob should not fail on gateway error, got: %v", err)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -176,4 +177,71 @@ func (c *Client) UploadFileSmart(ctx context.Context, filePath string, result an
 		"size":         size,
 		"checksum":     checksum,
 	}, result)
+}
+
+// BlobDeleteResult mirrors the API's BlobDeleteResult (blob.types.ts): the
+// r2 backend returns signed gateway delete URLs after removing the DB row.
+// local backend returns 204 and no deleteUrls.
+type BlobDeleteResult struct {
+	Deleted    bool     `json:"deleted"`
+	DeleteURLs []string `json:"deleteUrls"`
+}
+
+// R2 网关官方域名：签名删除 DELETE 的白名单（防御性校验，对齐 Web
+// R2_GATEWAY_ORIGIN / 移动端 kR2GatewayOrigin）。仅放行该 origin 的 deleteUrl。
+// 包级 var（非 const）以便测试注入 httptest 地址；生产值固定为官方网关。
+var r2GatewayOrigin = "https://s3.0icey.icu"
+
+// DeleteBlob deletes a physical blob. On the r2 backend the API returns signed
+// gateway delete URLs (DB row already removed): this method fires those
+// gateway DELETEs synchronously (best-effort, failures only warn) so objects
+// are actually removed from R2 — mirroring the web/mobile reference behavior.
+// On the local backend the API returns 204 and nothing extra happens.
+func (c *Client) DeleteBlob(ctx context.Context, id string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.url("/api/blobs/"+id), nil)
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %w", err)
+	}
+	c.setHeaders(req)
+	req.Close = true
+
+	var result BlobDeleteResult
+	if err := c.do(req, &result); err != nil {
+		return err
+	}
+	for _, u := range result.DeleteURLs {
+		if !isR2GatewayURL(u) {
+			continue // 防御性：仅官方网关，防恶意/错误 URL
+		}
+		if err := c.deleteGatewayObject(ctx, u); err != nil {
+			fmt.Fprintf(os.Stderr, "⚠️ 网关删除失败（对象将留待孤儿清理兜底）: %v\n", err)
+		}
+	}
+	return nil
+}
+
+func isR2GatewayURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return false
+	}
+	return u.Scheme+"://"+u.Host == r2GatewayOrigin
+}
+
+func (c *Client) deleteGatewayObject(ctx context.Context, target string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, target, nil)
+	if err != nil {
+		return fmt.Errorf("创建网关删除请求失败: %w", err)
+	}
+	// 签名在 query 上，无需 Authorization 头；用传输 client（有超时 watchdog）。
+	resp, err := c.transferHTTPClient().Do(req)
+	if err != nil {
+		return fmt.Errorf("网关删除请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("网关删除失败 (HTTP %d)", resp.StatusCode)
+	}
+	return nil
 }
