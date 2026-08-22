@@ -100,3 +100,22 @@ class BlobPage {
   final List<BlobEntry> items;
   final int total;
 }
+
+/// DELETE /api/blobs/:id 的结果（对齐 Web BlobDeleteResult）。
+/// - local 后端：204 无响应体 → deleteUrls 为空（后端已直接删文件）。
+/// - r2 后端：200 + data.deleteUrls（原图 + 图片缩略图签名删除 URL），
+///   客户端需直发网关 DELETE 完成对象删除（fire-and-forget，best-effort）。
+class BlobDeleteResult {
+  const BlobDeleteResult({required this.deleted, required this.deleteUrls});
+
+  final bool deleted;
+  final List<String> deleteUrls;
+
+  factory BlobDeleteResult.fromJson(Map<String, dynamic> json) =>
+      BlobDeleteResult(
+        deleted: json['deleted'] as bool? ?? true,
+        deleteUrls: (json['deleteUrls'] as List<dynamic>? ?? const [])
+            .whereType<String>()
+            .toList(),
+      );
+}

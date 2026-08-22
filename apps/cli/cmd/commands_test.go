@@ -363,6 +363,14 @@ func TestBlobUploadAllSuccessJSONMarksSuccessTrue(t *testing.T) {
 
 	runWithServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		// New smart-upload flow asks for a direct-upload credential first; a
+		// local backend rejects it, which is what triggers the multipart
+		// fallback (same behavior the tests exercised before the r2 change).
+		if r.URL.Path == "/api/blobs/upload-url" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"success":false,"message":"直传上传仅在 r2 存储后端可用","error":{"code":"VALIDATION"}}`))
+			return
+		}
 		w.Write([]byte(`{"success":true,"message":"ok","data":{"id":"b1","originalName":"a.jpg","mimeType":"image/jpeg","size":4,"checksum":"x","metadata":{},"width":null,"height":null,"duration":null,"createdAt":"2026-08-04T00:00:00Z"}}`))
 	}, true, func(srv *httptest.Server) {
 		rec := &recordingPrinter{}

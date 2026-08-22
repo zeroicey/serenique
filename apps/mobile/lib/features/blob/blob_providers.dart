@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'blob_access.dart';
 import 'blob_api.dart';
 import 'blob_models.dart';
 import '../../core/network/api_client.dart';
+
+/// 官方 R2 网关域名：签名删除 DELETE 的白名单（防御性校验，对齐 Web
+/// R2_GATEWAY_ORIGIN）。仅放行该 origin 的 deleteUrl，防恶意/错误 URL。
+const kR2GatewayOrigin = 'https://s3.0icey.icu';
 
 final blobApiProvider = Provider<BlobApi>(
   (ref) => BlobApi(ref.watch(apiClientProvider)),
@@ -107,9 +113,28 @@ class BlobActions {
   BlobApi get _api => _ref.read(blobApiProvider);
 
   /// 删除物理 blob。被引用时后端 409 → ApiException 由页面展示。
+  /// r2 后端返回签名删除 URL：校验 origin 后直发网关 DELETE（fire-and-forget，
+  /// best-effort——失败不阻断，孤儿对象由后续清理兜底）。
   Future<void> delete(String blobId) async {
-    await _api.delete(blobId);
+    final result = await _api.delete(blobId);
+    _fireGatewayDeletes(result.deleteUrls);
     _ref.invalidate(blobListProvider);
+  }
+
+  /// 直发网关签名删除（不等待结果）。仅放行官方网关 origin。
+  void _fireGatewayDeletes(List<String> deleteUrls) {
+    final api = _ref.read(apiClientProvider);
+    final gateway = Uri.parse(kR2GatewayOrigin);
+    for (final url in deleteUrls) {
+      final uri = Uri.tryParse(url);
+      // 显式校验 scheme/host（Uri.origin 对无 scheme 的 URL 会抛 Bad state）。
+      if (uri == null ||
+          uri.scheme != gateway.scheme ||
+          uri.host != gateway.host) {
+        continue;
+      }
+      unawaited(api.deleteUrl(url));
+    }
   }
 }
 

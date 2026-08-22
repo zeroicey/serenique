@@ -117,7 +117,7 @@ JSON 模式（--json）下，批量结果位于 data.results[].blobId（每个�
 			}
 
 			var result BlobEntry
-			err := apiClient.UploadFile(ctx, "/api/blobs/upload", filePath, &result)
+			err := apiClient.UploadFileSmart(ctx, filePath, &result)
 			if err != nil {
 				failCount++
 				results = append(results, uploadResult{File: filePath, Error: err.Error()})

@@ -45,8 +45,14 @@ class BlobApi {
   }
 
   /// 删除物理 blob。被引用时后端 409 → ApiException（中文 message 透传）。
-  Future<void> delete(String blobId) async {
-    await _client.deleteData('/api/blobs/$blobId');
+  /// - local 后端：204 无响应体 → deleteUrls 为空。
+  /// - r2 后端：200 + data.deleteUrls，调用方拿到后直发网关 DELETE。
+  Future<BlobDeleteResult> delete(String blobId) async {
+    final data = await _client.deleteData('/api/blobs/$blobId');
+    if (data == null) {
+      return const BlobDeleteResult(deleted: true, deleteUrls: []);
+    }
+    return BlobDeleteResult.fromJson(data as Map<String, dynamic>);
   }
 
   /// 申请 blob 签名访问链接（对齐 Web resolveApiPath：绝对 URL 原样返回，

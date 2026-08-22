@@ -128,15 +128,37 @@ void main() {
   });
 
   group('BlobApi.delete', () {
-    test('成功删除（204 无 body → data null）', () async {
+    test('local 204 无 body → 空 deleteUrls', () async {
       final client = _FakeApiClient(
         handler: (method, path, {query, body}) async => null,
       );
       final api = BlobApi(client);
 
-      await api.delete('b1');
+      final result = await api.delete('b1');
 
       expect(client.lastPath, '/api/blobs/b1');
+      expect(result.deleted, isTrue);
+      expect(result.deleteUrls, isEmpty);
+    });
+
+    test('r2 200 → 解包 data.deleteUrls（原图+缩略图）', () async {
+      final client = _FakeApiClient(
+        handler: (method, path, {query, body}) async => {
+          'deleted': true,
+          'deleteUrls': [
+            'https://s3.0icey.icu/image/2026/08/b1.png?e=1&s=abc',
+            'https://s3.0icey.icu/image/2026/08/b1.png.thumb.webp?e=1&s=def',
+          ],
+        },
+      );
+      final api = BlobApi(client);
+
+      final result = await api.delete('b1');
+
+      expect(client.lastPath, '/api/blobs/b1');
+      expect(result.deleted, isTrue);
+      expect(result.deleteUrls, hasLength(2));
+      expect(result.deleteUrls.first, startsWith('https://s3.0icey.icu/'));
     });
 
     test('被引用 409 → ApiException 透传中文 message', () async {

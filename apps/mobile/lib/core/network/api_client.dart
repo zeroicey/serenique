@@ -133,6 +133,24 @@ class ApiClient {
       return e.response?.statusCode ?? 0;
     }
   }
+
+  /// r2 签名删除：DELETE 绝对 URL（s3.0icey.icu 网关，签名在 query 上）。
+  /// 与 putBinary 同模式：独立 Dio（无 interceptor，不带 Bearer token），
+  /// 只回状态码不抛（调用方 fire-and-forget，失败由孤儿清理兜底）。
+  Future<int> deleteUrl(String absoluteUrl) async {
+    final raw = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      ),
+    );
+    try {
+      final res = await raw.delete(absoluteUrl);
+      return res.statusCode ?? 0;
+    } on DioException catch (e) {
+      return e.response?.statusCode ?? 0;
+    }
+  }
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {
