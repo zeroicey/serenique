@@ -98,6 +98,7 @@ docker run -d --name serenique -p 3000:3000 \
   -e AI_API_KEY=<key> \
   -e AI_BASE_URL=http://hpcore.hpnet.internal:3005/v1 \
   -v serenique-blobs:/data/blobs \
+  -v serenique-ai-config:/data/ai \
   -v serenique-sessions:/data/sessions \
   zeroicey/serenique-api:latest
 ```

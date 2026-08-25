@@ -54,7 +54,7 @@ const envSchema = z.object({
   // 网关不暴露这些元数据，保守默认值够用；特殊模型按需覆盖。
   AI_CONTEXT_WINDOW: z.coerce.number().int().positive().optional(),
   AI_MAX_TOKENS: z.coerce.number().int().positive().optional(),
-  // OpenAI 兼容端点 baseUrl（缺省本机 NewAPI 网关 http://127.0.0.1:3000/v1）。
+  // OpenAI 兼容端点 baseUrl（缺省 hpcore NewAPI 网关，见 ai.service.ts DEFAULT_AI_BASE_URL）。
   AI_BASE_URL: z.url().optional(),
   // OpenAI 兼容端点 API Key（生成生产 models.json 时必需；开发机缺省读用户级配置）。
   AI_API_KEY: z.string().min(16).optional(),

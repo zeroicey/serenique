@@ -30,7 +30,7 @@ import { buildAiTools } from './ai.tools'
 // 事件转发、历史渲染模型。不接触 Hono（由 handler 层负责 WS 收发）。
 //
 // 懒初始化：ModelRuntime / DefaultResourceLoader 只在 isAiEnabled() 或首次
-// 创建会话时才创建 —— import 本模块不读模型凭据，无 DEEPSEEK_API_KEY 也不崩。
+// 创建会话时才创建 —— import 本模块不读模型凭据，无 AI_API_KEY 也不崩。
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -110,22 +110,21 @@ async function writeGeneratedModelsJson(): Promise<string> {
   return GENERATED_MODELS_PATH
 }
 
-/** 解析 ModelRuntime 用的 models.json 路径：env 显式配置优先，其次用户级配置，
- * 否则生成最小配置。显式 AI_API_KEY/AI_BASE_URL 视为「本次部署的端点/凭据」，
- * 必须覆盖用户级配置 —— 否则开发机改 env 不生效（用户级文件恒存在）。 */
+/** 解析 ModelRuntime 用的 models.json 路径：显式 AI_API_KEY 优先（env 驱动），
+ * 其次用户级配置，否则生成最小配置。只有 key 视为「本次部署的凭据」才触发
+ * 覆盖 —— 只配 baseUrl 不配 key 会硬失败且覆盖开发机可用的用户级配置（评审修正）；
+ * baseUrl 不参与判断（它有独立缺省值，不构成「必须用 env 配置」的理由）。 */
 async function resolveAiModelsPath(): Promise<string> {
-  if (env.AI_API_KEY || env.AI_BASE_URL) return writeGeneratedModelsJson()
+  if (env.AI_API_KEY) return writeGeneratedModelsJson()
   if (await userHasNewApiProvider()) return USER_MODELS_PATH
   return writeGeneratedModelsJson()
 }
 
-let sharedModelRuntime: ModelRuntime | undefined
-let sharedLoader: DefaultResourceLoader | undefined
-let runtimeError: Error | undefined
+// in-flight 去重：并发首调共享同一个创建 promise（与 sessionRegistry 同模式）。
+let runtimePromise: Promise<ModelRuntime> | undefined
 
-async function getRuntime(): Promise<ModelRuntime> {
-  if (runtimeError) throw runtimeError
-  if (!sharedModelRuntime) {
+async function getRuntime(): Promise<ModelRuntime> {  // 失败不永久缓存：下次调用重试（运维修复后免重启恢复，如 chown /data/ai）。
+  runtimePromise ??= (async () => {
     try {
       const modelsPath = await resolveAiModelsPath()
       // env 驱动路径（无用户级配置）下缺少 key → 直接视为未配置，避免「半可用」：
@@ -133,14 +132,17 @@ async function getRuntime(): Promise<ModelRuntime> {
       if (modelsPath === GENERATED_MODELS_PATH && !env.AI_API_KEY) {
         throw new Error('AI 未配置模型凭据（检查 AI_API_KEY / AI_BASE_URL / AI_MODEL）')
       }
-      sharedModelRuntime = await ModelRuntime.create({ modelsPath })
+      return await ModelRuntime.create({ modelsPath })
     } catch (err) {
-      runtimeError = err instanceof Error ? err : new Error(String(err))
-      throw runtimeError
+      runtimePromise = undefined // 允许下次重试
+      logger.error({ err }, 'AI ModelRuntime 初始化失败')
+      throw err instanceof Error ? err : new Error(String(err))
     }
-  }
-  return sharedModelRuntime
+  })()
+  return runtimePromise
 }
+
+let sharedLoader: DefaultResourceLoader | undefined
 
 async function getLoader(): Promise<DefaultResourceLoader> {
   if (!sharedLoader) {
@@ -164,10 +166,19 @@ async function getLoader(): Promise<DefaultResourceLoader> {
   return sharedLoader
 }
 
+/** 解析当前模型；缺失时显式报错而非静默回退第一个可用模型（避免「以为在用
+ * A 其实在用 B」——旧目录时代的隐患，评审建议显式化）。 */
 async function resolveModel() {
   const modelRuntime = await getRuntime()
   const [provider, modelId] = aiModel.split('/')
-  return modelRuntime.getModel(provider, modelId) ?? (await modelRuntime.getAvailable())[0]
+  const model = modelRuntime.getModel(provider, modelId)
+  if (!model) {
+    throw new Error(
+      `模型不可用：${aiModel}（检查 AI_MODEL 与端点侧模型清单是否一致；` +
+        `开发机另需 ~/.pi/agent/models.json 含该 id）`,
+    )
+  }
+  return model
 }
 
 /** 全部业务工具 + 排除 7 个内置工具。注意不能用 tools: []（会把业务工具过滤掉）。 */
