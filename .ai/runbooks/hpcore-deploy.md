@@ -1,6 +1,6 @@
 # hpcore 生产服务器部署
 
-**适用范围**：hpcore（Azure，Arch Linux，用户 `oicey`）。入口：`ssh -J hpazure hpcore`。Compose 项目在 `/srv/compose/serenique/`。生产跑 Docker Hub `latest` / `:main` 镜像。
+**适用范围**：hpcore（Azure，Arch Linux，用户 `oicey`）。入口：`ssh -J hcyj hpcore`（跳板走 tailscale 节点 hcyj；旧跳板 hpazure 已弃用）。Compose 项目在 `/srv/compose/serenique/`。生产跑 Docker Hub `latest` / `:main` 镜像。
 
 ## 前置条件
 
@@ -90,7 +90,14 @@ docker compose run --rm api bun scripts/bootstrap-user.ts \
   - `AI_BASE_URL=<OpenAI 兼容端点>`（可选，缺省 `http://hpcore.hpnet.internal:3005/v1`——hpcore NewAPI 网关）
   - `AI_MODEL=<provider>/<modelId>`（可选，缺省 `newapi/ox-alpha`；换模型/端点只改 .env，无需改代码）
   - `AI_CONTEXT_WINDOW`/`AI_MAX_TOKENS`（可选，单模型元数据兜底，默认 1048576/131072）
-- 容器无用户级 `~/.pi/agent/models.json` → api 启动时从以上 env 生成最小配置到 `/data/ai/models.json`；开发机则直接复用 `~/.pi/agent/models.json` 的 newapi 提供者（与 pi 自身共享配置，零配置）。
+- 容器无用户级 `~/.pi/agent/models.json` → api 启动时从以上 env 生成最小配置到 `/data/ai/models.json`
+  （模型目录只含 AI_MODEL 这一个 id）；开发机则直接复用 `~/.pi/agent/models.json` 的 newapi 提供者
+  ——但显式配了 `AI_API_KEY`/`AI_BASE_URL` 时 env 驱动配置优先（2026-08-25 起）。
+- ⚠️ `/data/ai` 必须挂独立 named volume 且属主为 10001（2026-08-25 实测）：容器内 `/data` 本身是 root 属主，
+  无卷时 `mkdir /data/ai` EACCES → isAiEnabled 静默 false（无报错日志）。compose 已加 `serenique-ai-config:/data/ai`；
+  新建后若属主为 root 需一次性修复：`docker exec -u root serenique-api chown 10001:10001 /data/ai`。
+- ⚠️ 容器内访问 hpcore 网关：域名 `hpcore.hpnet.internal` 走宿主 tailscale MagicDNS，容器内不可解析 →
+  compose extra_hosts 已钉 `hpcore.hpnet.internal:100.64.0.1`；且必须加进 NO_PROXY（否则流量绕 mihomo 返回 502）。
 - 冒烟命令（容器内项目目录，`@/` 别名才能解析）：
 
   ```sh
