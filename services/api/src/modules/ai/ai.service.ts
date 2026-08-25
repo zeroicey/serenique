@@ -112,7 +112,8 @@ async function writeGeneratedModelsJson(): Promise<string> {
 
 /** 解析 ModelRuntime 用的 models.json 路径：env 显式配置优先，其次用户级配置，
  * 否则生成最小配置。显式 AI_API_KEY/AI_BASE_URL 视为「本次部署的端点/凭据」，
- * 必须覆盖用户级配置 —— 否则开发机改 env 不生效（用户级文件恒存在）。 */async function resolveAiModelsPath(): Promise<string> {
+ * 必须覆盖用户级配置 —— 否则开发机改 env 不生效（用户级文件恒存在）。 */
+async function resolveAiModelsPath(): Promise<string> {
   if (env.AI_API_KEY || env.AI_BASE_URL) return writeGeneratedModelsJson()
   if (await userHasNewApiProvider()) return USER_MODELS_PATH
   return writeGeneratedModelsJson()
