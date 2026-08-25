@@ -129,10 +129,18 @@ docker compose run --rm api bun scripts/bootstrap-user.ts \
 2. 经 stdin 直灌：`docker exec -i postgres psql -U serenique -d serenique < <迁移.sql>`（heredoc/stdin 传 SQL 最稳，**SQL 字面量用单引号**——多层 ssh 嵌套时双引号会被 PG 当标识符）。
 3. 记迁移：`INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ('<sha256(整文件)>', <journal.when>);`（id 自增）。
 
-## 公网链路（api.zeroicey.me）
+## 公网链路（api.hcyj.xyz/serenique，2026-08-25 起）
 
-- 路径：`api.zeroicey.me (hpazure) → Caddy:443 → 127.0.0.1:18081 → frps → frpc → hpcore:3000`。
-- frpc 配置：`/home/oicey/apps/frp/conf/frpc-serenique.toml`（localPort=3000），`systemctl --user restart frpc-serenique`。
-- Caddy 上游必须 `keepalive off`（`/etc/caddy/Caddyfile` reverse_proxy transport）——否则连接被 Bun API 重置后 Go transport 重试造成偶发 3–18s 慢请求。改前备份 `Caddyfile.bak.*`，`caddy validate` 后 `systemctl reload caddy`。
-- 本机（中国网络）直连 Azure 公网 IP 不稳定（2–12s），经本机代理 7897 则 ~0.8s——基础设施线路问题，非部署缺陷。
+> 旧链路 `api.zeroicey.me (hpazure) → frps/frpc → hpcore` 已随 hpazure 弃用而退役；
+> EasyTier 也已弃用，跨机互联统一走 Tailscale。
+
+- 路径：`api.hcyj.xyz/serenique/* (hcyj docker Caddy) → Tailscale 直连 hpcore:3000 (100.64.0.1)`，
+  `handle_path` 剥掉 `/serenique` 前缀后反代；无 frp 环节。
+- Caddyfile：hcyj `/root/hcyj/caddy/Caddyfile`（docker 挂载），改前备份 `Caddyfile.bak.*`，
+  `docker exec caddy caddy validate` 后 `caddy reload`。证书由 Caddy 自动签（api.hcyj.xyz）。
+- 上游必须 `keepalive off` + 超时参数——否则连接被 Bun API 重置后重试造成偶发慢请求（沿用旧坑结论）。
+- Web 前端：`serenique.0icey.icu`（Cloudflare，源站 Pages/静态托管），API 地址以构建时 `VITE_API_BASE_URL`
+  为准；改入口时需重新构建 web 并核对 CORS（生产 `.env` 的 `CORS_ORIGIN=https://serenique.0icey.icu` 不变）。
+- hpcore 本地验证：`curl http://127.0.0.1:3000/health`；公网验证：
+  `curl https://api.hcyj.xyz/serenique/health`。
 - 服务器端口：API 对外 3000；MCP 对外 3002（3001 被 vocechat 占用）。
