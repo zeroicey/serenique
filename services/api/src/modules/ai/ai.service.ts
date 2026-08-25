@@ -54,42 +54,17 @@ const GENERATED_MODELS_PATH = join(AI_CONFIG_DIR, 'models.json')
 
 const DEFAULT_AI_BASE_URL = 'http://hpcore.hpnet.internal:3005/v1'
 
-// 生成配置内置的模型清单（与 NewAPI 网关常用模型对齐；AI_MODEL 只选其中的 id）。
-// 当前主模型：ox-alpha（hpcore NewAPI，1M 上下文）。
-const GENERATED_MODELS = [
-  {
-    id: 'ox-alpha',
-    name: 'ox-alpha',
-    reasoning: true,
-    input: ['text', 'image'],
-    contextWindow: 1_048_576,
-    maxTokens: 131_072,
-  },
-  {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
-    reasoning: true,
-    input: ['text', 'image'],
-    contextWindow: 272_000,
-    maxTokens: 32768,
-  },
-  {
-    id: 'gpt-5.4-mini',
-    name: 'GPT-5.4 Mini',
-    reasoning: true,
-    input: ['text', 'image'],
-    contextWindow: 272_000,
-    maxTokens: 16384,
-  },
-  {
-    id: 'glm-5.2',
-    name: 'GLM 5.2',
-    reasoning: true,
-    input: ['text', 'image'],
-    contextWindow: 1_000_000,
-    maxTokens: 32768,
-  },
-]
+// 生成配置只含一个模型：id 取自 AI_MODEL（缺省 ox-alpha）。网关不暴露
+// contextWindow/maxTokens 元数据，用保守默认值（可经 AI_CONTEXT_WINDOW /
+// AI_MAX_TOKENS 覆盖）——换模型 = 只改 .env，无需改代码。
+const DEFAULT_CONTEXT_WINDOW = 1_048_576
+const DEFAULT_MAX_TOKENS = 131_072
+
+/** 从 "provider/modelId" 解析出 modelId（无 "/" 时整体作为 id）。 */
+export function aiModelId(): string {
+  const [, modelId] = aiModel.split('/')
+  return modelId ?? aiModel
+}
 
 /** 用户级 models.json 是否定义了 newapi 提供者（开发机零配置的判断条件）。 */
 async function userHasNewApiProvider(): Promise<boolean> {
@@ -118,7 +93,16 @@ async function writeGeneratedModelsJson(): Promise<string> {
           supportsReasoningEffort: true,
           maxTokensField: 'max_tokens',
         },
-        models: GENERATED_MODELS,
+        models: [
+          {
+            id: aiModelId(),
+            name: aiModelId(),
+            reasoning: true,
+            input: ['text', 'image'],
+            contextWindow: env.AI_CONTEXT_WINDOW ?? DEFAULT_CONTEXT_WINDOW,
+            maxTokens: env.AI_MAX_TOKENS ?? DEFAULT_MAX_TOKENS,
+          },
+        ],
       },
     },
   }
@@ -128,8 +112,7 @@ async function writeGeneratedModelsJson(): Promise<string> {
 
 /** 解析 ModelRuntime 用的 models.json 路径：env 显式配置优先，其次用户级配置，
  * 否则生成最小配置。显式 AI_API_KEY/AI_BASE_URL 视为「本次部署的端点/凭据」，
- * 必须覆盖用户级配置 —— 否则开发机改 env 不生效（用户级文件恒存在）。 */
-async function resolveAiModelsPath(): Promise<string> {
+ * 必须覆盖用户级配置 —— 否则开发机改 env 不生效（用户级文件恒存在）。 */async function resolveAiModelsPath(): Promise<string> {
   if (env.AI_API_KEY || env.AI_BASE_URL) return writeGeneratedModelsJson()
   if (await userHasNewApiProvider()) return USER_MODELS_PATH
   return writeGeneratedModelsJson()

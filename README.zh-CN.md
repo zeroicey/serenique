@@ -125,7 +125,8 @@ docker exec -it serenique bun scripts/bootstrap-user.ts   # 创建 users 行（�
 | `CORS_ORIGIN` | Web 前端 origin，带凭证的跨域请求必需 |
 | `AI_API_KEY` | AI 助手凭据（NewAPI 网关） |
 | `AI_BASE_URL` | OpenAI 兼容端点（默认 `http://hpcore.hpnet.internal:3005/v1`） |
-| `AI_MODEL` | 模型覆盖（默认 `newapi/ox-alpha`） |
+| `AI_MODEL` | 模型覆盖（默认 `newapi/ox-alpha`）；生成的模型目录只含这一个 id |
+| `AI_CONTEXT_WINDOW` / `AI_MAX_TOKENS` | 可选的上下文窗口/最大输出 token 覆盖（默认 1048576 / 131072） |
 | `AI_SESSION_DIR` | AI 会话目录（生产默认 `/data/sessions`） |
 | `FIRST_USER_NAME` / `FIRST_USER_EMAIL` / `FIRST_USER_BIRTHDAY` | 引导脚本的默认用户信息 |
 | `AUDIT_RETENTION_DAYS` / `AUDIT_MAX_ROWS` | 审计日志保留策略（默认 90 天 / 5000 条） |

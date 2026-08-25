@@ -125,7 +125,8 @@ docker exec -it serenique bun scripts/bootstrap-user.ts   # creates the users ro
 | `CORS_ORIGIN` | Web frontend origin, required for credentialed cross-origin requests |
 | `AI_API_KEY` | AI assistant credentials (NewAPI gateway) |
 | `AI_BASE_URL` | OpenAI-compatible endpoint (default `http://hpcore.hpnet.internal:3005/v1`) |
-| `AI_MODEL` | Model override (default `newapi/ox-alpha`) |
+| `AI_MODEL` | Model override (default `newapi/ox-alpha`); generated catalog contains exactly this model |
+| `AI_CONTEXT_WINDOW` / `AI_MAX_TOKENS` | Optional context-window / max-output-token overrides (defaults 1048576 / 131072) |
 | `AI_SESSION_DIR` | AI session directory (default `/data/sessions` in production) |
 | `FIRST_USER_NAME` / `FIRST_USER_EMAIL` / `FIRST_USER_BIRTHDAY` | Defaults for the bootstrap user script |
 | `AUDIT_RETENTION_DAYS` / `AUDIT_MAX_ROWS` | Audit log retention (default 90 days / 5,000 rows) |
