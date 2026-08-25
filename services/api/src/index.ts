@@ -2,7 +2,6 @@ import { createBunWebSocket } from 'hono/bun'
 import { createApp } from '@/app'
 import { env } from '@/env'
 import { startAuditSweeper } from '@/modules/audit/audit.service'
-import { authService } from '@/modules/auth/auth.service'
 import { initBlobRoot } from '@/shared/storage'
 
 // ---------------------------------------------------------------------------
@@ -13,10 +12,8 @@ import { initBlobRoot } from '@/shared/storage'
 
 await initBlobRoot(env.BLOB_ROOT)
 
-// 启动 fail-closed（决策⑨）：认证启用（生产）且 users 空表 → 拒绝启动，
-// 提示先运行引导脚本 bun scripts/bootstrap-user.ts 创建首个用户。
-// 只走真实启动路径（index.ts），createApp 不检查——测试 app 不连 DB。
-await authService.assertUsersSeeded()
+// OIDC 迁移后不再有启动期 users 空表门禁（原决策⑨ fail-closed 已移除）：
+// 首次 OIDC 登录自动绑定/创建用户行，空表是合法状态。
 
 // 后台审计日志清扫（保留天数 + 最大条数截断）。test 环境不启动，避免单测
 // import service 泄漏定时器。

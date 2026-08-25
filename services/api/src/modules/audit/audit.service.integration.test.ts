@@ -26,7 +26,6 @@ type AuditRow = typeof import('./audit.schema').auditLogs.$inferSelect
 
 describe.skipIf(!RUN_DB_TESTS)('audit service DB integration', () => {
   let auditService: typeof import('./audit.service').auditService
-  let authService: typeof import('@/modules/auth/auth.service').authService
   let db: typeof import('@/db/connection').db
   let auditLogs: typeof import('./audit.schema').auditLogs
   let eventService: typeof import('@/modules/event/event.service').eventService
@@ -61,10 +60,10 @@ describe.skipIf(!RUN_DB_TESTS)('audit service DB integration', () => {
         BLOB_MAX_SIZE: 104857600,
         BLOB_SIGNING_SECRET: process.env.BLOB_SIGNING_SECRET!,
         SESSION_SECRET: process.env.SESSION_SECRET!,
-        SETUP_TOKEN: process.env.SETUP_TOKEN!,
-        WEBAUTHN_RP_ID: 'localhost',
-        WEBAUTHN_RP_NAME: 'Serenique',
-        WEBAUTHN_ORIGINS: ['http://localhost:5173', 'http://localhost:3000'],
+        OIDC_ISSUER: process.env.OIDC_ISSUER!,
+        OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID!,
+        OIDC_CLIENT_SECRET: process.env.OIDC_CLIENT_SECRET!,
+        OIDC_REDIRECT_URI: process.env.OIDC_REDIRECT_URI!,
         PORT: 3000,
         NODE_ENV: 'test',
       },
@@ -75,7 +74,6 @@ describe.skipIf(!RUN_DB_TESTS)('audit service DB integration', () => {
   beforeAll(async () => {
     setTestEnv()
     auditService = (await import('./audit.service')).auditService
-    authService = (await import('@/modules/auth/auth.service')).authService
     db = (await import('@/db/connection')).db
     auditLogs = (await import('./audit.schema')).auditLogs
     eventService = (await import('@/modules/event/event.service')).eventService
@@ -212,26 +210,16 @@ describe.skipIf(!RUN_DB_TESTS)('audit service DB integration', () => {
   // ---- write-point hooks ---------------------------------------------------
 
   test('auth login failure writes audit rows (service 层触发，无需用户)', async () => {
-    // 用未知凭证 id 走完 login/start → finish：凭证不存在 → rejected → 审计。
-    // （登录成功 / 注册 / token 写点由 auth 集成测试的真实 ceremony 覆盖。）
+    // OIDC 回调带未知 state：登录态无效 → 401 → auth.login_failed 审计。
+    // （登录成功 / token 写点由 auth 集成测试覆盖。）
+    const app = makeApp()
     const ipBad = `it-${RUN_TOKEN}-login-bad`
-    const { challengeId } = await authService.loginStart()
-    const outcome = await authService.loginFinish(
-      {
-        challengeId,
-        origin: 'http://localhost:5173',
-        ip: ipBad,
-        credential: {
-          id: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-          rawId: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-          type: 'public-key',
-          response: { clientDataJSON: 'e30=', authenticatorData: 'e30=', signature: 'e30=' },
-          clientExtensionResults: {},
-        },
-      },
-      0, // delayMs=0：测试不等真实节流延迟
-    )
-    expect(outcome.status).toBe('rejected')
+    const res = await app.request('/api/auth/oidc/callback', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cf-connecting-ip': ipBad },
+      body: JSON.stringify({ code: 'whatever', state: `unknown-${RUN_TOKEN}` }),
+    })
+    expect(res.status).toBe(401)
 
     const badRows = await waitForAuditRows(
       and(eq(auditLogs.event, 'auth.login_failed'), eq(auditLogs.ip, ipBad)),

@@ -13,20 +13,14 @@ import { authService } from './auth.service'
 // 身份来源二选一：
 //   ① HttpOnly 会话 Cookie（验签 → 解析 userId，会话身份）
 //   ② Authorization: Bearer <API Token>（查 api_tokens 表，令牌身份，无 userId）
-// 放行：注册/登录 ceremony 端点、登出、签名 blob 链接（交给 blob handler
-// 自行校验）。dev 未配置 WEBAUTHN_RP_ID 时整体跳过（本地零摩擦）。
+// 放行：OIDC 登录端点、登出、签名 blob 链接（交给 blob handler 自行校验）。
+// dev 未配置 OIDC_* 时整体跳过（本地零摩擦）。
 // ---------------------------------------------------------------------------
 
 const BLOB_FILE_ROUTE = /^\/api\/blobs\/[^/]+\/file$/
 
-// 无需认证即可到达的路径（ceremony 本身由 service 层门禁把关）。
-const PUBLIC_ROUTES = new Set([
-  '/api/auth/register/start',
-  '/api/auth/register/finish',
-  '/api/auth/login/start',
-  '/api/auth/login/finish',
-  '/api/auth/logout',
-])
+// 无需认证即可到达的路径（OIDC 登录态由 service 层一次性消费把关）。
+const PUBLIC_ROUTES = new Set(['/api/auth/oidc/url', '/api/auth/oidc/callback', '/api/auth/logout'])
 
 export type AuthVars = {
   userId: string | null // 会话身份才携带；token 身份为 null
@@ -57,8 +51,7 @@ function isSignedBlobLink(c: Context): boolean {
 
 /**
  * 尽力解析身份（Bearer / 会话 cookie），失败返回 null。
- * 公开路由也会调用：注册/登录 ceremony 端点允许「带会话添加新设备凭证」，
- * 需要拿到 userId；但无凭据时照常放行（门禁在 service 层）。
+ * 公开路由也会调用：无凭据时照常放行（OIDC 登录态在 service 层把关）。
  */
 async function resolveAuth(c: Context): Promise<AuthVars | null> {
   const header = c.req.header('Authorization')

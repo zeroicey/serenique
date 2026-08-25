@@ -32,8 +32,10 @@ describe('REST contract smoke', () => {
         BLOB_MAX_SIZE: 104857600,
         BLOB_SIGNING_SECRET: 'test-signing-secret-0123456789abcdef',
         SESSION_SECRET: 'test-session-secret-0123456789abcdef',
-        WEBAUTHN_RP_NAME: 'Serenique',
-        WEBAUTHN_ORIGINS: ['http://localhost:5173'],
+        OIDC_ISSUER: 'https://auth.zeroicey.me',
+        OIDC_CLIENT_ID: 'test-client-id',
+        OIDC_CLIENT_SECRET: 'test-client-secret-0123456789',
+        OIDC_REDIRECT_URI: 'http://localhost:5173/auth/callback',
         PORT: 3000,
         NODE_ENV: 'test',
       },
@@ -123,7 +125,6 @@ describe('REST contract smoke', () => {
         method: 'DELETE',
       },
       { path: '/api/tokens/not-a-uuid', method: 'DELETE' },
-      { path: '/api/auth/credentials/not-a-uuid', method: 'DELETE' },
     ]
     for (const { path, method } of badRequests) {
       const res = await app.request(path, {

@@ -1,7 +1,7 @@
 import type { Context, Next } from 'hono'
 import { csrf as honoCsrf } from 'hono/csrf'
 import { HTTPException } from 'hono/http-exception'
-import { env } from '@/env'
+import { buildOriginWhitelist } from '@/shared/origins'
 import { Res } from '@/shared/response'
 
 // ---------------------------------------------------------------------------
@@ -17,25 +17,18 @@ import { Res } from '@/shared/response'
 // 因此这里包一层：无 Origin 头（非浏览器客户端）直接放行，与 ai.router.ts
 // 的 WebSocket Origin 门禁同策略；有 Origin 头则必须命中白名单，否则 403。
 //
-// 白名单 = CORS_ORIGIN（生产 Web 前端域名）+ WEBAUTHN_ORIGINS（dev 端口 /
-// 未来移动端 origin），与 AI WS 门禁一致。
+// 白名单 = CORS_ORIGIN（生产 Web 前端域名）+ OIDC_REDIRECT_URI 的 origin +
+// dev 端口，与 AI WS 门禁一致。
 //
 // hono/csrf 拦截时抛 HTTPException(403)，而 app.ts 的全局 onError 会把一切
 // 异常转成 500 —— 这里在中间件层把 403 转成统一响应信封（FORBIDDEN），
 // 避免跨站拦截被误报成服务端错误。
 // ---------------------------------------------------------------------------
 
-function buildOriginWhitelist(): string[] {
-  const origins = new Set<string>()
-  if (process.env.CORS_ORIGIN) origins.add(process.env.CORS_ORIGIN)
-  for (const origin of env.WEBAUTHN_ORIGINS) origins.add(origin)
-  return [...origins]
-}
-
 export function csrf(origins?: string[]) {
   const whitelist = origins ?? buildOriginWhitelist()
   if (whitelist.length === 0) {
-    // 白名单为空（理论上不会：WEBAUTHN_ORIGINS 有默认值）→ 降级为无操作，
+    // 白名单为空（理论上不会：内置 dev 端口兑底）→ 降级为无操作，
     // 避免 hono/csrf 用空数组拒绝所有带 Origin 的请求。
     return async (_c: Context, next: Next) => next()
   }

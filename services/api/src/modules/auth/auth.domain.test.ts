@@ -1,19 +1,17 @@
 import { describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
 import {
   clearSessionCookie,
-  evaluateRegisterGate,
-  evaluateSeedGate,
+  createPkcePair,
+  randomToken,
   secretsEqual,
   signSessionCookie,
-  throttleIsBlocked,
-  throttleRecordFailure,
-  throttleShouldBlock,
   verifySessionCookie,
 } from './auth.domain'
 
 // ---------------------------------------------------------------------------
 // Auth domain unit tests — cookie signing (userId 载荷), constant-time compare,
-// register gate decisions, throttle state transitions. No DB / IO.
+// OIDC login-state helpers（PKCE 对 / 随机 token）。No DB / IO.
 // ---------------------------------------------------------------------------
 
 const SECRET = 'session-secret-0123456789abcdef'
@@ -99,105 +97,25 @@ describe('session cookie (userId 载荷)', () => {
   })
 })
 
-describe('evaluateRegisterGate', () => {
-  const setupToken = 'setup-token-0123456789abcdef'
-
-  test('凭证 0 + 正确 setup token → first-time', () => {
-    expect(
-      evaluateRegisterGate({
-        credentialCount: 0,
-        isAuthenticated: false,
-        setupToken,
-        providedSetupToken: setupToken,
-      }),
-    ).toEqual({ kind: 'first-time' })
+describe('OIDC login-state helpers', () => {
+  test('randomToken: base64url、长度随字节数、不重复', () => {
+    const a = randomToken(32)
+    const b = randomToken(32)
+    expect(a).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(a).not.toBe(b)
+    expect(randomToken(16).length).toBeLessThan(a.length)
   })
 
-  test('凭证 0 + 错误/缺失 setup token → rejected 403', () => {
-    expect(
-      evaluateRegisterGate({
-        credentialCount: 0,
-        isAuthenticated: false,
-        setupToken,
-        providedSetupToken: 'wrong',
-      }),
-    ).toMatchObject({ kind: 'rejected', status: 403 })
-    expect(
-      evaluateRegisterGate({
-        credentialCount: 0,
-        isAuthenticated: false,
-        setupToken,
-        providedSetupToken: undefined,
-      }),
-    ).toMatchObject({ kind: 'rejected', status: 403 })
-  })
-
-  test('凭证 0 + setup token 未配置 → rejected 500', () => {
-    expect(
-      evaluateRegisterGate({
-        credentialCount: 0,
-        isAuthenticated: false,
-        setupToken: undefined,
-        providedSetupToken: 'anything',
-      }),
-    ).toMatchObject({ kind: 'rejected', status: 500 })
-  })
-
-  test('凭证 ≥1 + 无会话 → rejected 401（加设备需登录，即使带 setup token）', () => {
-    expect(
-      evaluateRegisterGate({
-        credentialCount: 1,
-        isAuthenticated: false,
-        setupToken,
-        providedSetupToken: setupToken,
-      }),
-    ).toMatchObject({ kind: 'rejected', status: 401 })
-  })
-
-  test('凭证 ≥1 + 会话 → authenticated（添加设备）', () => {
-    expect(
-      evaluateRegisterGate({
-        credentialCount: 1,
-        isAuthenticated: true,
-        setupToken,
-        providedSetupToken: undefined,
-      }),
-    ).toEqual({ kind: 'authenticated' })
-  })
-})
-
-describe('evaluateSeedGate（启动 fail-closed，决策⑨）', () => {
-  test('users 空表 → 拒绝启动，指明引导脚本', () => {
-    const decision = evaluateSeedGate(0)
-    expect(decision.ok).toBe(false)
-    if (!decision.ok) {
-      expect(decision.message).toContain('bun scripts/bootstrap-user.ts')
-      expect(decision.message).toContain('docker compose run --rm api')
-    }
-  })
-
-  test('users 已有行 → 放行', () => {
-    expect(evaluateSeedGate(1)).toEqual({ ok: true })
-    expect(evaluateSeedGate(2)).toEqual({ ok: true })
-  })
-})
-
-describe('login throttle state transitions', () => {
-  test('blocked only inside window with count >= max', () => {
-    expect(throttleIsBlocked(undefined, 0)).toBe(false)
-    const state = throttleRecordFailure(undefined, 1000)
-    expect(throttleIsBlocked(state, 2000)).toBe(true)
-    expect(throttleShouldBlock(state, 2000, 5)).toBe(false) // count 1 < 5
-    let s = state
-    for (let i = 0; i < 4; i++) s = throttleRecordFailure(s, 2000)
-    expect(throttleShouldBlock(s, 2000, 5)).toBe(true)
-    expect(throttleShouldBlock(s, 2000 + 10 * 60_000, 5)).toBe(false) // 窗口过期
-  })
-
-  test('window restarts on expiry', () => {
-    const s1 = throttleRecordFailure(undefined, 1000)
-    const s2 = throttleRecordFailure(s1, 1000 + 11 * 60_000)
-    expect(s2).toEqual({ count: 1, resetAtMs: 1000 + 11 * 60_000 + 10 * 60_000 })
+  test('createPkcePair: challenge = base64url(SHA256(verifier))（RFC 7636 S256）', () => {
+    const { verifier, challenge } = createPkcePair()
+    expect(verifier).toMatch(/^[A-Za-z0-9_-]+$/)
+    expect(challenge).toMatch(/^[A-Za-z0-9_-]+$/)
+    // 与独立重算结果一致；不同 verifier/challenge 必须不同。
+    const expected = createHash('sha256').update(verifier).digest('base64url')
+    expect(challenge).toBe(expected)
+    const other = createPkcePair()
+    expect(other.verifier).not.toBe(verifier)
+    expect(other.challenge).not.toBe(challenge)
   })
 })
 

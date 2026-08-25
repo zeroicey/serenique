@@ -1,15 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  useCredentials,
-  useDeleteCredential,
-  useLogout,
-  useProfile,
-  useRegister,
-  useRenameCredential,
-  useUpdateProfile,
-} from '@/features/auth/queries'
+import { useLogout, useProfile, useUpdateProfile } from '@/features/auth/queries'
 import {
   useAiMemory,
   useCreateToken,
@@ -26,13 +18,10 @@ vi.mock('next-themes', () => ({
 }))
 
 // mock 掉设置页用到的所有数据 hooks，页面只测各 tab 的核心交互。
+// 登录凭证管理已随 Passkey 退役（2026-08-26 OIDC 迁移），不再有凭证 tab。
 vi.mock('@/features/auth/queries', () => ({
   useProfile: vi.fn(),
   useUpdateProfile: vi.fn(),
-  useCredentials: vi.fn(),
-  useDeleteCredential: vi.fn(),
-  useRenameCredential: vi.fn(),
-  useRegister: vi.fn(),
   useLogout: vi.fn(),
 }))
 
@@ -46,10 +35,6 @@ vi.mock('../queries', () => ({
 
 const mockedUseProfile = vi.mocked(useProfile)
 const mockedUseUpdateProfile = vi.mocked(useUpdateProfile)
-const mockedUseCredentials = vi.mocked(useCredentials)
-const mockedUseDeleteCredential = vi.mocked(useDeleteCredential)
-const mockedUseRenameCredential = vi.mocked(useRenameCredential)
-const mockedUseRegister = vi.mocked(useRegister)
 const mockedUseLogout = vi.mocked(useLogout)
 const mockedUseTokens = vi.mocked(useTokens)
 const mockedUseCreateToken = vi.mocked(useCreateToken)
@@ -68,20 +53,11 @@ const profile = {
 
 const updateProfileMutate = vi.fn()
 const updateMemoryMutate = vi.fn()
-const deleteCredentialMutate = vi.fn()
-const renameCredentialMutateAsync = vi.fn().mockResolvedValue({})
-const registerMutateAsync = vi.fn().mockResolvedValue({ authenticated: true, user: null })
 const logoutMutate = vi.fn()
 const revokeTokenMutate = vi.fn()
 const createTokenMutate = vi.fn()
 
-function mockHooks(
-  overrides: {
-    credentials?: unknown[]
-    tokens?: unknown[]
-    memory?: { content: string } | null
-  } = {},
-) {
+function mockHooks(overrides: { tokens?: unknown[]; memory?: { content: string } | null } = {}) {
   mockedUseProfile.mockReturnValue({
     data: profile,
     isPending: false,
@@ -92,25 +68,6 @@ function mockHooks(
     mutate: updateProfileMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useUpdateProfile>)
-  mockedUseCredentials.mockReturnValue({
-    data: overrides.credentials ?? [],
-    isPending: false,
-    isError: false,
-    refetch: vi.fn(),
-  } as unknown as ReturnType<typeof useCredentials>)
-  mockedUseDeleteCredential.mockReturnValue({
-    mutate: deleteCredentialMutate,
-    isPending: false,
-  } as unknown as ReturnType<typeof useDeleteCredential>)
-  mockedUseRenameCredential.mockReturnValue({
-    mutateAsync: renameCredentialMutateAsync,
-    isPending: false,
-  } as unknown as ReturnType<typeof useRenameCredential>)
-  mockedUseRegister.mockReturnValue({
-    mutateAsync: registerMutateAsync,
-    isPending: false,
-    error: null,
-  } as unknown as ReturnType<typeof useRegister>)
   mockedUseLogout.mockReturnValue({
     mutate: logoutMutate,
     isPending: false,
@@ -141,16 +98,6 @@ function mockHooks(
   } as unknown as ReturnType<typeof useUpdateAiMemory>)
 }
 
-const credential = {
-  id: 'c1',
-  credentialId: 'cid-1',
-  deviceLabel: 'MacBook',
-  transports: null,
-  counter: 3,
-  lastUsedAt: '2026-08-09T02:00:00Z',
-  createdAt: '2026-08-08T01:00:00Z',
-}
-
 const token = {
   id: 't1',
   name: 'macbook',
@@ -169,15 +116,20 @@ const memory = {
 describe('SettingsPage', () => {
   beforeEach(() => {
     updateProfileMutate.mockClear()
-    deleteCredentialMutate.mockClear()
-    renameCredentialMutateAsync.mockClear()
-    registerMutateAsync.mockClear()
     logoutMutate.mockClear()
     setTheme.mockClear()
     revokeTokenMutate.mockClear()
     createTokenMutate.mockClear()
     updateMemoryMutate.mockClear()
     mockHooks()
+  })
+
+  it('tab 面只有四个：无「登录凭证」入口（Passkey 已退役）', () => {
+    render(<SettingsPage />)
+    expect(screen.queryByRole('button', { name: '登录凭证' })).not.toBeInTheDocument()
+    for (const name of ['个人信息', 'AI 记忆', 'API 令牌', '通用']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
   })
 
   it('默认个人信息 tab：表单回填资料，保存提交 PUT', async () => {
@@ -195,47 +147,6 @@ describe('SettingsPage', () => {
       email: 't@example.com',
       birthday: '',
     })
-  })
-
-  it('凭证 tab：列出凭证并支持确认删除', async () => {
-    const user = userEvent.setup()
-    mockHooks({ credentials: [credential] })
-    render(<SettingsPage />)
-    await user.click(screen.getByRole('button', { name: '登录凭证' }))
-
-    expect(screen.getByText('MacBook')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '删除凭证 MacBook' }))
-    // 确认弹窗
-    expect(screen.getByText('删除登录凭证')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '删除' }))
-    expect(deleteCredentialMutate).toHaveBeenCalledWith('c1')
-  })
-
-  it('凭证 tab：重命名设备标签走 PATCH（空串清空为 null）', async () => {
-    const user = userEvent.setup()
-    mockHooks({ credentials: [{ ...credential, deviceLabel: null }] })
-    render(<SettingsPage />)
-    await user.click(screen.getByRole('button', { name: '登录凭证' }))
-
-    // 未命名设备 + 重命名按钮
-    expect(screen.getByText('未命名设备')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '重命名凭证 未命名设备' }))
-    expect(screen.getByText('重命名登录凭证')).toBeInTheDocument()
-
-    await user.type(screen.getByPlaceholderText('例如：iPhone · Apple'), 'iPhone · Apple')
-    await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(renameCredentialMutateAsync).toHaveBeenCalledWith({
-      id: 'c1',
-      deviceLabel: 'iPhone · Apple',
-    })
-  })
-
-  it('凭证 tab：添加新设备走注册 ceremony（不带 setupToken）', async () => {
-    const user = userEvent.setup()
-    render(<SettingsPage />)
-    await user.click(screen.getByRole('button', { name: '登录凭证' }))
-    await user.click(screen.getByRole('button', { name: '添加新设备' }))
-    expect(registerMutateAsync).toHaveBeenCalledWith({})
   })
 
   it('令牌 tab：列出令牌（prefix 展示 + 已撤销标记）', () => {

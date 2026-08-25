@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { env } from '@/env'
+import { buildOriginWhitelist } from '@/shared/origins'
 import { createAiWebSocket } from './ai.handler'
 
 // ---------------------------------------------------------------------------
@@ -11,9 +11,7 @@ import { createAiWebSocket } from './ai.handler'
 // 无 Origin 头（同源 / 非浏览器客户端）放行。
 // ---------------------------------------------------------------------------
 
-const ALLOWED = new Set<string>()
-if (process.env.CORS_ORIGIN) ALLOWED.add(process.env.CORS_ORIGIN)
-for (const origin of env.WEBAUTHN_ORIGINS) ALLOWED.add(origin)
+const ALLOWED = new Set<string>(buildOriginWhitelist())
 
 export function createAiRouter(upgradeWebSocket: typeof import('hono/bun').upgradeWebSocket) {
   const router = new Hono()

@@ -123,7 +123,8 @@ async function resolveAiModelsPath(): Promise<string> {
 // in-flight 去重：并发首调共享同一个创建 promise（与 sessionRegistry 同模式）。
 let runtimePromise: Promise<ModelRuntime> | undefined
 
-async function getRuntime(): Promise<ModelRuntime> {  // 失败不永久缓存：下次调用重试（运维修复后免重启恢复，如 chown /data/ai）。
+async function getRuntime(): Promise<ModelRuntime> {
+  // 失败不永久缓存：下次调用重试（运维修复后免重启恢复，如 chown /data/ai）。
   runtimePromise ??= (async () => {
     try {
       const modelsPath = await resolveAiModelsPath()

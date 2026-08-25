@@ -26,11 +26,18 @@ import { Res } from '@/shared/response'
 // ---------------------------------------------------------------------------
 
 export function createApp(env: Env, ws: { upgradeWebSocket: typeof upgradeWebSocket }) {
-  // ---- 0. Fail-closed: 生产必须配置会话签名密钥与 RP ID，否则拒绝启动 -------
-  //    （SETUP_TOKEN 注册完成后可移除，故不在此列 —— 见需求文档 ⑦）
-  if (env.NODE_ENV === 'production' && (!env.SESSION_SECRET || !env.WEBAUTHN_RP_ID)) {
+  // ---- 0. Fail-closed: 生产必须配置会话签名密钥与认证中心四元组，否则拒绝启动
+  //    （OIDC 四项任缺 → 登录链路不可用，等同认证失效）
+  if (
+    env.NODE_ENV === 'production' &&
+    (!env.SESSION_SECRET ||
+      !env.OIDC_ISSUER ||
+      !env.OIDC_CLIENT_ID ||
+      !env.OIDC_CLIENT_SECRET ||
+      !env.OIDC_REDIRECT_URI)
+  ) {
     throw new Error(
-      '生产环境必须配置 SESSION_SECRET 与 WEBAUTHN_RP_ID 才能启动（认证 fail-closed）',
+      '生产环境必须配置 SESSION_SECRET 与 OIDC_ISSUER/OIDC_CLIENT_ID/OIDC_CLIENT_SECRET/OIDC_REDIRECT_URI 才能启动（认证 fail-closed）',
     )
   }
 

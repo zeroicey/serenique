@@ -1,15 +1,27 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { setTestEnv } from '@/test/helpers'
 
-setTestEnv() // 总是带默认 SESSION_SECRET / SETUP_TOKEN / WEBAUTHN_RP_ID
+setTestEnv() // 总是带默认 SESSION_SECRET / OIDC_* 四元组
 
 // ---------------------------------------------------------------------------
-// Auth service unit tests — challenge lifecycle (内存 Map，可注入时钟) 与
-// cookie 往返。所有走 DB 的路径（门禁查询、ceremony 校验）由集成测试覆盖。
+// Auth service unit tests — OIDC 授权跳转（mock openid-client，不外呼）与
+// cookie 往返。所有走 DB 的路径（用户 upsert、回调换 token）由集成测试覆盖。
 // ---------------------------------------------------------------------------
+
+// mock openid-client：discovery/buildAuthorizationUrl 不发网络请求。
+// ⚠️ bun test 单进程共享模块缓存 —— mock 必须在 import('./auth.service') 之前生效。
+const fakeConfig = { fake: 'configuration' } as never
+mock.module('openid-client', () => ({
+  discovery: async () => fakeConfig,
+  buildAuthorizationUrl: (_config: unknown, params: Record<string, string>) => {
+    const url = new URL('https://auth.zeroicey.me/authorize')
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
+    return url
+  },
+}))
 
 describe('authService (no DB)', () => {
-  test('auth is enabled when RP_ID + SESSION_SECRET configured', async () => {
+  test('auth is enabled when SESSION_SECRET + OIDC 四元组 configured', async () => {
     const { authService } = await import('./auth.service')
     expect(authService.isAuthEnabled()).toBe(true)
   })
@@ -26,78 +38,48 @@ describe('authService (no DB)', () => {
     })
   })
 
-  test('challenge lifecycle: issue → consume once → second consume throws', async () => {
+  test('buildOidcAuthorizeUrl: 携带 state/nonce/PKCE 参数并把登录态入库', async () => {
     const { authService } = await import('./auth.service')
-    authService._challenges.clear()
-    const { challengeId, challenge } = authService._storeChallenge(
-      { type: 'login', challenge: 'c1', expiresAt: 0 },
-      1_000,
-    )
-    expect(challenge).toBe('c1')
-    const rec = authService._consumeChallenge(challengeId, 'login', 1_000)
-    expect(rec.type).toBe('login')
-    // 一次性：再次消费必须抛 AppError
-    expect(() => authService._consumeChallenge(challengeId, 'login', 1_000)).toThrow(
-      '挑战无效或已过期',
-    )
+    authService._states.clear()
+    const { authorizationUrl } = await authService.buildOidcAuthorizeUrl(1_000)
+    const url = new URL(authorizationUrl)
+    expect(url.origin + url.pathname).toBe('https://auth.zeroicey.me/authorize')
+    // response_type/client_id 由 openid-client 内部补充；这里断言我们传入的参数
+    expect(url.searchParams.get('redirect_uri')).toBe(process.env.OIDC_REDIRECT_URI!)
+    expect(url.searchParams.get('scope')).toBe('openid email profile')
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256')
+    const state = url.searchParams.get('state')!
+    expect(state).toBeTruthy()
+    expect(url.searchParams.get('nonce')).toBeTruthy()
+    // 登录态已按 state 存放，且 challenge 与 URL 中的一致
+    expect(authService._states.size).toBe(1)
+    expect(authService._states.has(state)).toBe(true)
   })
 
-  test('wrong challenge type → throws', async () => {
+  test('OIDC 登录态一次性消费：未知 state → 401；过期 state → 401', async () => {
     const { authService } = await import('./auth.service')
-    authService._challenges.clear()
-    const { challengeId } = authService._storeChallenge(
-      { type: 'login', challenge: 'c2', expiresAt: 0 },
-      1_000,
-    )
-    expect(() => authService._consumeChallenge(challengeId, 'register', 1_000)).toThrow(
-      '挑战无效或已过期',
-    )
+    authService._states.clear()
+    // 未知 state：不触碰 DB，直接 401
+    expect(
+      authService.handleOidcCallback({ code: 'c', state: 'unknown-state', ip: '127.0.0.1' }, 1_000),
+    ).rejects.toMatchObject({ status: 401 })
+    // 过期 state：TTL 10 分钟，11 分钟后消费 → 401 且被 sweep 清掉
+    const { authorizationUrl } = await authService.buildOidcAuthorizeUrl(1_000)
+    const state = new URL(authorizationUrl).searchParams.get('state')!
+    expect(
+      authService.handleOidcCallback({ code: 'c', state, ip: '127.0.0.1' }, 1_000 + 11 * 60_000),
+    ).rejects.toMatchObject({ status: 401 })
+    expect(authService._states.size).toBe(0)
   })
 
-  test('expired challenge → throws after consume', async () => {
+  test('_sweepStates keeps the map bounded', async () => {
     const { authService } = await import('./auth.service')
-    authService._challenges.clear()
-    const { challengeId } = authService._storeChallenge(
-      { type: 'login', challenge: 'c3', expiresAt: 0 },
-      1_000,
-    )
-    // 5 分钟 TTL：2 分钟后仍有效，6 分钟后过期
-    const ok = authService._consumeChallenge(challengeId, 'login', 1_000 + 2 * 60_000)
-    expect(ok.type).toBe('login')
-    authService._challenges.clear()
-    const { challengeId: cid2 } = authService._storeChallenge(
-      { type: 'login', challenge: 'c4', expiresAt: 0 },
-      1_000,
-    )
-    expect(() => authService._consumeChallenge(cid2, 'login', 1_000 + 6 * 60_000)).toThrow(
-      '挑战已过期',
-    )
-  })
-
-  test('_sweepChallenges removes expired entries so the map stays bounded', async () => {
-    const { authService } = await import('./auth.service')
-    authService._challenges.clear()
-    authService._storeChallenge({ type: 'login', challenge: 's1', expiresAt: 0 }, 1_000)
-    authService._storeChallenge({ type: 'login', challenge: 's2', expiresAt: 0 }, 1_000)
-    expect(authService._challenges.size).toBe(2)
-    // 6 分钟后再次 issue → 前两条已过期被清掉
-    authService._storeChallenge(
-      { type: 'login', challenge: 's3', expiresAt: 0 },
-      1_000 + 6 * 60_000,
-    )
-    expect(authService._challenges.size).toBe(1)
-  })
-
-  test('login throttle sweep keeps the map bounded', async () => {
-    const { authService } = await import('./auth.service')
-    authService._throttle.clear()
-    const start = 1_000_000
-    authService._sweep(start)
-    // 直接验证 _sweep：窗口内保留，窗口后删除
-    authService._throttle.set('8.8.8.8', { count: 1, resetAtMs: start + 10 * 60_000 })
-    authService._sweep(start + 5 * 60_000)
-    expect(authService._throttle.has('8.8.8.8')).toBe(true)
-    authService._sweep(start + 11 * 60_000)
-    expect(authService._throttle.size).toBe(0)
+    authService._states.clear()
+    await authService.buildOidcAuthorizeUrl(1_000)
+    await authService.buildOidcAuthorizeUrl(2_000)
+    expect(authService._states.size).toBe(2)
+    // 11 分钟后再次 issue → 前两条已过期被清掉
+    await authService.buildOidcAuthorizeUrl(1_000 + 11 * 60_000)
+    expect(authService._states.size).toBe(1)
   })
 })

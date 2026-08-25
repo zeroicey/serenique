@@ -17,8 +17,11 @@ function lazyPage(loader: () => Promise<{ default: ComponentType }>) {
 
 const router = createBrowserRouter([
   { path: '/login', element: lazyPage(() => import('@/features/auth/pages/login-page')) },
-  // 隐藏的部署引导页：不挂任何导航入口，仅 ?setupToken= 链接可达（决策⑨）。
-  { path: '/setup', element: lazyPage(() => import('@/features/auth/pages/setup-page')) },
+  // OIDC 回调：认证中心（auth.zeroicey.me）带 code 回跳的落地页。
+  {
+    path: '/auth/callback',
+    element: lazyPage(() => import('@/features/auth/pages/oidc-callback-page')),
+  },
   {
     path: '/',
     element: <AuthGuard />,

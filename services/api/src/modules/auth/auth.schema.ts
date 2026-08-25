@@ -1,16 +1,16 @@
-import type { AuthenticatorTransport } from '@simplewebauthn/server'
 import { bigint, date, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 
 // ---------------------------------------------------------------------------
-// Auth module — identity tables (Passkey era).
+// Auth module — identity tables (Pocket ID OIDC era).
 //
 // users: the single row the whole service belongs to (部署者本人). Personal
 // profile fields (name/email/birthday) are all nullable — filled in later via
-// PUT /api/users/me.
+// PUT /api/users/me. oidcSub binds the row to the Pocket ID subject (sub);
+// set on first OIDC login（决策②：映射到现有行，首次登录自动绑定）.
 //
-// passkey_credentials: one row per registered WebAuthn credential (per device /
-// platform passkey manager). public_key stores the raw COSE public key bytes
-// base64url-encoded (@simplewebauthn/server's isoBase64URL round-trips it).
+// passkey_credentials: legacy WebAuthn credentials（Passkey 时代遗留）。
+// 登录已不再使用；表保留至 Phase 3 归档清理（见需求文档分期），避免迁移期
+// drizzle-kit 生成 DROP TABLE。
 // ---------------------------------------------------------------------------
 
 export const users = pgTable('users', {
@@ -18,6 +18,8 @@ export const users = pgTable('users', {
   name: text('name'), // 名字（可空，注册后可补全）
   email: text('email'), // 邮箱（可空）
   birthday: date('birthday', { mode: 'string' }), // 生日 YYYY-MM-DD（可空）
+  // Pocket ID subject（OIDC sub claim，唯一绑定）。可空：尚未 OIDC 登录过的存量行。
+  oidcSub: text('oidc_sub').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()

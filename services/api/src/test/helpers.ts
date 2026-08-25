@@ -27,9 +27,6 @@ export const TEST_SIGNING_SECRET = 'test-signing-secret-0123456789abcdef'
 /** Fallback session cookie signing secret for tests (≥32 chars). */
 export const TEST_SESSION_SECRET = 'test-session-secret-0123456789abcdef'
 
-/** Fallback bootstrap registration token for tests (≥32 chars). */
-export const TEST_SETUP_TOKEN = 'test-setup-token-0123456789abcdef'
-
 /**
  * Set test env vars. Must be called at the top of a test file, before any
  * module import that parses `@/env`.
@@ -38,10 +35,11 @@ export const TEST_SETUP_TOKEN = 'test-setup-token-0123456789abcdef'
  * - BLOB_ROOT is forced (not `??=`): `@/env` is parsed once per `bun test`
  *   process and shared across files, so integration tests must never touch a
  *   real/production BLOB_ROOT regardless of which file imports `@/env` first.
- * - WEBAUTHN_RP_ID defaults to "localhost"（认证启用——HTTP 级测试必须带会话
+ * - OIDC_* 默认指向本地假 IdP 常量（认证启用——HTTP 级测试必须带会话
  *   cookie 或 Bearer token）。所有测试文件共用同一份 env（bun test 单进程、
  *   先 import 先赢），所以不允许个别文件关闭认证；DB-free 的 smoke 测试用
- *   mock.module 替换 tokenService 即可。
+ *   mock.module 替换 tokenService 即可。真正的 token 交换由集成测试 mock
+ *   openid-client 层覆盖（不外呼真实 issuer）。
  */
 export function setTestEnv(
   opts: {
@@ -50,9 +48,10 @@ export function setTestEnv(
     BLOB_MAX_SIZE?: string
     BLOB_SIGNING_SECRET?: string
     SESSION_SECRET?: string
-    SETUP_TOKEN?: string
-    WEBAUTHN_RP_ID?: string
-    WEBAUTHN_ORIGINS?: string
+    OIDC_ISSUER?: string
+    OIDC_CLIENT_ID?: string
+    OIDC_CLIENT_SECRET?: string
+    OIDC_REDIRECT_URI?: string
     NODE_ENV?: string
   } = {},
 ): void {
@@ -65,12 +64,12 @@ export function setTestEnv(
   // shares one process across files, and whichever file's setTestEnv runs
   // first wins for the cached `@/env` module.
   process.env.BLOB_SIGNING_SECRET ??= opts.BLOB_SIGNING_SECRET ?? TEST_SIGNING_SECRET
-  // Session / bootstrap secrets — always present so auth-enabled tests work.
+  // Session secret + OIDC 四元组 — always present so auth-enabled tests work.
   process.env.SESSION_SECRET ??= opts.SESSION_SECRET ?? TEST_SESSION_SECRET
-  process.env.SETUP_TOKEN ??= opts.SETUP_TOKEN ?? TEST_SETUP_TOKEN
-  process.env.WEBAUTHN_RP_ID ??= opts.WEBAUTHN_RP_ID ?? 'localhost'
-  process.env.WEBAUTHN_ORIGINS ??=
-    opts.WEBAUTHN_ORIGINS ?? 'http://localhost:5173,http://localhost:3000'
+  process.env.OIDC_ISSUER ??= opts.OIDC_ISSUER ?? 'https://auth.zeroicey.me'
+  process.env.OIDC_CLIENT_ID ??= opts.OIDC_CLIENT_ID ?? 'test-client-id'
+  process.env.OIDC_CLIENT_SECRET ??= opts.OIDC_CLIENT_SECRET ?? 'test-client-secret-0123456789'
+  process.env.OIDC_REDIRECT_URI ??= opts.OIDC_REDIRECT_URI ?? 'http://localhost:5173/auth/callback'
   process.env.NODE_ENV ??= opts.NODE_ENV ?? 'test'
 }
 

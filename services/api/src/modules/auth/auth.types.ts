@@ -1,13 +1,11 @@
-import type { AuthenticatorTransport } from '@simplewebauthn/server'
 import { z } from 'zod'
 
 // ---------------------------------------------------------------------------
-// Auth module — request/response types (Passkey era).
+// Auth module — request/response types (Pocket ID OIDC era).
 //
-// The WebAuthn credential JSON payloads are kept deliberately permissive: the
-// ceremony verification happens inside @simplewebauthn/server, Zod only checks
-// the envelope (ids are base64url strings, type is "public-key", the inner
-// response buffers are base64url-encoded).
+// 登录 = 授权码 + PKCE 重定向到认证中心（auth.zeroicey.me）；本模块只剩
+// OIDC 跳转/回调两个入口 + 会话状态 + 个人信息。WebAuthn ceremony 类型已随
+// Passkey 方案退役。
 // ---------------------------------------------------------------------------
 
 /** YYYY-MM-DD 日期（可空字段用）。与 task 模块 DueDateSchema 同套路。 */
@@ -19,68 +17,19 @@ export const DateOnlySchema = z
     return !Number.isNaN(parsed) && new Date(parsed).toISOString().slice(0, 10) === v
   }, '日期无效')
 
-// ---- Registration ceremony ------------------------------------------------
+// ---- OIDC 登录 --------------------------------------------------------------
 
-export const RegisterStartSchema = z.object({
-  // 引导期（凭证计数 0）必填；已有凭证时忽略（走登录会话门禁）。
-  // users 行由引导脚本创建，ceremony 不再携带/创建用户信息（决策⑨）。
-  setupToken: z.string().trim().min(1).max(200).optional(),
+export const OidcCallbackSchema = z.object({
+  code: z.string().trim().min(1).max(2048),
+  state: z.string().trim().min(1).max(256),
 })
 
-export const RegistrationCredentialSchema = z.object({
-  id: z.string().min(1).max(1023), // base64url
-  rawId: z.string().min(1).max(1023), // base64url
-  type: z.literal('public-key'),
-  response: z.object({
-    clientDataJSON: z.string().min(1), // base64url
-    attestationObject: z.string().min(1), // base64url
-  }),
-  clientExtensionResults: z.record(z.string(), z.unknown()).optional(),
-  transports: z
-    .array(z.enum(['usb', 'nfc', 'ble', 'internal', 'hybrid']))
-    .max(10)
-    .optional(),
-})
+export type OidcCallbackInput = z.infer<typeof OidcCallbackSchema>
 
-export const RegisterFinishSchema = z.object({
-  challengeId: z.string().uuid(),
-  deviceLabel: z.string().trim().min(1).max(100).optional(),
-  credential: RegistrationCredentialSchema,
-})
-
-// ---- 凭证管理 --------------------------------------------------------------
-
-export const UpdateCredentialLabelSchema = z.object({
-  // 重命名设备：空字符串或 null 都视为清空（回到「未命名设备」）。
-  deviceLabel: z
-    .string()
-    .trim()
-    .max(50)
-    .nullable()
-    .transform((v) => (v ? v : null)),
-})
-
-export type UpdateCredentialLabelInput = z.infer<typeof UpdateCredentialLabelSchema>
-
-// ---- Login ceremony -------------------------------------------------------
-
-export const AuthenticationCredentialSchema = z.object({
-  id: z.string().min(1).max(1023), // base64url
-  rawId: z.string().min(1).max(1023), // base64url
-  type: z.literal('public-key'),
-  response: z.object({
-    clientDataJSON: z.string().min(1), // base64url
-    authenticatorData: z.string().min(1), // base64url
-    signature: z.string().min(1), // base64url
-    userHandle: z.string().optional(), // base64url
-  }),
-  clientExtensionResults: z.record(z.string(), z.unknown()).optional(),
-})
-
-export const LoginFinishSchema = z.object({
-  challengeId: z.string().uuid(),
-  credential: AuthenticationCredentialSchema,
-})
+/** GET /api/auth/oidc/url 载荷：前端整页跳转目标。 */
+export type OidcAuthorizeEntry = {
+  authorizationUrl: string
+}
 
 // ---- User profile ---------------------------------------------------------
 
@@ -110,15 +59,14 @@ export const UpdateUserProfileSchema = z
 
 // ---- Input types (service layer) ------------------------------------------
 
-export type RegisterStartInput = z.infer<typeof RegisterStartSchema>
-export type RegisterFinishInput = z.infer<typeof RegisterFinishSchema>
-export type LoginFinishInput = z.infer<typeof LoginFinishSchema>
 export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>
 
-export type LoginFinishOutcome =
-  | { status: 'ok'; user: UserEntry }
-  | { status: 'throttled' }
-  | { status: 'rejected'; reason: 'invalid' | 'counter' }
+/** ID Token claims 里我们关心的字段（openid-client 已完成签名/nonce 校验）。 */
+export type OidcIdentity = {
+  sub: string
+  email: string | null
+  name: string | null
+}
 
 // ---- Entry types (response layer) — times are ISO strings -----------------
 
@@ -129,16 +77,6 @@ export type UserEntry = {
   birthday: string | null
   createdAt: string
   updatedAt: string
-}
-
-export type CredentialEntry = {
-  id: string
-  credentialId: string
-  deviceLabel: string | null
-  transports: AuthenticatorTransport[] | null
-  counter: number
-  lastUsedAt: string | null
-  createdAt: string
 }
 
 /** /api/auth/me 载荷。authenticated:true 时 user 可为 null（令牌身份且尚未注册用户时）。 */

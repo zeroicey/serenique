@@ -4,15 +4,8 @@ import { fireAuditRecord } from '@/modules/audit/audit.service'
 import { buildSessionCookie, clearSessionCookie } from '@/modules/auth/auth.domain'
 import { getAuthVars, requireSessionUser } from '@/modules/auth/auth.middleware'
 import { authService } from '@/modules/auth/auth.service'
-import {
-  LoginFinishSchema,
-  RegisterFinishSchema,
-  RegisterStartSchema,
-  UpdateCredentialLabelSchema,
-  UpdateUserProfileSchema,
-} from '@/modules/auth/auth.types'
-import { AppError, ErrorCode } from '@/shared/errors'
-import { handleError, uuidParam } from '@/shared/handler'
+import { OidcCallbackSchema, UpdateUserProfileSchema } from '@/modules/auth/auth.types'
+import { handleError } from '@/shared/handler'
 import { clientIp } from '@/shared/ip'
 import { Res } from '@/shared/response'
 
@@ -20,14 +13,6 @@ import { Res } from '@/shared/response'
 // Auth handlers — parse request → call service → build response.
 // Set-Cookie 统一在这里拼装（crossSite/secure 由 NODE_ENV 决定）。
 // ---------------------------------------------------------------------------
-
-function resolveExpectedOrigin(c: Context): string {
-  const origin = c.req.header('Origin')
-  if (origin && !env.WEBAUTHN_ORIGINS.includes(origin)) {
-    throw new AppError(ErrorCode.FORBIDDEN, '请求来源不受信任', 403)
-  }
-  return origin ?? env.WEBAUTHN_ORIGINS[0]
-}
 
 function buildSetCookie(c: Context, userId: string): void {
   const crossSite = env.NODE_ENV === 'production'
@@ -50,70 +35,28 @@ function clearCookie(c: Context): void {
 }
 
 export const authHandler = {
-  // ---- 注册（首次引导 / 登录态添加新设备）----------------------------------
+  // ---- OIDC 登录（Pocket ID 授权码 + PKCE）---------------------------------
 
-  async registerStart(c: Context) {
+  /** 生成认证中心授权跳转 URL（含 state/nonce/PKCE，登录态存服务端）。 */
+  async oidcAuthorize(c: Context) {
     try {
-      const body = RegisterStartSchema.parse(await c.req.json())
-      const sessionUserId = getAuthVars(c).userId
-      const result = await authService.registerStart({
-        ...body,
-        sessionUserId,
-      })
-      return Res.ok('获取注册参数成功', result).build(c)
-    } catch (e) {
-      return handleError(e, c, 'auth')
-    }
-  },
-
-  async registerFinish(c: Context) {
-    try {
-      const body = RegisterFinishSchema.parse(await c.req.json())
-      const result = await authService.registerFinish({
-        ...body,
-        origin: resolveExpectedOrigin(c),
-        ip: clientIp(c),
-      })
-      // 注册成功即自动登录（发会话 cookie）。数据载荷固定 { authenticated, user }，
-      // 不暴露引导/加设备语义（决策⑨）。
-      buildSetCookie(c, result.user.id)
-      return Res.ok(result.mode === 'first-time' ? '注册成功' : '登录凭证添加成功', {
-        authenticated: true,
-        user: result.user,
-      }).build(c)
-    } catch (e) {
-      return handleError(e, c, 'auth')
-    }
-  },
-
-  // ---- 登录 ----------------------------------------------------------------
-
-  async loginStart(c: Context) {
-    try {
-      const result = await authService.loginStart()
-      return Res.ok('获取登录参数成功', result).build(c)
-    } catch (e) {
-      return handleError(e, c, 'auth')
-    }
-  },
-
-  async loginFinish(c: Context) {
-    const ip = clientIp(c)
-    try {
-      const body = LoginFinishSchema.parse(await c.req.json())
-      const result = await authService.loginFinish({
-        ...body,
-        origin: resolveExpectedOrigin(c),
-        ip,
-      })
-      if (result.status === 'throttled') {
-        return Res.error('尝试过于频繁，请稍后再试').status(429).code('RATE_LIMITED').build(c)
+      if (!authService.isAuthEnabled()) {
+        return Res.error('认证未配置').status(503).code('AUTH_DISABLED').build(c)
       }
-      if (result.status === 'rejected') {
-        return Res.unauthorized('登录验证失败').build(c)
-      }
-      buildSetCookie(c, result.user.id)
-      return Res.ok('登录成功', { authenticated: true, user: result.user }).build(c)
+      const result = await authService.buildOidcAuthorizeUrl()
+      return Res.ok('获取授权地址成功', result).build(c)
+    } catch (e) {
+      return handleError(e, c, 'auth')
+    }
+  },
+
+  /** 回调：code+state 换 token（服务端持 secret）→ 验签 → 建会话。 */
+  async oidcCallback(c: Context) {
+    try {
+      const body = OidcCallbackSchema.parse(await c.req.json())
+      const user = await authService.handleOidcCallback({ ...body, ip: clientIp(c) })
+      buildSetCookie(c, user.id)
+      return Res.ok('登录成功', { authenticated: true, user }).build(c)
     } catch (e) {
       return handleError(e, c, 'auth')
     }
@@ -142,46 +85,6 @@ export const authHandler = {
       }
       const user = userId ? await authService.getProfile(userId) : await authService.getFirstUser()
       return Res.ok('查询成功', { authenticated: true, user }).build(c)
-    } catch (e) {
-      return handleError(e, c, 'auth')
-    }
-  },
-
-  // ---- 凭证管理（需登录会话）------------------------------------------------
-
-  async listCredentials(c: Context) {
-    try {
-      const userId = requireSessionUser(c)
-      const items = await authService.listCredentials(userId)
-      return Res.ok('查询成功', { items }).build(c)
-    } catch (e) {
-      return handleError(e, c, 'auth')
-    }
-  },
-
-  async deleteCredential(c: Context) {
-    try {
-      const userId = requireSessionUser(c)
-      await authService.deleteCredential({
-        userId,
-        credentialId: uuidParam(c, 'id'),
-      })
-      return Res.noContent('凭证删除成功').build(c)
-    } catch (e) {
-      return handleError(e, c, 'auth')
-    }
-  },
-
-  async renameCredential(c: Context) {
-    try {
-      const userId = requireSessionUser(c)
-      const body = UpdateCredentialLabelSchema.parse(await c.req.json())
-      const item = await authService.updateCredentialLabel({
-        userId,
-        credentialId: uuidParam(c, 'id'),
-        deviceLabel: body.deviceLabel,
-      })
-      return Res.ok('凭证已重命名', item).build(c)
     } catch (e) {
       return handleError(e, c, 'auth')
     }

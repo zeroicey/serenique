@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input'
 import type { LocationPoi } from '@/features/location/api'
 // 跨 feature 数据 hook：选点搜索属 location 域，moment 消费其数据是刻意豁免（规则 5）。
 import { useLocationSearch, useNearbyLocations } from '@/features/location/queries'
-import type { MomentLocation } from '@/lib/location'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
+import type { MomentLocation } from '@/lib/location'
 import { formatDistance } from '@/lib/location'
 
 interface MomentLocationPickerProps {

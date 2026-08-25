@@ -1,16 +1,16 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 
 // ---------------------------------------------------------------------------
 // Auth domain — pure rules: session cookie signing/verification (payload now
-// carries the userId), constant-time compare, login-throttle state transitions,
-// and the registration gate decision. No DB / IO imports.
+// carries the userId), constant-time compare, and OIDC login-state helpers
+// (PKCE pair / state / nonce). No DB / IO imports.
 // ---------------------------------------------------------------------------
 
 export const SESSION_COOKIE_NAME = 'serenique_session'
-export const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 3600 // 30 天
-export const CHALLENGE_TTL_MS = 5 * 60_000 // WebAuthn challenge 有效期 5 分钟
-export const LOGIN_THROTTLE_WINDOW_MS = 10 * 60_000 // 10 分钟
-export const LOGIN_THROTTLE_MAX_ATTEMPTS = 5
+// 决策④（2026-08-26）：会话有效期 30 天 → 3 天（借 OIDC 迁移收紧安全窗口）。
+export const DEFAULT_SESSION_TTL_SECONDS = 3 * 24 * 3600 // 3 天
+// OIDC 登录态（state → verifier/nonce）有效期：授权跳转往返通常 <1 分钟。
+export const OIDC_STATE_TTL_MS = 10 * 60_000 // 10 分钟
 
 const SESSION_PREFIX = 'serenique-session.'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -91,97 +91,18 @@ export function clearSessionCookie(crossSite: boolean, secure: boolean): string 
   return buildSessionCookie('', 0, crossSite, secure)
 }
 
-// ---- Registration gate -----------------------------------------------------
-// 注册门禁（需求 2026-08-09-passkey-auth.md ⑦⑨）：按「凭证计数」判定，
-// 不再看 users 行数（users 由引导脚本创建，register 不再建用户）：
-//   passkey_credentials 计数为 0 → 引导期：必须携带与 SETUP_TOKEN 常量时间
-//   比对通过的引导令牌 → 首次凭证 ceremony；
-//   计数 ≥ 1 → 必须已登录会话 → 「添加新设备凭证」ceremony（同一接口）。
+// ---- OIDC login-state helpers（纯函数，无 DB/IO）---------------------------
+// 授权码 + PKCE 流程的登录态生成：state 防 CSRF，nonce 绑定 ID Token，
+// verifier/challenge 为 S256 PKCE 对。服务端 Map 按 state 存放，一次性消费。
 
-export type RegisterGateDecision =
-  | { kind: 'first-time' }
-  | { kind: 'authenticated' }
-  | { kind: 'rejected'; code: string; message: string; status: number }
-
-export function evaluateRegisterGate(opts: {
-  credentialCount: number
-  isAuthenticated: boolean
-  setupToken: string | undefined
-  providedSetupToken: string | undefined
-}): RegisterGateDecision {
-  if (opts.credentialCount === 0) {
-    if (!opts.setupToken) {
-      return {
-        kind: 'rejected',
-        code: 'INTERNAL',
-        status: 500,
-        message: '服务端未配置引导注册令牌（SETUP_TOKEN），无法注册',
-      }
-    }
-    if (!opts.providedSetupToken || !secretsEqual(opts.providedSetupToken, opts.setupToken)) {
-      return {
-        kind: 'rejected',
-        code: 'FORBIDDEN',
-        status: 403,
-        message: '引导注册令牌不正确',
-      }
-    }
-    return { kind: 'first-time' }
-  }
-  if (!opts.isAuthenticated) {
-    return {
-      kind: 'rejected',
-      code: 'UNAUTHORIZED',
-      status: 401,
-      message: '请先登录后再添加新的登录凭证',
-    }
-  }
-  return { kind: 'authenticated' }
+/** URL-safe random token（base64url），用于 state / nonce / PKCE verifier。 */
+export function randomToken(bytes = 32): string {
+  return randomBytes(bytes).toString('base64url')
 }
 
-// ---- Startup seed gate（决策⑨）--------------------------------------------
-// 认证启用时启动 fail-closed：users 空表（尚未运行引导脚本）→ 拒绝启动。
-
-export type SeedGateDecision = { ok: true } | { ok: false; message: string }
-
-export function evaluateSeedGate(userCount: number): SeedGateDecision {
-  if (userCount === 0) {
-    return {
-      ok: false,
-      message:
-        '请先运行引导脚本创建首个用户：bun scripts/bootstrap-user.ts' +
-        '（或 docker compose run --rm api bun scripts/bootstrap-user.ts）',
-    }
-  }
-  return { ok: true }
-}
-
-// ---- Login throttle (pure state transitions; state held in-memory at service) ----
-
-export type ThrottleState = { count: number; resetAtMs: number }
-
-export function throttleIsBlocked(state: ThrottleState | undefined, nowMs: number): boolean {
-  if (!state) return false
-  return nowMs < state.resetAtMs
-}
-
-/** Record one failed attempt; returns the new state (window restarts on expiry). */
-export function throttleRecordFailure(
-  state: ThrottleState | undefined,
-  nowMs: number,
-  windowMs = LOGIN_THROTTLE_WINDOW_MS,
-): ThrottleState {
-  if (!state || nowMs >= state.resetAtMs) {
-    return { count: 1, resetAtMs: nowMs + windowMs }
-  }
-  return { count: state.count + 1, resetAtMs: state.resetAtMs }
-}
-
-/** True when the attempt counter has hit the cap within the window. */
-export function throttleShouldBlock(
-  state: ThrottleState | undefined,
-  nowMs: number,
-  max = LOGIN_THROTTLE_MAX_ATTEMPTS,
-): boolean {
-  return throttleIsBlocked(state, nowMs) && (state?.count ?? 0) >= max
+/** S256 PKCE 对：challenge = base64url(SHA256(verifier))。RFC 7636 §4.2。 */
+export function createPkcePair(): { verifier: string; challenge: string } {
+  const verifier = randomToken(32)
+  const challenge = createHash('sha256').update(verifier).digest('base64url')
+  return { verifier, challenge }
 }

@@ -27,23 +27,17 @@ export {
   MarkReadSchema,
   RecordAuditSchema,
 } from '@/modules/audit/audit.types'
-// ---- Auth module (Passkey) ----
+// ---- Auth module (Pocket ID OIDC) ----
 export { authService } from '@/modules/auth/auth.service'
 export type {
   AuthMeEntry,
-  CredentialEntry,
-  LoginFinishInput,
-  LoginFinishOutcome,
-  RegisterFinishInput,
-  RegisterStartInput,
+  OidcAuthorizeEntry,
   UpdateUserProfileInput,
   UserEntry,
 } from '@/modules/auth/auth.types'
 export {
   DateOnlySchema,
-  LoginFinishSchema,
-  RegisterFinishSchema,
-  RegisterStartSchema,
+  OidcCallbackSchema,
   UpdateUserProfileSchema,
 } from '@/modules/auth/auth.types'
 // ---- Blob module ----
