@@ -42,7 +42,7 @@ import { buildAiTools } from './ai.tools'
 //   - 生产/无用户级配置：从 env（AI_BASE_URL / AI_API_KEY）生成一份最小
 //     models.json 到 AI 配置目录，再传给 ModelRuntime —— 容器不自带 ~/.pi。
 //
-// 提供者 id 恒为 "newapi"（与 aiModel 缺省 newapi/deepseek-v4-flash 对应）；
+// 提供者 id 恒为 "newapi"（与 aiModel 缺省 newapi/ox-alpha 对应）；
 // 换端点只改 env，不动代码。
 // ---------------------------------------------------------------------------
 
@@ -52,33 +52,18 @@ const USER_MODELS_PATH = join(homedir(), '.pi', 'agent', 'models.json')
 const AI_CONFIG_DIR = env.NODE_ENV === 'production' ? '/data/ai' : './.data/ai'
 const GENERATED_MODELS_PATH = join(AI_CONFIG_DIR, 'models.json')
 
-const DEFAULT_AI_BASE_URL = 'http://127.0.0.1:3000/v1'
+const DEFAULT_AI_BASE_URL = 'http://hpcore.hpnet.internal:3005/v1'
 
 // 生成配置内置的模型清单（与 NewAPI 网关常用模型对齐；AI_MODEL 只选其中的 id）。
+// 当前主模型：ox-alpha（hpcore NewAPI，1M 上下文）。
 const GENERATED_MODELS = [
   {
-    id: 'deepseek-v4-flash',
-    name: 'DeepSeek V4 Flash',
+    id: 'ox-alpha',
+    name: 'ox-alpha',
     reasoning: true,
     input: ['text', 'image'],
-    contextWindow: 1_000_000,
-    maxTokens: 16384,
-  },
-  {
-    id: 'deepseek-v4-flash-free',
-    name: 'DeepSeek V4 Flash (Free)',
-    reasoning: true,
-    input: ['text', 'image'],
-    contextWindow: 1_000_000,
-    maxTokens: 16384,
-  },
-  {
-    id: 'deepseek-v4-pro',
-    name: 'DeepSeek V4 Pro',
-    reasoning: true,
-    input: ['text', 'image'],
-    contextWindow: 1_000_000,
-    maxTokens: 16384,
+    contextWindow: 1_048_576,
+    maxTokens: 131_072,
   },
   {
     id: 'gpt-5.4',
@@ -141,8 +126,11 @@ async function writeGeneratedModelsJson(): Promise<string> {
   return GENERATED_MODELS_PATH
 }
 
-/** 解析 ModelRuntime 用的 models.json 路径：优先用户级配置，否则生成最小配置。 */
+/** 解析 ModelRuntime 用的 models.json 路径：env 显式配置优先，其次用户级配置，
+ * 否则生成最小配置。显式 AI_API_KEY/AI_BASE_URL 视为「本次部署的端点/凭据」，
+ * 必须覆盖用户级配置 —— 否则开发机改 env 不生效（用户级文件恒存在）。 */
 async function resolveAiModelsPath(): Promise<string> {
+  if (env.AI_API_KEY || env.AI_BASE_URL) return writeGeneratedModelsJson()
   if (await userHasNewApiProvider()) return USER_MODELS_PATH
   return writeGeneratedModelsJson()
 }

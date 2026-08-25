@@ -95,7 +95,8 @@ docker run -d --name serenique -p 3000:3000 \
   -e WEBAUTHN_RP_ID=your-web-domain \
   -e WEBAUTHN_ORIGINS=https://your-web-domain \
   -e CORS_ORIGIN=https://your-web-domain \
-  -e OPENCODE_API_KEY=<key> \
+  -e AI_API_KEY=<key> \
+  -e AI_BASE_URL=http://hpcore.hpnet.internal:3005/v1 \
   -v serenique-blobs:/data/blobs \
   -v serenique-sessions:/data/sessions \
   zeroicey/serenique-api:latest
@@ -122,8 +123,9 @@ docker exec -it serenique bun scripts/bootstrap-user.ts   # creates the users ro
 | `WEBAUTHN_RP_ID` | Frontend domain (not the API domain). Changing it invalidates all registered passkeys. Unset = auth skipped (dev only) |
 | `WEBAUTHN_ORIGINS` | Comma-separated WebAuthn ceremony origin allowlist |
 | `CORS_ORIGIN` | Web frontend origin, required for credentialed cross-origin requests |
-| `OPENCODE_API_KEY` | AI assistant credentials (opencode gateway) |
-| `AI_MODEL` | Model override (default `opencode-go/deepseek-v4-flash`) |
+| `AI_API_KEY` | AI assistant credentials (NewAPI gateway) |
+| `AI_BASE_URL` | OpenAI-compatible endpoint (default `http://hpcore.hpnet.internal:3005/v1`) |
+| `AI_MODEL` | Model override (default `newapi/ox-alpha`) |
 | `AI_SESSION_DIR` | AI session directory (default `/data/sessions` in production) |
 | `FIRST_USER_NAME` / `FIRST_USER_EMAIL` / `FIRST_USER_BIRTHDAY` | Defaults for the bootstrap user script |
 | `AUDIT_RETENTION_DAYS` / `AUDIT_MAX_ROWS` | Audit log retention (default 90 days / 5,000 rows) |

@@ -45,8 +45,9 @@ const envSchema = z.object({
   // 避免 Mac 上 /data 不存在。
   AI_SESSION_DIR: z.string().optional(),
   // 模型选择 "provider/modelId"，缺省走 newapi 自定义 OpenAI 兼容端点。
-  // 凭据/端点解析见 ai.service.ts：优先复用 ~/.pi/agent/models.json 的 newapi
-  // 提供者（开发机零配置）；不存在时（如生产容器）从以下两变量生成最小配置。
+  // 凭据/端点解析见 ai.service.ts：显式配置 AI_API_KEY/AI_BASE_URL 时优先生成
+  // env 驱动配置；否则复用 ~/.pi/agent/models.json 的 newapi 提供者（开发机
+  // 零配置）；都没有时（如生产容器缺 key）按未配置处理。
   AI_MODEL: z.string().optional(),
   // OpenAI 兼容端点 baseUrl（缺省本机 NewAPI 网关 http://127.0.0.1:3000/v1）。
   AI_BASE_URL: z.url().optional(),
@@ -97,4 +98,4 @@ export const env = envSchema.parse(process.env)
 export const aiSessionDir =
   env.AI_SESSION_DIR ?? (env.NODE_ENV === 'production' ? '/data/sessions' : './.data/sessions')
 // 缺省走 newapi 提供者（OpenAI 兼容自定义端点，见 ai.service.ts 的解析逻辑）。
-export const aiModel = env.AI_MODEL ?? 'newapi/deepseek-v4-flash'
+export const aiModel = env.AI_MODEL ?? 'newapi/ox-alpha'

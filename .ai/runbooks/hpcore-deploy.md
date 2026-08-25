@@ -86,9 +86,9 @@ docker compose run --rm api bun scripts/bootstrap-user.ts \
 ## AI 助手（宁序）配置（2026-08-21 起，OpenCode Go 订阅到期 → OpenAI 兼容端点）
 
 - `.env` 新增：
-  - `AI_API_KEY=<OpenAI 兼容端点 key>`（必配；缺省模型 `newapi/deepseek-v4-flash`）
-  - `AI_BASE_URL=<OpenAI 兼容端点>`（可选，缺省 `http://127.0.0.1:3000/v1`——本机 NewAPI 网关）
-  - `AI_MODEL=<provider>/<modelId>`（可选，缺省 `newapi/deepseek-v4-flash`）
+  - `AI_API_KEY=<OpenAI 兼容端点 key>`（必配；缺省模型 `newapi/ox-alpha`）
+  - `AI_BASE_URL=<OpenAI 兼容端点>`（可选，缺省 `http://hpcore.hpnet.internal:3005/v1`——hpcore NewAPI 网关）
+  - `AI_MODEL=<provider>/<modelId>`（可选，缺省 `newapi/ox-alpha`）
 - 容器无用户级 `~/.pi/agent/models.json` → api 启动时从以上 env 生成最小配置到 `/data/ai/models.json`；开发机则直接复用 `~/.pi/agent/models.json` 的 newapi 提供者（与 pi 自身共享配置，零配置）。
 - 冒烟命令（容器内项目目录，`@/` 别名才能解析）：
 
