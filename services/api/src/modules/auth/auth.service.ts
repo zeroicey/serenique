@@ -138,6 +138,9 @@ export const authService = {
     // 先删后用：同一 state 只允许成功一次（重放直接落空）。
     this._states.delete(state)
 
+    // OIDC 验证段（换 token + ID Token 校验）：任何失败都归为 401 并记审计，
+    // 不区分 state 无效与 code 已用过（避免探测面）。
+    let identity: OidcIdentity
     try {
       const client = await this._client()
       // 回跳 URL 用环境配置的 redirect_uri（origin 可信）+ 原样透传的查询参数。
@@ -149,20 +152,11 @@ export const authService = {
       })
       const claims = tokens.claims()
       if (!claims?.sub) throw new Error('missing sub claim')
-      const identity: OidcIdentity = {
+      identity = {
         sub: claims.sub,
         email: typeof claims.email === 'string' ? claims.email : null,
         name: typeof claims.name === 'string' ? claims.name : null,
       }
-      const userRow = await this.upsertOidcUser(identity)
-      fireAuditRecord({
-        event: 'auth.login',
-        message: '登录成功（Pocket ID）',
-        level: 'info',
-        ip: input.ip,
-        detail: { userId: userRow.id },
-      })
-      return toUserEntry(userRow)
     } catch (e) {
       fireAuditRecord({
         event: 'auth.login_failed',
@@ -173,6 +167,18 @@ export const authService = {
       })
       throw new AppError(ErrorCode.UNAUTHORIZED, '登录验证失败，请重新登录', 401)
     }
+
+    // 用户落库段在 OIDC 验证 try 之外：DB 故障保持原始 500 语义（review F1），
+    // 不被吞成「登录失败」误导运维信号。
+    const userRow = await this.upsertOidcUser(identity)
+    fireAuditRecord({
+      event: 'auth.login',
+      message: '登录成功（Pocket ID）',
+      level: 'info',
+      ip: input.ip,
+      detail: { userId: userRow.id },
+    })
+    return toUserEntry(userRow)
   },
 
   /**
