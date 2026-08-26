@@ -4,6 +4,7 @@ import '../../core/network/api_client.dart';
 import '../../core/network/api_exception.dart';
 import '../../providers.dart';
 import 'auth_token.dart';
+import 'oidc_login.dart';
 import 'token_storage.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => SecureTokenStorage());
@@ -66,6 +67,22 @@ class AuthController extends Notifier<AuthState> {
     state = AuthState(initializing: false, token: clean);
     _bump();
     return null;
+  }
+
+  /// OIDC 登录（Pocket ID）：拉起系统浏览器完成认证，服务端铸好 Bearer
+  /// token 后存入。返回错误文案；null = 成功。
+  Future<String?> loginWithOidc() async {
+    try {
+      final result = await oidcSignIn();
+      await _storage.write(result.bearerToken);
+      state = AuthState(initializing: false, token: result.bearerToken);
+      _bump();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } on Exception {
+      return '登录失败，请稍后重试';
+    }
   }
 
   Future<void> logout() async {
