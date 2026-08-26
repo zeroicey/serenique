@@ -19,9 +19,13 @@ export const DateOnlySchema = z
 
 // ---- OIDC 登录 --------------------------------------------------------------
 
+/**
+ * 回调载荷：前端把认证中心回跳的**完整查询串**（code/state/iss 等全部参数）
+ * 原样转发。不能只挑 code+state —— 支持 RFC 9207 的 IdP（如 Pocket ID）会
+ * 附带 iss 参数，openid-client 校验授权响应时要求它在场，缺失直接判非法。
+ */
 export const OidcCallbackSchema = z.object({
-  code: z.string().trim().min(1).max(2048),
-  state: z.string().trim().min(1).max(256),
+  query: z.string().min(1).max(4096),
 })
 
 export type OidcCallbackInput = z.infer<typeof OidcCallbackSchema>

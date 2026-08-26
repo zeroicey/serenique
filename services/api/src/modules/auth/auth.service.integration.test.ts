@@ -147,7 +147,9 @@ describe.skipIf(!RUN_DB_TESTS)('auth + tokens integration', () => {
     const res = await app.request('/api/auth/oidc/callback', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code: 'whatever', state: 'unknown' }),
+      body: JSON.stringify({
+        query: 'code=whatever&state=unknown&iss=https%3A%2F%2Fauth.zeroicey.me',
+      }),
     })
     expect(res.status).toBe(401)
   })
@@ -210,7 +212,7 @@ describe.skipIf(!RUN_DB_TESTS)('auth + tokens integration', () => {
     await app.request('/api/auth/oidc/callback', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code: 'x', state: 'bad-state-audit' }),
+      body: JSON.stringify({ query: `code=x&state=bad-state-audit-${RUN_TOKEN}` }),
     })
     const rows = await waitForAuditRows(eq(auditLogs.ip, IP_LOGIN))
     void rows // 失败路径的审计由 service 层 fire-and-forget 写入，此处仅冒烟

@@ -62,12 +62,12 @@ export async function fetchOidcAuthorizeUrl(): Promise<OidcAuthorizeResult> {
   return { authorizationUrl: parsed.href }
 }
 
-/** 回调：把认证中心带回的 code+state 交给服务端换 token 建会话。 */
-export async function postOidcCallback(input: {
-  code: string
-  state: string
-}): Promise<AuthStatus> {
-  const res = await api.post(apiUrl('auth/oidc/callback'), { json: input })
+/**
+ * 回调：把认证中心回跳的完整查询串（含 code/state/iss）原样交给服务端。
+ * 不能只挑 code+state —— RFC 9207 的 iss 参数缺失会被服务端直接判非法。
+ */
+export async function postOidcCallback(query: string): Promise<AuthStatus> {
+  const res = await api.post(apiUrl('auth/oidc/callback'), { json: { query } })
   return unwrap<AuthStatus>(res)
 }
 

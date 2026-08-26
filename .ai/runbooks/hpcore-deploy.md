@@ -68,6 +68,7 @@ docker compose up -d --force-recreate api
 
 1. 起好 DB + 迁移 + .env（认证五键见上节）→ `docker compose up -d`
 2. 浏览器打开前端 → 「前往登录」→ 跳 auth.zeroicey.me 按 Passkey → 回调后 API 自动绑定/创建 users 行并发会话 cookie。
+
 - 首次登录绑到现有唯一 users 行（若历史部署遗留）；全新库则新建。个人信息（姓名/邮箱）以认证中心为准回填缺省值，生日等附加字段在 Web 设置页维护。
 - 旧版「bootstrap-user.ts 引导脚本 + /setup 页」已随 Passkey 方案删除，不再适用。
 

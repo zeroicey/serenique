@@ -118,27 +118,33 @@ export const authService = {
    * 完成回调：一次性消费 state → code+verifier 换 token → 校验 nonce →
    * 取 sub/email/name 映射（或创建）本地用户。任何失败都抛 401，
    * 不区分「state 无效」与「code 已用过」（避免探测面）。
+   *
+   * input.query 是认证中心回跳的完整查询串（code/state/iss…）：RFC 9207
+   * 支持 iss 参数的 IdP（如 Pocket ID）必须原样透传全部参数，否则
+   * openid-client 在发 token 请求前就判非法响应。
    */
   async handleOidcCallback(
-    input: { code: string; state: string; ip: string },
+    input: { query: string; ip: string },
     nowMs = Date.now(),
   ): Promise<UserEntry> {
-    const record = this._states.get(input.state)
+    const raw = input.query.startsWith('?') ? input.query.slice(1) : input.query
+    const params = new URLSearchParams(raw)
+    const state = params.get('state') ?? ''
+    const record = state ? this._states.get(state) : undefined
     this._sweepStates(nowMs)
-    if (!record || nowMs >= record.expiresAt) {
+    if (!state || !record || nowMs >= record.expiresAt) {
       throw new AppError(ErrorCode.UNAUTHORIZED, '登录状态无效或已过期，请重新登录', 401)
     }
     // 先删后用：同一 state 只允许成功一次（重放直接落空）。
-    this._states.delete(input.state)
+    this._states.delete(state)
 
     try {
       const client = await this._client()
-      const currentUrl = new URL(
-        `${env.OIDC_REDIRECT_URI!}?code=${encodeURIComponent(input.code)}&state=${encodeURIComponent(input.state)}`,
-      )
+      // 回跳 URL 用环境配置的 redirect_uri（origin 可信）+ 原样透传的查询参数。
+      const currentUrl = new URL(`${env.OIDC_REDIRECT_URI!}?${params.toString()}`)
       const tokens = await openidClient.authorizationCodeGrant(client, currentUrl, {
         pkceCodeVerifier: record.verifier,
-        expectedState: input.state,
+        expectedState: state,
         expectedNonce: record.nonce,
       })
       const claims = tokens.claims()

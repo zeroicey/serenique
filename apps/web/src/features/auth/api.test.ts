@@ -77,11 +77,11 @@ describe('auth api', () => {
     await expect(fetchOidcAuthorizeUrl()).rejects.toBeInstanceOf(ApiError)
   })
 
-  it('postOidcCallback 提交 code+state 到 /auth/oidc/callback', async () => {
+  it('postOidcCallback 提交完整查询串到 /auth/oidc/callback', async () => {
     mockedPost.mockResolvedValue(envelope({ authenticated: true, user }))
-    const result = await postOidcCallback({ code: 'abc', state: 'st1' })
+    const result = await postOidcCallback('code=abc&state=st1&iss=https%3A%2F%2Fauth.zeroicey.me')
     expect(mockedPost).toHaveBeenCalledWith('/api/auth/oidc/callback', {
-      json: { code: 'abc', state: 'st1' },
+      json: { query: 'code=abc&state=st1&iss=https%3A%2F%2Fauth.zeroicey.me' },
     })
     expect(result.authenticated).toBe(true)
   })
@@ -93,7 +93,7 @@ describe('auth api', () => {
         headers: { 'Content-Type': 'application/json' },
       }),
     )
-    await expect(postOidcCallback({ code: 'x', state: 'y' })).rejects.toMatchObject({
+    await expect(postOidcCallback('code=x&state=y')).rejects.toMatchObject({
       status: 401,
       message: '登录验证失败，请重新登录',
     })

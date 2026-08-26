@@ -61,13 +61,19 @@ describe('authService (no DB)', () => {
     authService._states.clear()
     // 未知 state：不触碰 DB，直接 401
     expect(
-      authService.handleOidcCallback({ code: 'c', state: 'unknown-state', ip: '127.0.0.1' }, 1_000),
+      authService.handleOidcCallback(
+        { query: 'code=c&state=unknown-state', ip: '127.0.0.1' },
+        1_000,
+      ),
     ).rejects.toMatchObject({ status: 401 })
     // 过期 state：TTL 10 分钟，11 分钟后消费 → 401 且被 sweep 清掉
     const { authorizationUrl } = await authService.buildOidcAuthorizeUrl(1_000)
     const state = new URL(authorizationUrl).searchParams.get('state')!
     expect(
-      authService.handleOidcCallback({ code: 'c', state, ip: '127.0.0.1' }, 1_000 + 11 * 60_000),
+      authService.handleOidcCallback(
+        { query: `code=c&state=${state}&iss=https%3A%2F%2Fauth.zeroicey.me`, ip: '127.0.0.1' },
+        1_000 + 11 * 60_000,
+      ),
     ).rejects.toMatchObject({ status: 401 })
     expect(authService._states.size).toBe(0)
   })

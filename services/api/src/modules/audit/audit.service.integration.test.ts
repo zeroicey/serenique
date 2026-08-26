@@ -217,7 +217,9 @@ describe.skipIf(!RUN_DB_TESTS)('audit service DB integration', () => {
     const res = await app.request('/api/auth/oidc/callback', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'cf-connecting-ip': ipBad },
-      body: JSON.stringify({ code: 'whatever', state: `unknown-${RUN_TOKEN}` }),
+      body: JSON.stringify({
+        query: `code=whatever&state=unknown-${RUN_TOKEN}&iss=https%3A%2F%2Fauth.zeroicey.me`,
+      }),
     })
     expect(res.status).toBe(401)
 

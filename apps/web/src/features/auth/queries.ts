@@ -32,15 +32,11 @@ export function useAuthStatus(): UseQueryResult<import('./api').AuthStatus, Erro
   })
 }
 
-/** OIDC 回调 mutation：code+state 换会话 cookie，成功后刷新登录态。 */
-export function useOidcCallback(): UseMutationResult<
-  import('./api').AuthStatus,
-  Error,
-  { code: string; state: string }
-> {
+/** OIDC 回调 mutation：完整查询串（含 iss）换会话 cookie，成功后刷新登录态。 */
+export function useOidcCallback(): UseMutationResult<import('./api').AuthStatus, Error, string> {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input) => postOidcCallback(input),
+    mutationFn: (query: string) => postOidcCallback(query),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: authKeys.status }),
     onError: (error) => toast.error(error.message || '登录失败'),
   })
