@@ -1,7 +1,7 @@
 # 认证中心迁移：接入 Pocket ID（auth.zeroicey.me）需求评估
 
-- 日期：2026-08-26（决策定稿同日；Phase 1 代码同日完成）
-- 状态：⏳待实施（Phase 1 API + Web 代码已完成，全量测试/typecheck/lint 绿；待生产部署 + 端到端验收）
+- 日期：2026-08-26（决策定稿同日；Phase 1 同日实施 + 部署 + 验收）
+- 状态：✅已实施（Web 端 OIDC 登录全量上线并端到端验收通过 2026-08-26；双子代理 code review ship-safe；Mobile/CLI 改造与 Phase 3 清理待后续）
 
 ## 已定决策（2026-08-26，用户拍板）
 
