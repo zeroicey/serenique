@@ -78,10 +78,15 @@ Future<OidcLoginResult> oidcSignIn() async {
   unwrapResponse(cbRes.data); // 失败在此抛 ApiException
 
   final cookies = cbRes.headers['set-cookie'];
-  final sessionCookie = _extractSessionCookie(cookies ?? const []);
-  if (sessionCookie == null) {
+  final sessionCookieValue = _extractSessionCookie(cookies ?? const []);
+  if (sessionCookieValue == null) {
     throw const ApiException('BAD_RESPONSE', '未收到登录会话，请稍后重试');
   }
+
+  // ④ 会话身份铸一把长期 Bearer token，此后与粘贴 token 同一通路。
+  //    Cookie 头必须是完整名值对（中间件按 serenique_session= 匹配），
+  //    不能只发裸值。
+  final sessionCookie = 'serenique_session=$sessionCookieValue';
 
   // ④ 会话身份铸一把长期 Bearer token，此后与粘贴 token 同一通路
   final Response<dynamic> tokenRes;

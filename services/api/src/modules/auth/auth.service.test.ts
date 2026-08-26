@@ -61,14 +61,10 @@ describe('authService (no DB)', () => {
     authService._states.clear()
     const { authorizationUrl } = await authService.buildOidcAuthorizeUrl('mobile', 2_000)
     const url = new URL(authorizationUrl)
-    expect(url.searchParams.get('redirect_uri')).toBe(
-      process.env.OIDC_MOBILE_REDIRECT_URI!,
-    )
+    expect(url.searchParams.get('redirect_uri')).toBe(process.env.OIDC_MOBILE_REDIRECT_URI!)
     // 登录态记录了实际使用的 redirectUri，回调换 token 时用它重建 URL
     const state = url.searchParams.get('state')!
-    expect(authService._states.get(state)?.redirectUri).toBe(
-      process.env.OIDC_MOBILE_REDIRECT_URI,
-    )
+    expect(authService._states.get(state)?.redirectUri).toBe(process.env.OIDC_MOBILE_REDIRECT_URI)
   })
 
   test('OIDC 登录态一次性消费：未知 state → 401；过期 state → 401', async () => {

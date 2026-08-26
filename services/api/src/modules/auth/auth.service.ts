@@ -106,10 +106,13 @@ export const authService = {
     const client = await this._client()
     this._sweepStates(nowMs)
     if (target === 'mobile' && !env.OIDC_MOBILE_REDIRECT_URI) {
-      throw new AppError(ErrorCode.VALIDATION, '移动端登录未配置（缺 OIDC_MOBILE_REDIRECT_URI）', 503)
+      throw new AppError(
+        ErrorCode.VALIDATION,
+        '移动端登录未配置（缺 OIDC_MOBILE_REDIRECT_URI）',
+        503,
+      )
     }
-    const redirectUri =
-      target === 'mobile' ? env.OIDC_MOBILE_REDIRECT_URI! : env.OIDC_REDIRECT_URI!
+    const redirectUri = target === 'mobile' ? env.OIDC_MOBILE_REDIRECT_URI! : env.OIDC_REDIRECT_URI!
     const state = randomToken(32)
     const nonce = randomToken(32)
     const { verifier, challenge } = createPkcePair()
