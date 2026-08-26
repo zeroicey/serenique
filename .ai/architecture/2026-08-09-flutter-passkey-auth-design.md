@@ -1,5 +1,7 @@
 # Flutter 移动端 Passkey 接入设计（Mobile Passkey Auth Design）
 
+> ⚠️ **已被取代（2026-08-26）**：认证已迁移到 Pocket ID 统一认证中心，移动端登录改为 OIDC 授权码 + PKCE（系统浏览器 custom scheme 回调），实现见 `.ai/requirements/2026-08-26-pocket-id-auth-migration.md` 与 `apps/mobile/lib/features/auth/oidc_login.dart`；本文档的 passkey 方案与「回退 API token 认证」均为历史阶段，仅作备查。
+
 > ⚠️ **已回退**：iOS 免费开发者账号（Personal Team）不支持 Associated Domains capability，App 内 passkey 无法真机构建（`flutter build ios --release` 报 "Personal development teams do not support the Associated Domains capability"）。用户决策：**移动端退回 API token 认证**（同 CLI 模式，token 在 Web 设置页创建）。本文档保留作 passkey 方案备查（付费账号后可用）；当前有效移动端认证见 `2026-08-07-flutter-mobile-auth-design.md`（token 模式，AUTH_TOKEN 语义以 API token 为准）+ `worklog/2026-08-09-flutter-passkey-auth-mobile-rollback.md`。
 
 - 日期：2026-08-09

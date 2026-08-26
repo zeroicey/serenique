@@ -1,7 +1,7 @@
 # 认证中心迁移：接入 Pocket ID（auth.zeroicey.me）需求评估
 
-- 日期：2026-08-26（决策定稿同日；Phase 1 同日实施 + 部署 + 验收）
-- 状态：✅已实施（Web 端 OIDC 登录全量上线并端到端验收通过 2026-08-26；双子代理 code review ship-safe；Mobile/CLI 改造与 Phase 3 清理待后续）
+- 日期：2026-08-26（决策定稿同日；Phase 1 + Phase 2 同日实施、部署、验收）
+- 状态：✅已实施（Web + 移动端 OIDC 登录全量上线并端到端验收通过；双子代理 review ship-safe；CLI device flow 与 Phase 3 清理待后续）
 
 ## 已定决策（2026-08-26，用户拍板）
 
@@ -104,8 +104,8 @@
 7. **测试两档约定**：auth.service.test.ts 纯函数档照写（JWT 验签逻辑 mock 时钟/JWKS）；integration 档注意 OIDC 流程依赖外网 issuer，需用本地 wiremock 或注入 JWKS 公钥。
 8. **exports.ts 导出面**：auth 相关 schema 若被 `.extend()`/`.shape` 引用，改动前核对契约锚定规则。
 
-## 7. 分期建议（未排期）
+## 7. 分期进展
 
-- **Phase 1（核心）**：API OIDC 回调 + Web 登录切换 + 删 WebAuthn 面 + Pocket ID 后台注册 client。完成后 Web 全量走认证中心，Mobile/CLI 存量不受影响。
-- **Phase 2（体验）**：Mobile OIDC PKCE 按钮；CLI device flow。
-- **Phase 3（清理）**：退役 `WEBAUTHN_*` env、setup-page 残留、passkey_credentials 表归档迁移。
+- **Phase 1（核心）**：✅ 完成——API OIDC 回调 + Web 登录切换 + 删 WebAuthn 面 + Pocket ID 后台注册 client，2026-08-26 上线端到端验收通过。
+- **Phase 2（体验）**：✅ 完成（移动端部分）——Flutter OIDC PKCE 登录上线（custom scheme 回调 + 会话铸长期 Bearer token）；CLI device flow 待做。
+- **Phase 3（清理）**：待做——退役 `WEBAUTHN_*` 残留文档、`passkey_credentials` 表归档迁移。

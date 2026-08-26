@@ -10,7 +10,7 @@
 | `2026-08-06-auth.md` | 认证（共享密钥，旧方案） | 🪦已否决（被 Passkey 方案替换，见 08-09） |
 | `2026-08-08-diary-merge-into-moment.md` | 日记并入闪念 | ✅已实施（2026-08-09 日记并入闪念，模块移除） |
 | `2026-08-09-passkey-auth.md` | Passkey 认证重构 + 个人信息 + API Token | ✅已实施（v0.5.0 全栈部署完成 2026-08-09；待用户端到端验收） |
-| `2026-08-26-pocket-id-auth-migration.md` | 认证中心迁移：接入 Pocket ID（auth.zeroicey.me） | ✅已实施（Web 端 2026-08-26 上线验收；Mobile/CLI 后续 phase） |
+| `2026-08-26-pocket-id-auth-migration.md` | 认证中心迁移：接入 Pocket ID（auth.zeroicey.me） | ✅已实施（Web + 移动端 2026-08-26 上线验收；CLI device flow 待做） |
 | `2026-08-08-audit-module.md` | 审计模块 | ✅已实施 |
 | `2026-08-08-push-module.md` | 推送模块 | 🔶设计中 |
 | `2026-08-08-mobile-moment-attachments.md` | Moment 移动端附件 | ✅已实施（显示/预览 MVP；上传下阶段） |
