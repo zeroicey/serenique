@@ -43,45 +43,33 @@ docker compose up -d --force-recreate api
 - 正确姿势：走 GitHub Actions 构建（多架构），服务器 `docker pull zeroicey/serenique-api:main` 后 tag 成 `latest`。
 - 手动构建必须 `docker build --platform linux/amd64`。
 
-## Passkey 环境变量（v0.5.0 起）
+## 认证环境变量（v0.6.0 起：Pocket ID OIDC；Passkey 键已退役）
 
-生产 .env 的认证相关键（**首次配置后不可随意改**，除 SETUP_TOKEN）：
+> 2026-08-26 登录链路迁移到统一认证中心 Pocket ID（auth.zeroicey.me，运维见 hpcore ops 仓库 `runbooks/pocket-id.md`）。需求与决策见 `.ai/requirements/2026-08-26-pocket-id-auth-migration.md`。
 
-| 键 | 生成方式 | 语义 / 坑 |
-| ---- | ---------- | ----------- |
-| `SESSION_SECRET` | `openssl rand -hex 32` | cookie 签名密钥。**改了 = 所有会话立即失效**（旧 cookie 验签失败），密钥轮换即全员下线 |
-| `SETUP_TOKEN` | `openssl rand -hex 24` | 首个凭证门禁（**passkey_credentials 计数=0** 时 `/setup` 创建凭证必须携带，常量时间比对）。**首个凭证创建完成后可从 .env 移除**，之后加设备走登录态「添加设备」 |
-| `WEBAUTHN_RP_ID` | `serenique.0icey.icu`（固定） | **RP ID = 前端域名（serenique.0icey.icu），不是 API 域名**。⚠️ 换前端域名 = 全部 passkey 永久失效（iCloud/Google 按 RP ID 存凭证） |
-| `WEBAUTHN_RP_NAME` | `Serenique` | 仅展示用 |
-| `WEBAUTHN_ORIGINS` | `https://serenique.0icey.icu` | ceremony origin 白名单（逗号分隔）。移动端 phase 需扩展 Android `android:apk-key-hash:<指纹>` |
+生产 .env 认证相关键：
 
-- 生产 fail-closed：缺 `SESSION_SECRET` 或 `WEBAUTHN_RP_ID` → 容器拒绝启动（app.ts）；**认证启用且 `users` 表为空 → 拒绝启动**，报错提示先跑引导脚本（见下）。
-- `AUTH_TOKEN` 已退役（v0.5.0 迁移时从 .env 删除）；旧客户端 401。
-- 数据库迁移 `0014_rapid_stone_men`（users / passkey_credentials / api_tokens 三表）已于 2026-08-09 应用到生产（drizzle 记录 id=15，hash 450a3cdd…）。
-- 数据库迁移 `0015_add_moment_pinyin`（moments 加 pinyin / pinyin_initial 两列，全局搜索用）已于 2026-08-13 应用到生产（drizzle 记录 id=16，hash 0bcc286c…）；回填已执行（`docker exec -w /app/services/api serenique-api bun scripts/backfill-moment-pinyin.ts`，107 条全部更新，幂等）。
+| 键 | 语义 / 坑 |
+| ---- | ----------- |
+| `SESSION_SECRET` | cookie 签名密钥（**首次配置后不可随意改**：改了 = 所有会话立即失效）。OIDC 迁移后仍由 API 自发会话 cookie，语义不变 |
+| `OIDC_ISSUER` | `https://auth.zeroicey.me`（发现文档自动拉取，容器内经 mihomo 代理出公网） |
+| `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | Pocket ID 后台 → OIDC Clients「Serenique」的凭据（机密客户端 + PKCE + skip consent）；secret 只存服务器 .env |
+| `OIDC_REDIRECT_URI` | `https://serenique.0icey.icu/auth/callback`（必须与 Pocket ID 后台注册的 Callback URL 精确一致；dev 为 `http://localhost:5173/auth/callback`） |
 
-## 全新安装（引导首个用户 + 首个凭证，v0.5.1 起）
+- 生产 fail-closed：`SESSION_SECRET` 与 OIDC 四元组任缺其一 → 容器拒绝启动。users 空表不再拒启（首次 OIDC 登录自动绑定/建行）。
+- 已退役键：`AUTH_TOKEN`（v0.5.0）、`SETUP_TOKEN`/`WEBAUTHN_RP_ID`/`WEBAUTHN_RP_NAME`/`WEBAUTHN_ORIGINS`（v0.6.0 OIDC 迁移时从 .env 移除）。
+- 会话 TTL 默认 3 天（可用 `SESSION_TTL` 秒数覆盖）。
+- ⚠️ 首次冷启动 `/api/auth/oidc/url` 可能慢（discovery 外呼经代理），之后进程内缓存 0ms。
+- 数据库迁移记录：0014 三表（id=15）、0015 moment 拼音（id=16，已回填 107 条）、**0019 users.oidc_sub（id=20，hash 44bd6076…，2026-08-26）**。
 
-公开「首次注册」已移除（需求决策⑨）：**users 由引导脚本创建，首个凭证由隐藏 `/setup` 页创建**，登录页只留通行密钥登录。
+## 全新安装（v0.6.0 起：OIDC 自动开通，无引导脚本）
 
-```sh
-# 1. 起好 DB + 迁移（见「升级 schema」）后，创建用户行（幂等，可重复跑）
-docker compose run --rm api bun scripts/bootstrap-user.ts \
-  --name "zeroicey" --email "me@example.com" --birthday "1990-01-01"
-#    ⚠️ docker compose run 覆盖 CMD → entrypoint 的 localhost→host.docker.internal
-#    重写不执行：容器内 DATABASE_URL 用 compose 网络服务名（postgres）即可直达。
-#    参数可用 env FIRST_USER_NAME/FIRST_USER_EMAIL/FIRST_USER_BIRTHDAY 替代。
+登录链路已迁移到 Pocket ID OIDC（2026-08-26），**无需任何引导步骤**：
 
-# 2. 浏览器打开（仅此一次，需 SETUP_TOKEN 在 .env 中）
-#    https://serenique.0icey.icu/setup?setupToken=<SETUP_TOKEN>
-#    → 「创建通行密钥」→ 自动登录。（该页无任何导航入口，凭证已存在时访问跳登录页）
-
-# 3. 验证后移除 SETUP_TOKEN 并重建容器
-#    vi .env（删 SETUP_TOKEN 行）→ docker compose up -d --no-deps api
-```
-
-- 用户可见面只有「通行密钥登录」；users 空表时服务起不来（fail-closed），前端只会看到「服务暂时不可用」。
-- 引导脚本在镜像内（services/api/scripts/ 已随镜像拷贝，WORKDIR /app/services/api），服务器无需 bun/npm。
+1. 起好 DB + 迁移 + .env（认证五键见上节）→ `docker compose up -d`
+2. 浏览器打开前端 → 「前往登录」→ 跳 auth.zeroicey.me 按 Passkey → 回调后 API 自动绑定/创建 users 行并发会话 cookie。
+- 首次登录绑到现有唯一 users 行（若历史部署遗留）；全新库则新建。个人信息（姓名/邮箱）以认证中心为准回填缺省值，生日等附加字段在 Web 设置页维护。
+- 旧版「bootstrap-user.ts 引导脚本 + /setup 页」已随 Passkey 方案删除，不再适用。
 
 ## AI 助手（宁序）配置（2026-08-21 起，OpenCode Go 订阅到期 → OpenAI 兼容端点）
 
