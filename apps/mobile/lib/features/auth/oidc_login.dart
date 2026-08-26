@@ -37,10 +37,14 @@ Future<OidcLoginResult> oidcSignIn() async {
     ),
   );
 
-  // ① 取授权跳转地址（state/PKCE 登录态由服务端生成保存）
+  // ① 取授权跳转地址（state/PKCE 登录态由服务端生成保存；target=mobile 让
+  //    服务端用自定义 scheme 回调，而不是 Web 域名回调）
   final Response<dynamic> urlRes;
   try {
-    urlRes = await dio.get('/api/auth/oidc/url');
+    urlRes = await dio.get(
+      '/api/auth/oidc/url',
+      queryParameters: {'target': 'mobile'},
+    );
   } on DioException catch (e) {
     throw ApiException.fromDioException(e);
   }
@@ -67,10 +71,7 @@ Future<OidcLoginResult> oidcSignIn() async {
   final query = uri.query.isEmpty ? uri.fragment : uri.query;
   final Response<dynamic> cbRes;
   try {
-    cbRes = await dio.post(
-      '/api/auth/oidc/callback',
-      data: {'query': query},
-    );
+    cbRes = await dio.post('/api/auth/oidc/callback', data: {'query': query});
   } on DioException catch (e) {
     throw ApiException.fromDioException(e);
   }
@@ -79,10 +80,7 @@ Future<OidcLoginResult> oidcSignIn() async {
   final cookies = cbRes.headers['set-cookie'];
   final sessionCookie = _extractSessionCookie(cookies ?? const []);
   if (sessionCookie == null) {
-    throw const ApiException(
-      'BAD_RESPONSE',
-      '未收到登录会话，请稍后重试',
-    );
+    throw const ApiException('BAD_RESPONSE', '未收到登录会话，请稍后重试');
   }
 
   // ④ 会话身份铸一把长期 Bearer token，此后与粘贴 token 同一通路

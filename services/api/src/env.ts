@@ -21,6 +21,12 @@ const envSchema = z.object({
   // 生产 https://serenique.0icey.icu/auth/callback；dev http://localhost:5173/auth/callback。
   // 必须与 Pocket ID 后台注册的 Callback URLs 精确一致。
   OIDC_REDIRECT_URI: z.url().optional(),
+  // 移动端回调（自定义 scheme，非 http(s) URL 故不用 z.url()）。可选：未配置时
+  // 移动端登录端点返回 503；配置后需同步在 Pocket ID 后台注册同一回调。
+  OIDC_MOBILE_REDIRECT_URI: z
+    .string()
+    .regex(/^[a-z][a-z0-9+.-]*:\/\//, '移动端回调须为自定义 scheme URI')
+    .optional(),
   // 会话 TTL（秒），未配置时 service 回退 DEFAULT_SESSION_TTL_SECONDS（3 天）。
   // 用 optional 而非 default：Env 类型不要求必填，避免 createApp(env) 调用方
   // 必须显式传值（app.test.ts / 集成测试均未传）。

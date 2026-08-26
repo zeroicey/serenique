@@ -52,6 +52,7 @@ export function setTestEnv(
     OIDC_CLIENT_ID?: string
     OIDC_CLIENT_SECRET?: string
     OIDC_REDIRECT_URI?: string
+    OIDC_MOBILE_REDIRECT_URI?: string
     NODE_ENV?: string
   } = {},
 ): void {
@@ -70,6 +71,8 @@ export function setTestEnv(
   process.env.OIDC_CLIENT_ID ??= opts.OIDC_CLIENT_ID ?? 'test-client-id'
   process.env.OIDC_CLIENT_SECRET ??= opts.OIDC_CLIENT_SECRET ?? 'test-client-secret-0123456789'
   process.env.OIDC_REDIRECT_URI ??= opts.OIDC_REDIRECT_URI ?? 'http://localhost:5173/auth/callback'
+  process.env.OIDC_MOBILE_REDIRECT_URI ??=
+    opts.OIDC_MOBILE_REDIRECT_URI ?? 'serenique://auth/callback'
   process.env.NODE_ENV ??= opts.NODE_ENV ?? 'test'
 }
 

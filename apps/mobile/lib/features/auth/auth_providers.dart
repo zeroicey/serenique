@@ -7,12 +7,19 @@ import 'auth_token.dart';
 import 'oidc_login.dart';
 import 'token_storage.dart';
 
-final tokenStorageProvider = Provider<TokenStorage>((ref) => SecureTokenStorage());
+final tokenStorageProvider = Provider<TokenStorage>(
+  (ref) => SecureTokenStorage(),
+);
 
 /// 登录时用输入的令牌调 /api/auth/me 校验。抛 ApiException；401（任意 code）→ 令牌错。
-final verifyTokenProvider = Provider<Future<void> Function(String token)>((ref) {
+final verifyTokenProvider = Provider<Future<void> Function(String token)>((
+  ref,
+) {
   return (token) async {
-    final client = ApiClient(baseUrl: AppConfig.apiBaseUrl, tokenReader: () => token);
+    final client = ApiClient(
+      baseUrl: AppConfig.apiBaseUrl,
+      tokenReader: () => token,
+    );
     await client.getData('/api/auth/me');
   };
 });
@@ -94,5 +101,6 @@ class AuthController extends Notifier<AuthState> {
   void _bump() => ref.read(routerRefreshProvider).value++;
 }
 
-final authControllerProvider =
-    NotifierProvider<AuthController, AuthState>(AuthController.new);
+final authControllerProvider = NotifierProvider<AuthController, AuthState>(
+  AuthController.new,
+);

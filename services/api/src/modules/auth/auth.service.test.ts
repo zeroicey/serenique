@@ -41,7 +41,7 @@ describe('authService (no DB)', () => {
   test('buildOidcAuthorizeUrl: 携带 state/nonce/PKCE 参数并把登录态入库', async () => {
     const { authService } = await import('./auth.service')
     authService._states.clear()
-    const { authorizationUrl } = await authService.buildOidcAuthorizeUrl(1_000)
+    const { authorizationUrl } = await authService.buildOidcAuthorizeUrl('web', 1_000)
     const url = new URL(authorizationUrl)
     expect(url.origin + url.pathname).toBe('https://auth.zeroicey.me/authorize')
     // response_type/client_id 由 openid-client 内部补充；这里断言我们传入的参数
@@ -56,6 +56,21 @@ describe('authService (no DB)', () => {
     expect(authService._states.has(state)).toBe(true)
   })
 
+  test("buildOidcAuthorizeUrl('mobile'): 使用自定义 scheme 回调，redirect_uri 绑定进登录态", async () => {
+    const { authService } = await import('./auth.service')
+    authService._states.clear()
+    const { authorizationUrl } = await authService.buildOidcAuthorizeUrl('mobile', 2_000)
+    const url = new URL(authorizationUrl)
+    expect(url.searchParams.get('redirect_uri')).toBe(
+      process.env.OIDC_MOBILE_REDIRECT_URI!,
+    )
+    // 登录态记录了实际使用的 redirectUri，回调换 token 时用它重建 URL
+    const state = url.searchParams.get('state')!
+    expect(authService._states.get(state)?.redirectUri).toBe(
+      process.env.OIDC_MOBILE_REDIRECT_URI,
+    )
+  })
+
   test('OIDC 登录态一次性消费：未知 state → 401；过期 state → 401', async () => {
     const { authService } = await import('./auth.service')
     authService._states.clear()
@@ -67,7 +82,7 @@ describe('authService (no DB)', () => {
       ),
     ).rejects.toMatchObject({ status: 401 })
     // 过期 state：TTL 10 分钟，11 分钟后消费 → 401 且被 sweep 清掉
-    const { authorizationUrl } = await authService.buildOidcAuthorizeUrl(1_000)
+    const { authorizationUrl } = await authService.buildOidcAuthorizeUrl('web', 1_000)
     const state = new URL(authorizationUrl).searchParams.get('state')!
     expect(
       authService.handleOidcCallback(
@@ -81,11 +96,11 @@ describe('authService (no DB)', () => {
   test('_sweepStates keeps the map bounded', async () => {
     const { authService } = await import('./auth.service')
     authService._states.clear()
-    await authService.buildOidcAuthorizeUrl(1_000)
-    await authService.buildOidcAuthorizeUrl(2_000)
+    await authService.buildOidcAuthorizeUrl('web', 1_000)
+    await authService.buildOidcAuthorizeUrl('web', 2_000)
     expect(authService._states.size).toBe(2)
     // 11 分钟后再次 issue → 前两条已过期被清掉
-    await authService.buildOidcAuthorizeUrl(1_000 + 11 * 60_000)
+    await authService.buildOidcAuthorizeUrl('web', 1_000 + 11 * 60_000)
     expect(authService._states.size).toBe(1)
   })
 })

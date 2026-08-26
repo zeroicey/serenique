@@ -37,13 +37,15 @@ function clearCookie(c: Context): void {
 export const authHandler = {
   // ---- OIDC 登录（Pocket ID 授权码 + PKCE）---------------------------------
 
-  /** 生成认证中心授权跳转 URL（含 state/nonce/PKCE，登录态存服务端）。 */
+  /** 生成认证中心授权跳转 URL（含 state/nonce/PKCE，登录态存服务端）。target=mobile 走自定义 scheme 回调。 */
   async oidcAuthorize(c: Context) {
     try {
       if (!authService.isAuthEnabled()) {
         return Res.error('认证未配置').status(503).code('AUTH_DISABLED').build(c)
       }
-      const result = await authService.buildOidcAuthorizeUrl()
+      const raw = c.req.query('target') ?? 'web'
+      const target = raw === 'mobile' ? 'mobile' : 'web'
+      const result = await authService.buildOidcAuthorizeUrl(target)
       return Res.ok('获取授权地址成功', result).build(c)
     } catch (e) {
       return handleError(e, c, 'auth')

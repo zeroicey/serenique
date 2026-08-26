@@ -25,24 +25,29 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Future<void> _submit() async {
     final token = _controller.text.trim();
     if (token.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入令牌')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入令牌')));
       return;
     }
     setState(() => _submitting = true);
     try {
-      final error = await ref.read(authControllerProvider.notifier).login(token);
+      final error = await ref
+          .read(authControllerProvider.notifier)
+          .login(token);
       if (error != null && mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
         return; // 失败就 return，别往下导航
       }
       // 登录成功：显式进主界面（redirect 也会把已认证的 /login 重定向走）
       if (mounted) context.go('/moments');
     } on Exception catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(humanizeError(e))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(humanizeError(e))));
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -53,14 +58,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Future<void> _loginWithOidc() async {
     setState(() => _oidcBusy = true);
     try {
-      final error =
-          await ref.read(authControllerProvider.notifier).loginWithOidc();
+      final error = await ref
+          .read(authControllerProvider.notifier)
+          .loginWithOidc();
       if (!mounted) return;
       if (error != null) {
         // 用户主动取消不算失败，不打扰
         if (error != '已取消登录') {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(error)));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(error)));
         }
         return;
       }
@@ -94,41 +101,55 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.fingerprint),
               label: Text(_oidcBusy ? '等待认证中心返回…' : '通过认证中心登录'),
             ),
             const SizedBox(height: 24),
-            Row(children: [
-              const Expanded(child: Divider()),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('或使用 API 令牌',
-                    style: Theme.of(context).textTheme.bodySmall),
-              ),
-              const Expanded(child: Divider()),
-            ]),
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    '或使用 API 令牌',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
             const SizedBox(height: 24),
-            Text('输入你的 Serenique 令牌',
-                style: Theme.of(context).textTheme.titleMedium,
-                textAlign: TextAlign.center),
+            Text(
+              '输入你的 Serenique 令牌',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
-            Text('令牌在 Web 端设置页「API 令牌」创建',
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center),
+            Text(
+              '令牌在 Web 端设置页「API 令牌」创建',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _controller,
               obscureText: true,
               decoration: const InputDecoration(
-                  hintText: 'serenique_…', border: OutlineInputBorder()),
+                hintText: 'serenique_…',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 16),
             FilledButton.tonal(
               onPressed: busy ? null : _submit,
               child: _submitting
                   ? const SizedBox(
-                      width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text('使用令牌登录'),
             ),
           ],

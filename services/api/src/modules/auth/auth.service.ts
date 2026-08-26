@@ -31,6 +31,9 @@ type OidcLoginState = {
   verifier: string
   nonce: string
   expiresAt: number
+  /** 本次授权请求实际使用的 redirect_uri（web 域名回调或移动端自定义 scheme），
+   *  token 交换时必须与授权请求严格一致（OAuth 规范要求）。 */
+  redirectUri: string
 }
 
 export const authService = {
@@ -93,18 +96,32 @@ export const authService = {
 
   /**
    * 生成授权跳转 URL：state 随机 + S256 PKCE 对 + nonce，登录态按 state 入库。
-   * 返回的 authorizationUrl 由前端整页跳转（302 语义由前端 location 赋值完成）。
+   * target=mobile 使用自定义 scheme 回调（需配置 OIDC_MOBILE_REDIRECT_URI），
+   * 默认 web 走 OIDC_REDIRECT_URI。返回的 authorizationUrl 由客户端整页/浏览器打开。
    */
-  async buildOidcAuthorizeUrl(nowMs = Date.now()): Promise<{ authorizationUrl: string }> {
+  async buildOidcAuthorizeUrl(
+    target: 'web' | 'mobile' = 'web',
+    nowMs = Date.now(),
+  ): Promise<{ authorizationUrl: string }> {
     const client = await this._client()
     this._sweepStates(nowMs)
+    if (target === 'mobile' && !env.OIDC_MOBILE_REDIRECT_URI) {
+      throw new AppError(ErrorCode.VALIDATION, '移动端登录未配置（缺 OIDC_MOBILE_REDIRECT_URI）', 503)
+    }
+    const redirectUri =
+      target === 'mobile' ? env.OIDC_MOBILE_REDIRECT_URI! : env.OIDC_REDIRECT_URI!
     const state = randomToken(32)
     const nonce = randomToken(32)
     const { verifier, challenge } = createPkcePair()
-    this._states.set(state, { verifier, nonce, expiresAt: nowMs + OIDC_STATE_TTL_MS })
+    this._states.set(state, {
+      verifier,
+      nonce,
+      expiresAt: nowMs + OIDC_STATE_TTL_MS,
+      redirectUri,
+    })
 
     const authorizationUrl = openidClient.buildAuthorizationUrl(client, {
-      redirect_uri: env.OIDC_REDIRECT_URI!,
+      redirect_uri: redirectUri,
       scope: 'openid email profile',
       state,
       nonce,
@@ -143,8 +160,9 @@ export const authService = {
     let identity: OidcIdentity
     try {
       const client = await this._client()
-      // 回跳 URL 用环境配置的 redirect_uri（origin 可信）+ 原样透传的查询参数。
-      const currentUrl = new URL(`${env.OIDC_REDIRECT_URI!}?${params.toString()}`)
+      // 回跳 URL 用登录态里记录的 redirect_uri（与授权请求严格一致，可能是
+      // web 域名或移动端自定义 scheme）+ 原样透传的查询参数。
+      const currentUrl = new URL(`${record.redirectUri}?${params.toString()}`)
       const tokens = await openidClient.authorizationCodeGrant(client, currentUrl, {
         pkceCodeVerifier: record.verifier,
         expectedState: state,
